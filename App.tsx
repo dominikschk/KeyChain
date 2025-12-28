@@ -6,7 +6,7 @@ import { Controls } from './components/Controls';
 import { ShopifyGuide } from './components/ShopifyGuide';
 import { DEFAULT_CONFIG } from './constants';
 import { ModelConfig, SVGPathData } from './types';
-import * as THREE from 'this';
+import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 import { supabase } from './lib/supabase';
@@ -117,9 +117,9 @@ const App: React.FC = () => {
       const stlResult = exporter.parse(exportGroup, { binary: true });
       
       // Fix: Sicherstellen, dass der Blob mit dem korrekten Buffer erstellt wird
-      // Wir casten zu any und nutzen den buffer, um TypeScript-Fehler mit DataView/ArrayBuffer zu vermeiden
-      const stlBuffer = (stlResult as any).buffer || stlResult;
-      const blob = new Blob([stlBuffer], { type: 'application/octet-stream' });
+      // STLExporter gibt im Binary-Mode ein DataView zurück. Wir brauchen dessen .buffer
+      const stlBuffer = (stlResult instanceof DataView) ? stlResult.buffer : stlResult;
+      const blob = new Blob([stlBuffer as BlobPart], { type: 'application/octet-stream' });
       
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
@@ -163,8 +163,7 @@ const App: React.FC = () => {
 
       const { data: { publicUrl } } = supabase.storage.from('previews').getPublicUrl(fileName);
 
-      // Shopify URL Konstruktion
-      // HINWEIS: Hier deine echte Shopify Shop URL und Variant ID einsetzen
+      // Shopify URL nudaim3d.de
       const shopDomain = 'nudaim3d.de';
       const variantId = 'YOUR_VARIANT_ID'; 
       
