@@ -6,7 +6,7 @@ import { Controls } from './components/Controls';
 import { ShopifyGuide } from './components/ShopifyGuide';
 import { DEFAULT_CONFIG } from './constants';
 import { ModelConfig, SVGPathData } from './types';
-import * as THREE from 'three';
+import * as THREE from 'this';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 import { supabase } from './lib/supabase';
@@ -117,7 +117,10 @@ const App: React.FC = () => {
       const stlResult = exporter.parse(exportGroup, { binary: true });
       
       // Fix: Sicherstellen, dass der Blob mit dem korrekten Buffer erstellt wird
-      const blob = new Blob([stlResult as any], { type: 'application/octet-stream' });
+      // Wir casten zu any und nutzen den buffer, um TypeScript-Fehler mit DataView/ArrayBuffer zu vermeiden
+      const stlBuffer = (stlResult as any).buffer || stlResult;
+      const blob = new Blob([stlBuffer], { type: 'application/octet-stream' });
+      
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `3D_Logo_Plate_${Date.now()}.stl`;
@@ -162,7 +165,7 @@ const App: React.FC = () => {
 
       // Shopify URL Konstruktion
       // HINWEIS: Hier deine echte Shopify Shop URL und Variant ID einsetzen
-      const shopDomain = 'mein-shop.myshopify.com';
+      const shopDomain = 'nudaim3d.de';
       const variantId = 'YOUR_VARIANT_ID'; 
       
       const shopifyUrl = new URL(`https://${shopDomain}/cart/add`);
