@@ -1,4 +1,3 @@
-
 import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Canvas, useFrame, ThreeElements } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Environment, ContactShadows } from '@react-three/drei';
@@ -6,13 +5,11 @@ import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
 
-// Extend the React.JSX namespace to include Three.js elements for standard R3F usage.
-// This resolves "Property 'group' does not exist on type 'JSX.IntrinsicElements'" errors in React 18+.
+// Extend the global JSX namespace to include Three.js elements for standard R3F usage.
+// Fix: Updated the declaration to match modern React/Vite global namespace expectations.
 declare global {
-  namespace React {
-    namespace JSX {
-      interface IntrinsicElements extends ThreeElements {}
-    }
+  namespace JSX {
+    interface IntrinsicElements extends ThreeElements {}
   }
 }
 

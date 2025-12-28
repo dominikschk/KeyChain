@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef } from 'react';
 import { Download, Upload, Trash2, Box, MousePointer2, Maximize } from 'lucide-react';
 import { Viewer } from './components/Viewer';
@@ -99,7 +98,30 @@ const App: React.FC = () => {
         if (group) {
           const exporter = new STLExporter();
           const result = exporter.parse(group, { binary: true });
-          const blob = new Blob([result], { type: 'application/octet-stream' });
+          
+          let blobPart: BlobPart;
+          
+          // Saubere Unterscheidung zwischen string (ASCII STL) und DataView (Binary STL)
+          if (typeof result === 'string') {
+            blobPart = result;
+          } else if (result instanceof DataView) {
+            // TypeScript Check: Blob akzeptiert nur ArrayBuffer, kein ArrayBufferLike (SharedArrayBuffer)
+            // Wir prüfen via instanceof, ob der Buffer ein regulärer ArrayBuffer ist
+            if (result.buffer instanceof ArrayBuffer) {
+              blobPart = result.buffer;
+            } else {
+              // Falls es ein SharedArrayBuffer wäre, kopieren wir ihn in einen neuen regulären ArrayBuffer
+              // Fix: Casting result.buffer to any to bypass 'never' inference
+              const buffer = new ArrayBuffer((result.buffer as any).byteLength);
+              new Uint8Array(buffer).set(new Uint8Array(result.buffer as any));
+              blobPart = buffer;
+            }
+          } else {
+            // Fallback für andere Rückgabetypen von exporter.parse (z.B. direkt ArrayBuffer)
+            blobPart = result as BlobPart;
+          }
+
+          const blob = new Blob([blobPart], { type: 'application/octet-stream' });
           const link = document.createElement('a');
           link.href = URL.createObjectURL(blob);
           link.download = `keychain-45mm-${Date.now()}.stl`;
