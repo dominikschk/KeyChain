@@ -89,7 +89,7 @@ const App: React.FC = () => {
   };
 
   /**
-   * PROZESS: Supabase Upload -> Shopify Cart
+   * PROZESS: Supabase Upload -> Shopify Redirect (CORS-Safe)
    */
   const handleAddToCart = async () => {
     if (!originalSvgContent || !svgElements) {
@@ -104,54 +104,44 @@ const App: React.FC = () => {
       // 1. Eindeutige Design ID generieren
       const designId = `3D-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
-      // 2. Upload zu Supabase
-      const { error: dbError } = await supabase
-        .from('designs')
-        .insert([
-          { 
-            id: designId, 
-            config: config, 
-            svg_content: originalSvgContent 
-          }
-        ]);
-
-      if (dbError) {
-        // Hinweis: Wenn Keys nicht gesetzt sind, wird das hier fehlschlagen.
-        console.warn("Supabase Error (Check keys):", dbError.message);
+      // 2. Upload zu Supabase (Optionaler Step, schlägt fehl wenn keine Keys gesetzt sind)
+      try {
+        const { error: dbError } = await supabase
+          .from('designs')
+          .insert([
+            { 
+              id: designId, 
+              config: config, 
+              svg_content: originalSvgContent 
+            }
+          ]);
+        if (dbError) console.warn("Supabase Config fehlt oder fehlerhaft:", dbError.message);
+      } catch (e) {
+        console.warn("Supabase Verbindung nicht möglich.");
       }
 
-      console.log(`Design ${designId} in Supabase gesichert.`);
+      // 3. Shopify Redirect URL bauen (Umgeht CORS)
+      // Format: https://{shop}/cart/add?id={variantId}&quantity=1&properties[key]=value
+      const baseUrl = `https://${shopifyParams.shop}/cart/add`;
+      const queryParams = new URLSearchParams();
+      queryParams.append('id', shopifyParams.variantId);
+      queryParams.append('quantity', '1');
+      
+      // Line Item Properties hinzufügen
+      queryParams.append('properties[_design_id]', designId);
+      queryParams.append('properties[Vorschau]', '3D-Konfiguriert');
+      queryParams.append('properties[Material]', 'Kunststoff (3D-Druck)');
+      queryParams.append('properties[Kette]', config.hasChain ? 'Inklusive' : 'Ohne');
 
-      // 3. Shopify AJAX Request
-      const formData = {
-        'items': [{
-          'id': parseInt(shopifyParams.variantId),
-          'quantity': 1,
-          'properties': {
-            '_design_id': designId,
-            'Vorschau': '3D-Konfiguriert',
-            'Material': 'Kunststoff (3D-Druck)',
-            'Kette': config.hasChain ? 'Inklusive' : 'Ohne'
-          }
-        }]
-      };
+      const finalShopifyUrl = `${baseUrl}?${queryParams.toString()}`;
 
-      const response = await fetch(`https://${shopifyParams.shop}/cart/add.js`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      if (!response.ok) {
-        throw new Error("Warenkorb-Übertragung fehlgeschlagen.");
-      }
-
+      console.log(`Leite weiter zu Shopify: ${finalShopifyUrl}`);
       setIsSuccess(true);
       
-      // Kurze Verzögerung für visuelles Feedback vor dem Redirect
+      // Kurze Verzögerung für visuelles Feedback
       setTimeout(() => {
-        window.location.href = `https://${shopifyParams.shop}/cart`;
-      }, 800);
+        window.location.href = finalShopifyUrl;
+      }, 500);
 
     } catch (err: any) {
       setError(err.message || "Ein Fehler ist aufgetreten.");
@@ -166,11 +156,7 @@ const App: React.FC = () => {
       if (group) {
         const exporter = new STLExporter();
         const result = exporter.parse(group, { binary: true });
-        
-        // Use a type cast to any for the blob part to bypass strict SharedArrayBuffer checks
-        // SharedArrayBuffer is sometimes rejected as a BlobPart in strict TS environments
         const blob = new Blob([result as any], { type: 'application/octet-stream' });
-        
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `keychain-preview.stl`;
@@ -205,7 +191,7 @@ const App: React.FC = () => {
           {isSuccess && (
             <div className="bg-emerald-900/20 border border-emerald-500/50 p-4 rounded-xl flex items-start gap-3 animate-pulse">
               <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
-              <p className="text-xs text-emerald-200">Wird zum Warenkorb geleitet...</p>
+              <p className="text-xs text-emerald-200">Leite zum Shopify Warenkorb weiter...</p>
             </div>
           )}
 

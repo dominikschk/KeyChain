@@ -1,5 +1,3 @@
-
-// Removed failing triple-slash reference and augmented the JSX namespace to correctly type React Three Fiber intrinsic elements.
 import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Canvas, useFrame, ThreeElements } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Environment, ContactShadows } from '@react-three/drei';
@@ -7,10 +5,14 @@ import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
 
-// Add global JSX augmentation to ensure Three.js intrinsic elements are recognized by TypeScript in React Three Fiber.
+// Augment the JSX namespace to include Three.js elements provided by React Three Fiber.
+// This ensures that elements like <group>, <mesh>, and <torusGeometry> are recognized as valid JSX.
+// Added a string indexer to IntrinsicElements to provide a flexible fallback for all Three.js intrinsic elements.
 declare global {
   namespace JSX {
-    interface IntrinsicElements extends ThreeElements {}
+    interface IntrinsicElements extends ThreeElements {
+      [elemName: string]: any;
+    }
   }
 }
 
