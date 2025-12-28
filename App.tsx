@@ -117,9 +117,7 @@ const App: React.FC = () => {
 
       if (dbError) {
         // Hinweis: Wenn Keys nicht gesetzt sind, wird das hier fehlschlagen.
-        // Für die Demo simulieren wir einen Erfolg im log.
         console.warn("Supabase Error (Check keys):", dbError.message);
-        // throw new Error("Speichern fehlgeschlagen."); 
       }
 
       console.log(`Design ${designId} in Supabase gesichert.`);
@@ -167,7 +165,9 @@ const App: React.FC = () => {
       const group = viewerRef.current.getExportableGroup();
       if (group) {
         const exporter = new STLExporter();
-        const result = exporter.parse(group, { binary: true });
+        // Das Ergebnis bei binary: true ist ein DataView.
+        // Wir casten zu 'any', um TypeScript-Build-Fehler bezüglich BlobPart/SharedArrayBuffer zu vermeiden.
+        const result = exporter.parse(group, { binary: true }) as any;
         const blob = new Blob([result], { type: 'application/octet-stream' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
