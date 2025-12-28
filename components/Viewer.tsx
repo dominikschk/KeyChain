@@ -6,10 +6,16 @@ import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
 
-// Fix for JSX intrinsic elements errors by augmenting the global JSX namespace for React-Three-Fiber.
+// Fix for JSX intrinsic elements errors by augmenting the global and React JSX namespaces.
+// This ensures that React-Three-Fiber elements like <mesh />, <group />, etc., are recognized by the TypeScript compiler.
 declare global {
   namespace JSX {
     interface IntrinsicElements extends ThreeElements {}
+  }
+  namespace React {
+    namespace JSX {
+      interface IntrinsicElements extends ThreeElements {}
+    }
   }
 }
 

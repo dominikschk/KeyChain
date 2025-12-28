@@ -9,7 +9,6 @@ import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { supabase } from './lib/supabase';
 
-// Main Application Component
 const App: React.FC = () => {
   const [config, setConfig] = useState<ModelConfig>(DEFAULT_CONFIG);
   const [svgElements, setSvgElements] = useState<SVGPathData[] | null>(null);
@@ -122,6 +121,7 @@ const App: React.FC = () => {
       const designId = `3D-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
       let publicImageUrl = '';
 
+      // 1. Screenshot erstellen
       const screenshotData = await viewerRef.current.takeScreenshot();
       
       if (screenshotData) {
@@ -129,20 +129,24 @@ const App: React.FC = () => {
         const blob = await base64Response.blob();
         const fileName = `${designId}.png`;
         
-        const { error: uploadError } = await supabase.storage
+        // 2. Zu Supabase Storage hochladen
+        const { error: uploadError, data: uploadData } = await supabase.storage
           .from('previews')
           .upload(fileName, blob, {
             contentType: 'image/png',
             cacheControl: '3600',
-            upsert: false
+            upsert: true
           });
 
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage
-            .from('previews')
-            .getPublicUrl(fileName);
-          publicImageUrl = urlData.publicUrl;
+        if (uploadError) {
+          console.error("Storage Error:", uploadError);
+          throw new Error(`Bild-Upload fehlgeschlagen: ${uploadError.message}`);
         }
+
+        const { data: urlData } = supabase.storage
+          .from('previews')
+          .getPublicUrl(fileName);
+        publicImageUrl = urlData.publicUrl;
       }
 
       const sanitizedElements = svgElements.map(({ id, name, color, currentColor }) => ({
@@ -152,6 +156,7 @@ const App: React.FC = () => {
         currentColor: currentColor
       }));
 
+      // 3. In Datenbank speichern
       const { error: dbError } = await supabase
         .from('designs')
         .insert([
@@ -167,24 +172,30 @@ const App: React.FC = () => {
         ]);
 
       if (dbError) {
-        throw new Error(`Datenbank-Fehler: ${dbError.message}`);
+        console.error("Database Error:", dbError);
+        throw new Error(`Speichern fehlgeschlagen: ${dbError.message}`);
       }
 
+      // 4. Zu Shopify weiterleiten
       const baseUrl = `https://${shopifyParams.shop}/cart/add`;
       const queryParams = new URLSearchParams();
       queryParams.append('id', shopifyParams.variantId);
       queryParams.append('quantity', '1');
+      
+      // Diese Properties werden an Shopify gesendet
       queryParams.append('properties[_design_id]', designId);
-      if (publicImageUrl) queryParams.append('properties[Vorschau-Bild]', publicImageUrl);
+      // "Vorschau" ohne Unterstrich ist sichtbar, mit Unterstrich versteckt.
+      // Wir nutzen hier einen Namen, den wir später im Liquid-Code abfangen.
+      if (publicImageUrl) queryParams.append('properties[Dein-Design]', publicImageUrl);
       if (config.customLink) queryParams.append('properties[Link-Text]', config.customLink);
 
       setIsSuccess(true);
       setTimeout(() => {
         window.location.href = `${baseUrl}?${queryParams.toString()}`;
-      }, 1200);
+      }, 1000);
 
     } catch (err: any) {
-      setError(err.message || "Ein unbekannter Fehler ist aufgetreten.");
+      setError(err.message || "Verbindung zu Supabase fehlgeschlagen. Bitte SQL-Setup prüfen.");
       setIsSubmitting(false);
     }
   };
@@ -207,7 +218,7 @@ const App: React.FC = () => {
             <div className="bg-red-900/20 border border-red-500/50 p-4 rounded-xl flex items-start gap-3 animate-in fade-in zoom-in-95">
               <AlertCircle className="text-red-500 shrink-0" size={18} />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1">Hinweis</p>
+                <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1">Fehler</p>
                 <p className="text-[11px] text-red-200 leading-tight break-words">{error}</p>
               </div>
             </div>
@@ -218,7 +229,7 @@ const App: React.FC = () => {
               <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
               <div className="flex-1">
                 <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider mb-1">Erfolg</p>
-                <p className="text-[11px] text-emerald-200 leading-tight">Design gespeichert! Weiterleitung zum Warenkorb...</p>
+                <p className="text-[11px] text-emerald-200 leading-tight">Übertragung zu Shopify läuft...</p>
               </div>
             </div>
           )}
@@ -226,7 +237,7 @@ const App: React.FC = () => {
           <section className="space-y-4">
             <div className="flex items-center gap-2 text-zinc-400 font-bold text-[10px] uppercase tracking-[0.15em]">
               <Upload size={14} className="text-blue-500" />
-              <span>SVG Upload</span>
+              <span>SVG Logo</span>
             </div>
             <div className="relative group">
               <input
@@ -235,13 +246,13 @@ const App: React.FC = () => {
                 onChange={handleFileUpload}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
               />
-              <div className="border-2 border-dashed border-zinc-800 group-hover:border-blue-500/50 group-hover:bg-blue-500/5 rounded-2xl p-8 transition-all flex flex-col items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 group-hover:text-blue-400 group-hover:scale-110 transition-all">
-                  <Upload size={20} />
+              <div className={`border-2 border-dashed rounded-2xl p-8 transition-all flex flex-col items-center gap-3 ${svgElements ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-zinc-800 group-hover:border-blue-500/50 group-hover:bg-blue-500/5'}`}>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${svgElements ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-400 group-hover:text-blue-400 group-hover:scale-110'}`}>
+                  {svgElements ? <CheckCircle2 size={24} /> : <Upload size={20} />}
                 </div>
                 <div className="text-center">
-                  <p className="text-xs font-bold text-zinc-300">Logo hochladen</p>
-                  <p className="text-[10px] text-zinc-500 mt-1">Nur .SVG Dateien</p>
+                  <p className="text-xs font-bold text-zinc-300">{svgElements ? 'Logo ersetzt' : 'Logo hochladen'}</p>
+                  <p className="text-[10px] text-zinc-500 mt-1">SVG Format erforderlich</p>
                 </div>
               </div>
             </div>
@@ -272,11 +283,6 @@ const App: React.FC = () => {
             )}
             <span>IN DEN WARENKORB</span>
           </button>
-          
-          <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-zinc-500 font-medium">
-            <ShieldCheck size={12} className="text-emerald-500" />
-            <span>Sichere 3D-Konfiguration</span>
-          </div>
         </div>
       </aside>
 
@@ -288,27 +294,6 @@ const App: React.FC = () => {
           selectedId={selectedElementId}
           onSelect={setSelectedElementId}
         />
-        
-        <div className="absolute top-6 left-6 pointer-events-none">
-          <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 p-3 rounded-xl flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Live Preview Enabled</span>
-          </div>
-        </div>
-
-        {svgElements && (
-          <button 
-            onClick={() => {
-              setSvgElements(null);
-              setOriginalSvgContent(null);
-              setSelectedElementId(null);
-            }}
-            className="absolute bottom-6 right-6 bg-red-900/20 hover:bg-red-900/40 border border-red-500/30 text-red-500 p-3 rounded-xl transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider"
-          >
-            <Trash2 size={14} />
-            <span>Reset Logo</span>
-          </button>
-        )}
       </main>
     </div>
   );
