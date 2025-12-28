@@ -1,8 +1,9 @@
 
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { Download, Upload, Trash2, Box, ShoppingCart, AlertCircle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
+import { Download, Upload, Trash2, Box, ShoppingCart, AlertCircle, CheckCircle2, Loader2, ShieldCheck, Code, Settings2 } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
+import { ShopifyGuide } from './components/ShopifyGuide';
 import { DEFAULT_CONFIG } from './constants';
 import { ModelConfig, SVGPathData } from './types';
 import * as THREE from 'three';
@@ -17,6 +18,8 @@ const App: React.FC = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [showShopifyGuide, setShowShopifyGuide] = useState(false);
+  
   const viewerRef = useRef<{ getExportableGroup: () => THREE.Group | null, takeScreenshot: () => Promise<string> }>(null);
 
   const [shopifyParams] = useState(() => {
@@ -121,7 +124,6 @@ const App: React.FC = () => {
       const designId = `3D-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
       let publicImageUrl = '';
 
-      // 1. Screenshot erstellen
       const screenshotData = await viewerRef.current.takeScreenshot();
       
       if (screenshotData) {
@@ -129,8 +131,7 @@ const App: React.FC = () => {
         const blob = await base64Response.blob();
         const fileName = `${designId}.png`;
         
-        // 2. Zu Supabase Storage hochladen
-        const { error: uploadError, data: uploadData } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('previews')
           .upload(fileName, blob, {
             contentType: 'image/png',
@@ -139,7 +140,6 @@ const App: React.FC = () => {
           });
 
         if (uploadError) {
-          console.error("Storage Error:", uploadError);
           throw new Error(`Bild-Upload fehlgeschlagen: ${uploadError.message}`);
         }
 
@@ -156,7 +156,6 @@ const App: React.FC = () => {
         currentColor: currentColor
       }));
 
-      // 3. In Datenbank speichern
       const { error: dbError } = await supabase
         .from('designs')
         .insert([
@@ -172,20 +171,14 @@ const App: React.FC = () => {
         ]);
 
       if (dbError) {
-        console.error("Database Error:", dbError);
         throw new Error(`Speichern fehlgeschlagen: ${dbError.message}`);
       }
 
-      // 4. Zu Shopify weiterleiten
       const baseUrl = `https://${shopifyParams.shop}/cart/add`;
       const queryParams = new URLSearchParams();
       queryParams.append('id', shopifyParams.variantId);
       queryParams.append('quantity', '1');
-      
-      // Diese Properties werden an Shopify gesendet
       queryParams.append('properties[_design_id]', designId);
-      // "Vorschau" ohne Unterstrich ist sichtbar, mit Unterstrich versteckt.
-      // Wir nutzen hier einen Namen, den wir später im Liquid-Code abfangen.
       if (publicImageUrl) queryParams.append('properties[Dein-Design]', publicImageUrl);
       if (config.customLink) queryParams.append('properties[Link-Text]', config.customLink);
 
@@ -195,7 +188,7 @@ const App: React.FC = () => {
       }, 1000);
 
     } catch (err: any) {
-      setError(err.message || "Verbindung zu Supabase fehlgeschlagen. Bitte SQL-Setup prüfen.");
+      setError(err.message || "Verbindung zu Supabase fehlgeschlagen.");
       setIsSubmitting(false);
     }
   };
@@ -203,14 +196,24 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
       <aside className="w-80 border-r border-zinc-800 bg-zinc-900/50 flex flex-col z-10 shrink-0 shadow-2xl">
-        <header className="p-6 border-b border-zinc-800 flex items-center gap-3">
-          <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/20">
-            <Box size={20} className="text-white" />
+        <header className="p-6 border-b border-zinc-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/20">
+              <Box size={20} className="text-white" />
+            </div>
+            <div>
+              <h1 className="font-bold text-lg tracking-tight leading-none">KeyChain Studio</h1>
+              <p className="text-[9px] text-zinc-500 uppercase tracking-widest mt-1">Smart Geometry Integration</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-lg tracking-tight leading-none">KeyChain Studio</h1>
-            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mt-1">Smart Geometry Integration</p>
-          </div>
+          <button 
+            onClick={() => setShowShopifyGuide(true)}
+            className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-blue-400 px-3 py-1.5 rounded-xl transition-all border border-zinc-700/50"
+            title="Shopify Setup Guide"
+          >
+            <Code size={14} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Setup</span>
+          </button>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
@@ -295,6 +298,8 @@ const App: React.FC = () => {
           onSelect={setSelectedElementId}
         />
       </main>
+
+      {showShopifyGuide && <ShopifyGuide onClose={() => setShowShopifyGuide(false)} />}
     </div>
   );
 };
