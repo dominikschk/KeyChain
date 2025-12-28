@@ -6,12 +6,9 @@ import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
 
-// Fix for JSX Intrinsic Elements to ensure @react-three/fiber elements are recognized by the TypeScript compiler
-// We augment both the global JSX namespace and the React.JSX namespace to handle React 18+ type definitions correctly.
+// Extend the React.JSX namespace to include Three.js elements for standard R3F usage.
+// This resolves "Property 'group' does not exist on type 'JSX.IntrinsicElements'" errors in React 18+.
 declare global {
-  namespace JSX {
-    interface IntrinsicElements extends ThreeElements {}
-  }
   namespace React {
     namespace JSX {
       interface IntrinsicElements extends ThreeElements {}
@@ -30,8 +27,8 @@ export interface ViewerProps {
  * KeychainChain: Koaxiale Platzierung durch worldToLocal Transformation.
  */
 const KeychainChain: React.FC<{ 
-  markerRef: React.RefObject<THREE.Object3D>;
-  parentRef: React.RefObject<THREE.Group>;
+  markerRef: React.RefObject<THREE.Group | null>;
+  parentRef: React.RefObject<THREE.Group | null>;
 }> = ({ markerRef, parentRef }) => {
   const groupRef = useRef<THREE.Group>(null);
   const worldPos = useMemo(() => new THREE.Vector3(), []);
@@ -43,7 +40,6 @@ const KeychainChain: React.FC<{
     for (let i = 0; i < 6; i++) {
       links.push({
         position: i === 0 ? [0, 0, 0] : [-ringRadius * 1.5 * i, 0, i * 0.2],
-        // Erster Ring [0,0,0]: Steht vertikal (Normalenvektor in XZ-Ebene), um Y-Dicke zu umschließen
         rotation: i === 0 ? [0, Math.PI / 4, 0] : [Math.PI / 2, 0, i % 2 === 0 ? 0.8 : -0.8],
         radius: ringRadius,
         tube: tubeRadius
@@ -53,16 +49,14 @@ const KeychainChain: React.FC<{
   }, []);
 
   useFrame(() => {
+    // Sicherer Check auf alle beteiligten Refs
     if (markerRef.current && groupRef.current && parentRef.current) {
-      // 1. Weltposition des Loch-Markers aus der Matrix berechnen
       markerRef.current.updateWorldMatrix(true, true);
       markerRef.current.getWorldPosition(worldPos);
       
-      // 2. Transformation der Weltkoordinate in den lokalen Raum des gemeinsamen Parents (Zwang)
       parentRef.current.updateWorldMatrix(true, true);
       parentRef.current.worldToLocal(worldPos);
       
-      // 3. Position ohne manuelle Korrekturen setzen
       groupRef.current.position.copy(worldPos);
     }
   });
@@ -70,7 +64,7 @@ const KeychainChain: React.FC<{
   return (
     <group ref={groupRef} userData={{ excludeFromExport: true }}>
       {chainLinks.map((link, idx) => (
-        <mesh key={idx} position={link.position as any} rotation={link.rotation as any}>
+        <mesh key={idx} position={link.position as [number, number, number]} rotation={link.rotation as [number, number, number]}>
           <torusGeometry args={[link.radius, link.tube, 24, 48]} />
           <meshStandardMaterial color="#94a3b8" metalness={1} roughness={0.05} side={THREE.DoubleSide} />
         </mesh>
@@ -97,7 +91,7 @@ const LogoElement: React.FC<{ element: SVGPathData; config: ModelConfig }> = ({ 
   );
 };
 
-const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateRef: React.RefObject<THREE.Mesh> }> = ({ elements, config, plateRef }) => {
+const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateRef: React.RefObject<THREE.Mesh | null> }> = ({ elements, config, plateRef }) => {
   const groupRef = useRef<THREE.Group>(null);
   const plateBox = useMemo(() => new THREE.Box3(), []);
   const logoBox = useMemo(() => new THREE.Box3(), []);
@@ -145,7 +139,7 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
   );
 };
 
-const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig; markerRef: React.RefObject<THREE.Object3D> }>(({ config, markerRef }, ref) => {
+const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig; markerRef: React.RefObject<THREE.Group | null> }>(({ config, markerRef }, ref) => {
   const geometry = useMemo(() => {
     const s = 45;
     const r = 5;
@@ -169,11 +163,8 @@ const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig; markerRef: Re
     const bodyG = new THREE.ExtrudeGeometry(shape, sets);
     const eyeG = new THREE.ExtrudeGeometry(eyelet, sets);
     
-    // Zentrierung Z vor Rotation
     bodyG.translate(0, 0, -config.plateDepth/2);
     eyeG.translate(0, 0, -config.plateDepth/2);
-    
-    // Rotation: Y_2d wird zu -Z_3d. Lochzentrum 2D(y=22.5) -> 3D(z=-22.5)
     bodyG.rotateX(-Math.PI/2);
     eyeG.rotateX(-Math.PI/2);
 
@@ -188,8 +179,7 @@ const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig; markerRef: Re
       <mesh ref={ref} geometry={geometry} castShadow receiveShadow>
         <meshStandardMaterial color="#27272a" roughness={0.8} metalness={0.1} side={THREE.DoubleSide} />
       </mesh>
-      {/* Geometrisch korrekter Marker-Punkt nach X-Rotation (-90 Grad) */}
-      <group ref={markerRef as any} position={[-22.5, 0, -22.5]} />
+      <group ref={markerRef} position={[-22.5, 0, -22.5]} />
     </group>
   );
 });
@@ -198,7 +188,7 @@ export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null 
   const { config, svgElements } = props;
   const sceneGroupRef = useRef<THREE.Group>(null);
   const plateRef = useRef<THREE.Mesh>(null);
-  const holeMarkerRef = useRef<THREE.Object3D>(null);
+  const holeMarkerRef = useRef<THREE.Group>(null);
 
   useImperativeHandle(ref, () => ({
     getExportableGroup: () => {
