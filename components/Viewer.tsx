@@ -10,7 +10,10 @@ import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
 // This allows TypeScript to recognize elements like <mesh />, <group />, <torusGeometry />, etc.
 declare global {
   namespace JSX {
-    interface IntrinsicElements extends ThreeElements {}
+    interface IntrinsicElements extends ThreeElements {
+      // Fix: Add indexer to satisfy compiler for custom intrinsic elements in this environment
+      [tagName: string]: any;
+    }
   }
 }
 

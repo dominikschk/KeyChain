@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { Download, Upload, Trash2, Box, ShoppingCart, AlertCircle, CheckCircle2, Loader2, ShieldCheck, Code, Settings2 } from 'lucide-react';
+import { Download, Upload, Box, AlertCircle, CheckCircle2, Loader2, Printer, ShoppingCart, HelpCircle } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
 import { ShopifyGuide } from './components/ShopifyGuide';
@@ -8,27 +8,20 @@ import { DEFAULT_CONFIG } from './constants';
 import { ModelConfig, SVGPathData } from './types';
 import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 import { supabase } from './lib/supabase';
 
 const App: React.FC = () => {
   const [config, setConfig] = useState<ModelConfig>(DEFAULT_CONFIG);
   const [svgElements, setSvgElements] = useState<SVGPathData[] | null>(null);
-  const [originalSvgContent, setOriginalSvgContent] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
-  const [showShopifyGuide, setShowShopifyGuide] = useState(false);
   
   const viewerRef = useRef<{ getExportableGroup: () => THREE.Group | null, takeScreenshot: () => Promise<string> }>(null);
-
-  const [shopifyParams] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return {
-      shop: params.get('shop') || 'nudaim3d.de',
-      variantId: params.get('variant') || '56564338262361'
-    };
-  });
 
   const logoDimensions = useMemo(() => {
     if (!svgElements) return { width: 0, height: 0 };
@@ -78,7 +71,6 @@ const App: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const contents = e.target?.result as string;
-      setOriginalSvgContent(contents);
       const loader = new SVGLoader();
       try {
         const svgData = loader.parse(contents);
@@ -111,108 +103,97 @@ const App: React.FC = () => {
     reader.readAsText(file);
   };
 
-  const handleAddToCart = async () => {
-    if (!originalSvgContent || !svgElements || !viewerRef.current) {
+  const handleExportSTL = async () => {
+    if (!svgElements || !viewerRef.current) {
       setError("Bitte laden Sie zuerst ein Logo hoch.");
       return;
     }
-    
-    setIsSubmitting(true);
+    setIsExporting(true);
     setError(null);
-
     try {
-      const designId = `3D-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-      let publicImageUrl = '';
-
-      const screenshotData = await viewerRef.current.takeScreenshot();
-      
-      if (screenshotData) {
-        const base64Response = await fetch(screenshotData);
-        const blob = await base64Response.blob();
-        const fileName = `${designId}.png`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('previews')
-          .upload(fileName, blob, {
-            contentType: 'image/png',
-            cacheControl: '3600',
-            upsert: true
-          });
-
-        if (uploadError) {
-          throw new Error(`Bild-Upload fehlgeschlagen: ${uploadError.message}`);
-        }
-
-        const { data: urlData } = supabase.storage
-          .from('previews')
-          .getPublicUrl(fileName);
-        publicImageUrl = urlData.publicUrl;
-      }
-
-      const sanitizedElements = svgElements.map(({ id, name, color, currentColor }) => ({
-        id,
-        name,
-        originalColor: color,
-        currentColor: currentColor
-      }));
-
-      const { error: dbError } = await supabase
-        .from('designs')
-        .insert([
-          { 
-            id: designId, 
-            config: { 
-              ...config, 
-              customizedElements: sanitizedElements 
-            }, 
-            svg_content: originalSvgContent,
-            preview_url: publicImageUrl
-          }
-        ]);
-
-      if (dbError) {
-        throw new Error(`Speichern fehlgeschlagen: ${dbError.message}`);
-      }
-
-      const baseUrl = `https://${shopifyParams.shop}/cart/add`;
-      const queryParams = new URLSearchParams();
-      queryParams.append('id', shopifyParams.variantId);
-      queryParams.append('quantity', '1');
-      queryParams.append('properties[_design_id]', designId);
-      if (publicImageUrl) queryParams.append('properties[Dein-Design]', publicImageUrl);
-      if (config.customLink) queryParams.append('properties[Link-Text]', config.customLink);
-
+      const exportGroup = viewerRef.current.getExportableGroup();
+      if (!exportGroup) throw new Error("Export-Geometrie konnte nicht generiert werden.");
+      const exporter = new STLExporter();
+      const stlString = exporter.parse(exportGroup, { binary: true });
+      const blob = new Blob([stlString], { type: 'application/octet-stream' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `3D_Logo_Plate_${Date.now()}.stl`;
+      link.click();
       setIsSuccess(true);
-      setTimeout(() => {
-        window.location.href = `${baseUrl}?${queryParams.toString()}`;
-      }, 1000);
-
+      setTimeout(() => setIsSuccess(false), 3000);
     } catch (err: any) {
-      setError(err.message || "Verbindung zu Supabase fehlgeschlagen.");
-      setIsSubmitting(false);
+      setError(err.message || "STL Export fehlgeschlagen.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleAddToCart = async () => {
+    if (!svgElements || !viewerRef.current) {
+      setError("Bitte laden Sie zuerst ein Logo hoch.");
+      return;
+    }
+    setIsAddingToCart(true);
+    setError(null);
+    try {
+      const screenshot = await viewerRef.current.takeScreenshot();
+      const base64Data = screenshot.split(',')[1];
+      
+      // Fix: Manual base64 to Uint8Array conversion for Supabase upload as FileLoader.decodeText is not intended for public use
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      const fileName = `preview_${Date.now()}.png`;
+      const { data, error: uploadError } = await supabase.storage
+        .from('previews')
+        .upload(fileName, bytes, {
+          contentType: 'image/png'
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('previews').getPublicUrl(fileName);
+
+      // Shopify URL Konstruktion
+      const shopifyUrl = new URL('https://mein-shop.myshopify.com/cart/add');
+      shopifyUrl.searchParams.append('id', 'YOUR_VARIANT_ID'); // Ersetze dies durch deine echte Shopify Variant ID
+      shopifyUrl.searchParams.append('quantity', '1');
+      shopifyUrl.searchParams.append('properties[Vorschau]', publicUrl);
+      shopifyUrl.searchParams.append('properties[Modell]', 'Custom 3D Plate');
+
+      window.location.href = shopifyUrl.toString();
+    } catch (err: any) {
+      setError("Fehler beim Warenkorb-Prozess: " + err.message);
+    } finally {
+      setIsAddingToCart(false);
     }
   };
 
   return (
     <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
+      {showGuide && <ShopifyGuide onClose={() => setShowGuide(false)} />}
+      
       <aside className="w-80 border-r border-zinc-800 bg-zinc-900/50 flex flex-col z-10 shrink-0 shadow-2xl">
-        <header className="p-6 border-b border-zinc-800 flex items-center justify-between">
+        <header className="p-6 border-b border-zinc-800 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/20">
-              <Box size={20} className="text-white" />
+              <Printer size={20} className="text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg tracking-tight leading-none">KeyChain Studio</h1>
-              <p className="text-[9px] text-zinc-500 uppercase tracking-widest mt-1">Smart Geometry Integration</p>
+              <h1 className="font-bold text-lg tracking-tight leading-none">PrintStudio</h1>
+              <p className="text-[9px] text-zinc-500 uppercase tracking-widest mt-1">Personalizer</p>
             </div>
           </div>
           <button 
-            onClick={() => setShowShopifyGuide(true)}
-            className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-blue-400 px-3 py-1.5 rounded-xl transition-all border border-zinc-700/50"
+            onClick={() => setShowGuide(true)}
+            className="text-zinc-500 hover:text-white transition-colors"
             title="Shopify Setup Guide"
           >
-            <Code size={14} />
-            <span className="text-[10px] font-bold uppercase tracking-wider">Setup</span>
+            <HelpCircle size={18} />
           </button>
         </header>
 
@@ -228,11 +209,11 @@ const App: React.FC = () => {
           )}
 
           {isSuccess && (
-            <div className="bg-emerald-900/20 border border-emerald-500/50 p-4 rounded-xl flex items-start gap-3 animate-pulse">
+            <div className="bg-emerald-900/20 border border-emerald-500/50 p-4 rounded-xl flex items-start gap-3 animate-in fade-in">
               <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
               <div className="flex-1">
                 <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider mb-1">Erfolg</p>
-                <p className="text-[11px] text-emerald-200 leading-tight">Übertragung zu Shopify läuft...</p>
+                <p className="text-[11px] text-emerald-200 leading-tight">STL erfolgreich exportiert!</p>
               </div>
             </div>
           )}
@@ -240,7 +221,7 @@ const App: React.FC = () => {
           <section className="space-y-4">
             <div className="flex items-center gap-2 text-zinc-400 font-bold text-[10px] uppercase tracking-[0.15em]">
               <Upload size={14} className="text-blue-500" />
-              <span>SVG Logo</span>
+              <span>Logo hochladen (SVG)</span>
             </div>
             <div className="relative group">
               <input
@@ -254,8 +235,7 @@ const App: React.FC = () => {
                   {svgElements ? <CheckCircle2 size={24} /> : <Upload size={20} />}
                 </div>
                 <div className="text-center">
-                  <p className="text-xs font-bold text-zinc-300">{svgElements ? 'Logo ersetzt' : 'Logo hochladen'}</p>
-                  <p className="text-[10px] text-zinc-500 mt-1">SVG Format erforderlich</p>
+                  <p className="text-xs font-bold text-zinc-300">{svgElements ? 'Logo geladen' : 'Datei wählen'}</p>
                 </div>
               </div>
             </div>
@@ -273,18 +253,23 @@ const App: React.FC = () => {
           />
         </div>
 
-        <div className="p-6 border-t border-zinc-800 bg-zinc-900/80 backdrop-blur-md">
+        <div className="p-6 border-t border-zinc-800 bg-zinc-900/80 backdrop-blur-md space-y-3">
           <button
             onClick={handleAddToCart}
-            disabled={isSubmitting || !svgElements}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-blue-900/20 active:scale-[0.98]"
+            disabled={isAddingToCart || !svgElements}
+            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-3 shadow-lg active:scale-[0.98]"
           >
-            {isSubmitting ? (
-              <Loader2 className="animate-spin" size={20} />
-            ) : (
-              <ShoppingCart size={20} />
-            )}
+            {isAddingToCart ? <Loader2 className="animate-spin" size={20} /> : <ShoppingCart size={20} />}
             <span>IN DEN WARENKORB</span>
+          </button>
+          
+          <button
+            onClick={handleExportSTL}
+            disabled={isExporting || !svgElements}
+            className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-3 active:scale-[0.98] text-xs"
+          >
+            {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+            <span>STL DOWNLOAD</span>
           </button>
         </div>
       </aside>
@@ -298,8 +283,6 @@ const App: React.FC = () => {
           onSelect={setSelectedElementId}
         />
       </main>
-
-      {showShopifyGuide && <ShopifyGuide onClose={() => setShowShopifyGuide(false)} />}
     </div>
   );
 };
