@@ -1,23 +1,10 @@
+/// <reference types="@react-three/fiber" />
 import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Canvas, useFrame, ThreeElements } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Environment, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
-
-// Extend the global JSX namespace to include Three.js elements for standard R3F usage.
-// This resolves the errors where 'group', 'mesh', etc. are not recognized in JSX.
-// We extend both JSX and React.JSX for maximum compatibility across TS/React versions.
-declare global {
-  namespace JSX {
-    interface IntrinsicElements extends ThreeElements {}
-  }
-  namespace React {
-    namespace JSX {
-      interface IntrinsicElements extends ThreeElements {}
-    }
-  }
-}
 
 export interface ViewerProps {
   config: ModelConfig;

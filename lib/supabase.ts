@@ -1,5 +1,5 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@^2.45.4';
+import { createClient } from '@supabase/supabase-js';
 
 // Diese Werte sollten idealerweise aus Umgebungsvariablen kommen.
 // Da wir hier im Browser sind, nutzen wir Platzhalter, die du mit deinen 
