@@ -6,14 +6,12 @@ import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
 
-// Extend the global JSX namespace to include Three.js elements provided by @react-three/fiber.
-// This resolves the "Property '...' does not exist on type 'JSX.IntrinsicElements'" errors
-// by ensuring that Three.js primitives like <group />, <mesh />, etc. are recognized.
+// Fix for JSX intrinsic elements errors by augmenting the global JSX namespace for React-Three-Fiber.
+// This ensures that 'mesh', 'group', 'torusGeometry', etc. are recognized by the TypeScript compiler
+// when used inside the Fiber Canvas.
 declare global {
   namespace JSX {
-    interface IntrinsicElements extends ThreeElements {
-      [elemName: string]: any;
-    }
+    interface IntrinsicElements extends ThreeElements {}
   }
 }
 
@@ -68,7 +66,7 @@ const KeychainChain: React.FC<{
   );
 };
 
-const LogoElement: React.FC<{ element: SVGPathData; config: ModelConfig }> = ({ element, config }) => {
+const LogoElement: React.FC<{ element: SVGPathData; config: ModelConfig; isSelected: boolean }> = ({ element, config, isSelected }) => {
   const geometry = useMemo(() => {
     const geo = new THREE.ExtrudeGeometry(element.shapes, { depth: config.logoDepth, bevelEnabled: false });
     geo.scale(1, -1, 1);
@@ -81,12 +79,19 @@ const LogoElement: React.FC<{ element: SVGPathData; config: ModelConfig }> = ({ 
 
   return (
     <mesh geometry={geometry} castShadow receiveShadow>
-      <meshStandardMaterial color={element.currentColor} roughness={0.2} metalness={0.4} side={THREE.DoubleSide} />
+      <meshStandardMaterial 
+        color={element.currentColor} 
+        roughness={0.2} 
+        metalness={0.4} 
+        side={THREE.DoubleSide} 
+        emissive={isSelected ? element.currentColor : '#000000'}
+        emissiveIntensity={isSelected ? 0.5 : 0}
+      />
     </mesh>
   );
 };
 
-const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateRef: React.RefObject<THREE.Mesh | null> }> = ({ elements, config, plateRef }) => {
+const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateRef: React.RefObject<THREE.Mesh | null>; selectedId: string | null }> = ({ elements, config, plateRef, selectedId }) => {
   const groupRef = useRef<THREE.Group>(null);
   const plateBox = useMemo(() => new THREE.Box3(), []);
   const logoBox = useMemo(() => new THREE.Box3(), []);
@@ -128,7 +133,14 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
       rotation={[0, THREE.MathUtils.degToRad(config.logoRotation), 0]}
     >
       <group position={[-centerOffset.x, 0, -centerOffset.z]}>
-        {elements.map(el => <LogoElement key={el.id} element={el} config={config} />)}
+        {elements.map(el => (
+          <LogoElement 
+            key={el.id} 
+            element={el} 
+            config={config} 
+            isSelected={selectedId === el.id} 
+          />
+        ))}
       </group>
     </group>
   );
@@ -172,7 +184,7 @@ const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig; markerRef: Re
   return (
     <group>
       <mesh ref={ref} geometry={geometry} castShadow receiveShadow>
-        <meshStandardMaterial color="#27272a" roughness={0.8} metalness={0.1} side={THREE.DoubleSide} />
+        <meshStandardMaterial color="#18181b" roughness={0.8} metalness={0.1} side={THREE.DoubleSide} />
       </mesh>
       <group ref={markerRef} position={[-22.5, 0, -22.5]} />
     </group>
@@ -180,11 +192,10 @@ const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig; markerRef: Re
 });
 
 export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null, takeScreenshot: () => Promise<string> }, ViewerProps>((props, ref) => {
-  const { config, svgElements } = props;
+  const { config, svgElements, selectedId } = props;
   const sceneGroupRef = useRef<THREE.Group>(null);
   const plateRef = useRef<THREE.Mesh>(null);
   const holeMarkerRef = useRef<THREE.Group>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useImperativeHandle(ref, () => ({
     getExportableGroup: () => {
@@ -207,7 +218,6 @@ export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null,
       return new Promise((resolve) => {
         const canvas = document.querySelector('canvas');
         if (canvas) {
-          // Wir geben dem Renderer einen Moment Zeit, um sicherzustellen, dass das Bild aktuell ist
           requestAnimationFrame(() => {
             resolve(canvas.toDataURL('image/png'));
           });
@@ -226,13 +236,14 @@ export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null,
       >
         <PerspectiveCamera makeDefault position={[80, 80, 80]} fov={35} />
         <OrbitControls makeDefault minDistance={30} maxDistance={400} />
-        <ambientLight intensity={1} />
-        <pointLight position={[60, 60, 60]} intensity={1.5} castShadow />
+        <ambientLight intensity={0.5} />
+        <spotLight position={[50, 100, 50]} angle={0.15} penumbra={1} intensity={2} castShadow />
+        <pointLight position={[-50, -50, -50]} intensity={1} color="#3b82f6" />
         
         <group ref={sceneGroupRef}>
           <KeychainBase config={config} ref={plateRef} markerRef={holeMarkerRef} />
           {svgElements && (
-            <LogoGroup elements={svgElements} config={config} plateRef={plateRef} />
+            <LogoGroup elements={svgElements} config={config} plateRef={plateRef} selectedId={selectedId} />
           )}
           {config.hasChain && (
             <KeychainChain markerRef={holeMarkerRef} parentRef={sceneGroupRef} />
@@ -241,7 +252,7 @@ export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null,
 
         <gridHelper args={[600, 60, 0x18181b, 0x0c0c0e]} position={[0, -10, 0]} />
         <ContactShadows opacity={0.6} scale={150} blur={3} far={20} color="#000000" position={[0, -8, 0]} />
-        <Environment preset="studio" />
+        <Environment preset="night" />
       </Canvas>
     </div>
   );

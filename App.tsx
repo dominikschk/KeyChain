@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { Download, Upload, Trash2, Box, ShoppingCart, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
@@ -27,6 +27,28 @@ const App: React.FC = () => {
     };
   });
 
+  const logoDimensions = useMemo(() => {
+    if (!svgElements) return { width: 0, height: 0 };
+    const totalBox = new THREE.Box3();
+    svgElements.forEach(el => {
+      el.shapes.forEach(shape => {
+        const geo = new THREE.ShapeGeometry(shape);
+        geo.computeBoundingBox();
+        if (geo.boundingBox) totalBox.union(geo.boundingBox);
+      });
+    });
+    const size = new THREE.Vector3();
+    totalBox.getSize(size);
+    return {
+      width: size.x * config.logoScale,
+      height: size.y * config.logoScale
+    };
+  }, [svgElements, config.logoScale]);
+
+  const updateElementColor = (id: string, color: string) => {
+    setSvgElements(prev => prev ? prev.map(el => el.id === id ? { ...el, currentColor: color } : el) : null);
+  };
+
   const calculateAutoFitScale = useCallback((elements: SVGPathData[]) => {
     const totalBox = new THREE.Box3();
     elements.forEach(el => {
@@ -39,7 +61,7 @@ const App: React.FC = () => {
     const size = new THREE.Vector3();
     totalBox.getSize(size);
     if (size.x === 0 || size.y === 0) return 1;
-    const padding = 8; 
+    const padding = 12; 
     const targetSize = 45 - padding;
     return Math.min(targetSize / size.x, targetSize / size.y);
   }, []);
@@ -65,7 +87,7 @@ const App: React.FC = () => {
             shapes: shapes,
             color: color,
             currentColor: color,
-            name: (path.userData as any)?.node?.id || `Element ${index + 1}`
+            name: (path.userData as any)?.node?.id || `Form ${index + 1}`
           };
         });
 
@@ -121,45 +143,38 @@ const App: React.FC = () => {
         }
       }
 
-      try {
-        await supabase
-          .from('designs')
-          .insert([
-            { 
-              id: designId, 
-              config: config, 
-              svg_content: originalSvgContent,
-              preview_url: publicImageUrl
-            }
-          ]);
-      } catch (e) {
-        console.warn("Datenbank-Verbindung fehlgeschlagen.");
-      }
+      // Wir erstellen eine bereinigte Liste der Elemente OHNE die Three.js Shapes, 
+      // damit nur ID, Name und vor allem die gewählten FARBEN in Supabase gespeichert werden.
+      const sanitizedElements = svgElements.map(({ id, name, color, currentColor }) => ({
+        id,
+        name,
+        originalColor: color,
+        currentColor: currentColor
+      }));
+
+      await supabase
+        .from('designs')
+        .insert([
+          { 
+            id: designId, 
+            config: { 
+              ...config, 
+              customizedElements: sanitizedElements 
+            }, 
+            svg_content: originalSvgContent,
+            preview_url: publicImageUrl
+          }
+        ]);
 
       const baseUrl = `https://${shopifyParams.shop}/cart/add`;
       const queryParams = new URLSearchParams();
       queryParams.append('id', shopifyParams.variantId);
       queryParams.append('quantity', '1');
-      
       queryParams.append('properties[_design_id]', designId);
-      if (publicImageUrl) {
-        queryParams.append('properties[Vorschau-Bild]', publicImageUrl);
-      }
-      
-      // HIER WIRD DER LINK ÜBERGEBEN
-      if (config.customLink) {
-        queryParams.append('properties[Link-Text]', config.customLink);
-      }
+      if (publicImageUrl) queryParams.append('properties[Vorschau-Bild]', publicImageUrl);
+      if (config.customLink) queryParams.append('properties[Link-Text]', config.customLink);
 
-      queryParams.append('properties[Konfiguration]', 'Individuell');
-      queryParams.append('properties[Kette]', config.hasChain ? 'Inklusive' : 'Ohne');
-
-      const finalShopifyUrl = `${baseUrl}?${queryParams.toString()}`;
-      setIsSuccess(true);
-      setTimeout(() => {
-        window.location.href = finalShopifyUrl;
-      }, 800);
-
+      window.location.href = `${baseUrl}?${queryParams.toString()}`;
     } catch (err: any) {
       setError(err.message || "Ein Fehler ist aufgetreten.");
       setIsSubmitting(false);
@@ -193,7 +208,7 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="font-bold text-lg tracking-tight leading-none">KeyChain Studio</h1>
-            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mt-1">Nudaim 3D Integration</p>
+            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mt-1">Smart Geometry Integration</p>
           </div>
         </header>
 
@@ -208,7 +223,7 @@ const App: React.FC = () => {
           {isSuccess && (
             <div className="bg-emerald-900/20 border border-emerald-500/50 p-4 rounded-xl flex items-start gap-3 animate-pulse">
               <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
-              <p className="text-xs text-emerald-200">Design gespeichert. Leite weiter...</p>
+              <p className="text-xs text-emerald-200">Design gespeichert...</p>
             </div>
           )}
 
@@ -229,14 +244,22 @@ const App: React.FC = () => {
                 <input type="file" accept=".svg" className="hidden" onChange={handleFileUpload} />
               </label>
             ) : (
-              <div className="bg-zinc-900/80 rounded-xl border border-zinc-800 p-2 text-xs text-zinc-400 flex items-center gap-2">
-                 <Box size={14} className="text-blue-500" />
-                 Logo bereit zur Anpassung
+              <div className="bg-emerald-500/10 rounded-xl border border-emerald-500/30 p-3 text-[10px] text-emerald-400 font-bold uppercase flex items-center gap-2">
+                 <CheckCircle2 size={14} /> Logo erfolgreich geladen
               </div>
             )}
           </section>
 
-          <Controls config={config} setConfig={setConfig} hasLogo={!!svgElements} />
+          <Controls 
+            config={config} 
+            setConfig={setConfig} 
+            hasLogo={!!svgElements} 
+            svgElements={svgElements}
+            selectedElementId={selectedElementId}
+            onSelectElement={setSelectedElementId}
+            onUpdateColor={updateElementColor}
+            logoDimensions={logoDimensions}
+          />
         </div>
 
         <footer className="p-6 border-t border-zinc-800 bg-zinc-900/80 space-y-3">
@@ -248,14 +271,7 @@ const App: React.FC = () => {
             }`}
           >
             <ShoppingCart size={18} />
-            {isSubmitting ? 'Vorschau wird erstellt...' : 'In den Warenkorb'}
-          </button>
-          
-          <button 
-            onClick={handleExport}
-            className="w-full text-zinc-600 hover:text-zinc-400 text-[10px] uppercase font-bold tracking-widest flex items-center justify-center gap-2"
-          >
-            <Download size={12} /> Preview-STL exportieren
+            {isSubmitting ? 'Verarbeite...' : 'Jetzt bestellen'}
           </button>
         </footer>
       </aside>
@@ -268,13 +284,6 @@ const App: React.FC = () => {
           onSelect={setSelectedElementId}
           ref={viewerRef} 
         />
-        
-        <div className="absolute top-6 right-6">
-           <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 p-4 rounded-xl text-[10px] text-zinc-500 font-mono shadow-2xl space-y-1">
-              <div className="flex justify-between gap-4"><span>SHOP</span> <span>{shopifyParams.shop}</span></div>
-              <div className="flex justify-between gap-4"><span>VAR-ID</span> <span>{shopifyParams.variantId}</span></div>
-           </div>
-        </div>
       </main>
     </div>
   );

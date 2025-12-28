@@ -1,11 +1,16 @@
 import React from 'react';
-import { ModelConfig } from '../types';
-import { Layers, Maximize2, Move, RotateCw, Box, ShieldCheck, ToggleLeft, ToggleRight, FlipHorizontal, Link as LinkIcon, Type } from 'lucide-react';
+import { ModelConfig, SVGPathData } from '../types';
+import { Layers, Maximize2, Move, RotateCw, Box, ShieldCheck, ToggleLeft, ToggleRight, FlipHorizontal, Link as LinkIcon, Type, MousePointer2, Palette } from 'lucide-react';
 
 interface ControlsProps {
   config: ModelConfig;
   setConfig: React.Dispatch<React.SetStateAction<ModelConfig>>;
   hasLogo: boolean;
+  svgElements: SVGPathData[] | null;
+  selectedElementId: string | null;
+  onSelectElement: (id: string | null) => void;
+  onUpdateColor: (id: string, color: string) => void;
+  logoDimensions: { width: number, height: number };
 }
 
 const Slider: React.FC<{
@@ -26,7 +31,7 @@ const Slider: React.FC<{
         <span>{label}</span>
       </div>
       <span className="text-zinc-200 font-mono bg-zinc-800 px-2 py-0.5 rounded border border-zinc-700/50">
-        {value}{unit}
+        {value.toFixed(1)}{unit}
       </span>
     </div>
     <input
@@ -41,13 +46,63 @@ const Slider: React.FC<{
   </div>
 );
 
-export const Controls: React.FC<ControlsProps> = ({ config, setConfig, hasLogo }) => {
+export const Controls: React.FC<ControlsProps> = ({ 
+  config, 
+  setConfig, 
+  hasLogo, 
+  svgElements, 
+  selectedElementId, 
+  onSelectElement, 
+  onUpdateColor,
+  logoDimensions 
+}) => {
   const updateConfig = (key: keyof ModelConfig, value: any) => {
     setConfig(prev => ({ ...prev, [key]: value }));
   };
 
+  // Berechnung der maximalen Verschiebung, damit das Logo nicht über den Rand ragt
+  // Platte ist 45x45mm, also von -22.5 bis 22.5
+  const maxMoveX = Math.max(0, (45 - logoDimensions.width) / 2);
+  const maxMoveY = Math.max(0, (45 - logoDimensions.height) / 2);
+
   return (
     <div className="space-y-8 pb-6">
+      {/* SVG Elements List */}
+      <section className={`space-y-4 transition-all ${!hasLogo ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+        <div className="flex items-center gap-2 text-zinc-400 font-bold text-[10px] uppercase tracking-[0.15em]">
+          <Palette size={14} className="text-blue-500" />
+          <span>Formen & Farben</span>
+        </div>
+        <div className="bg-zinc-900/40 rounded-2xl border border-zinc-800/80 p-2 space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
+          {svgElements?.map(el => (
+            <div 
+              key={el.id}
+              onClick={() => onSelectElement(el.id)}
+              className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
+                selectedElementId === el.id ? 'bg-blue-600/20 border border-blue-500/50' : 'hover:bg-zinc-800/50 border border-transparent'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-4 h-4 rounded-full border border-white/20" 
+                  style={{ backgroundColor: el.currentColor }} 
+                />
+                <span className="text-[10px] font-bold text-zinc-300 truncate w-32">{el.name}</span>
+              </div>
+              {selectedElementId === el.id && (
+                <input 
+                  type="color" 
+                  value={el.currentColor} 
+                  onChange={(e) => onUpdateColor(el.id, e.target.value)}
+                  className="w-6 h-6 bg-transparent border-none cursor-pointer p-0"
+                />
+              )}
+              <MousePointer2 size={12} className={selectedElementId === el.id ? 'text-blue-500' : 'text-zinc-600'} />
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Base Settings */}
       <section className="space-y-4">
         <div className="flex items-center gap-2 text-zinc-400 font-bold text-[10px] uppercase tracking-[0.15em]">
@@ -55,7 +110,7 @@ export const Controls: React.FC<ControlsProps> = ({ config, setConfig, hasLogo }
           <span>Basis & Add-ons</span>
         </div>
         <div className="space-y-5 bg-zinc-900/40 p-5 rounded-2xl border border-zinc-800/80 shadow-inner">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-2">
               <LinkIcon size={12} /> Schlüsselkette
             </span>
@@ -67,23 +122,17 @@ export const Controls: React.FC<ControlsProps> = ({ config, setConfig, hasLogo }
             </button>
           </div>
 
-          {/* Link / Text Addon Field */}
           <div className="space-y-2">
             <label className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-2">
-              <Type size={12} /> Link / Text auf Rückseite
+              <Type size={12} /> Text-Addon (Rückseite)
             </label>
             <input 
               type="text"
-              placeholder="z.B. @deinname oder URL"
+              placeholder="@handle oder Link"
               value={config.customLink}
               onChange={(e) => updateConfig('customLink', e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-zinc-600"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
             />
-          </div>
-
-          <div className="flex justify-between items-center text-[10px] text-zinc-500 font-bold uppercase mt-2">
-             <span>Abmessungen (fix)</span>
-             <span className="text-zinc-400">45 x 45 mm</span>
           </div>
 
           <Slider 
@@ -99,51 +148,14 @@ export const Controls: React.FC<ControlsProps> = ({ config, setConfig, hasLogo }
       <section className={`space-y-4 transition-all duration-500 ${!hasLogo ? 'opacity-30 blur-[2px] pointer-events-none grayscale' : 'opacity-100'}`}>
         <div className="flex items-center gap-2 text-zinc-400 font-bold text-[10px] uppercase tracking-[0.15em]">
           <Layers size={14} className="text-blue-500" />
-          <span>Logo Individualisierung</span>
+          <span>Logo Position & Skalierung</span>
         </div>
         
         <div className="space-y-5 bg-zinc-900/40 p-5 rounded-2xl border border-zinc-800/80 shadow-inner">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-2">
-              <ShieldCheck size={12} /> Hohlkörper (Shell)
-            </span>
-            <button 
-              onClick={() => updateConfig('isHollow', !config.isHollow)}
-              className="text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              {config.isHollow ? <ToggleRight size={24} /> : <ToggleLeft size={24} className="text-zinc-600" />}
-            </button>
-          </div>
-
-          <Slider 
-            label="Wandstärke" 
-            value={config.wallThickness} 
-            min={0.8} max={5} step={0.2}
-            disabled={!config.isHollow}
-            onChange={(v) => updateConfig('wallThickness', v)} 
-            icon={<Layers size={12} />}
-          />
-
-          <div className="border-t border-zinc-800/50 pt-4 mt-2" />
-
-          <div className="mb-2">
-            <button
-              onClick={() => updateConfig('mirrorX', !config.mirrorX)}
-              className={`w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all ${
-                config.mirrorX 
-                  ? 'bg-blue-600/20 border-blue-500 text-blue-400' 
-                  : 'bg-zinc-800/50 border-zinc-700 text-zinc-500 hover:border-zinc-600'
-              }`}
-            >
-              <FlipHorizontal size={14} />
-              Horizontal spiegeln
-            </button>
-          </div>
-
           <Slider 
             label="Skalierung" 
             value={config.logoScale} 
-            min={0.05} max={2.0} step={0.01} 
+            min={0.05} max={1.5} step={0.01} 
             unit="x"
             onChange={(v) => updateConfig('logoScale', v)} 
             icon={<Maximize2 size={12} />}
@@ -151,10 +163,28 @@ export const Controls: React.FC<ControlsProps> = ({ config, setConfig, hasLogo }
           <Slider 
             label="Extrusion" 
             value={config.logoDepth} 
-            min={0.1} max={10} step={0.1}
+            min={0.1} max={8} step={0.1}
             onChange={(v) => updateConfig('logoDepth', v)} 
             icon={<Layers size={12} />}
           />
+          
+          <div className="grid grid-cols-2 gap-4">
+             <Slider 
+              label="Position X" 
+              value={config.logoPosX} 
+              min={-maxMoveX} max={maxMoveX} step={0.5}
+              onChange={(v) => updateConfig('logoPosX', v)} 
+              icon={<Move size={12} />}
+            />
+            <Slider 
+              label="Position Y" 
+              value={config.logoPosY} 
+              min={-maxMoveY} max={maxMoveY} step={0.5}
+              onChange={(v) => updateConfig('logoPosY', v)} 
+              icon={<Move size={12} />}
+            />
+          </div>
+
           <Slider 
             label="Rotation" 
             value={config.logoRotation} 
@@ -165,21 +195,18 @@ export const Controls: React.FC<ControlsProps> = ({ config, setConfig, hasLogo }
           />
         </div>
 
-        <div className="space-y-5 bg-zinc-900/40 p-5 rounded-2xl border border-zinc-800/80 shadow-inner">
-          <Slider 
-            label="Position X" 
-            value={config.logoPosX} 
-            min={-30} max={30} 
-            onChange={(v) => updateConfig('logoPosX', v)} 
-            icon={<Move size={12} />}
-          />
-          <Slider 
-            label="Position Y" 
-            value={config.logoPosY} 
-            min={-30} max={30} 
-            onChange={(v) => updateConfig('logoPosY', v)} 
-            icon={<Move size={12} />}
-          />
+        <div className="bg-zinc-900/40 p-5 rounded-2xl border border-zinc-800/80 shadow-inner">
+           <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-2">
+                <FlipHorizontal size={12} /> Spiegeln
+              </span>
+              <button 
+                onClick={() => updateConfig('mirrorX', !config.mirrorX)}
+                className="text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                {config.mirrorX ? <ToggleRight size={24} /> : <ToggleLeft size={24} className="text-zinc-600" />}
+              </button>
+            </div>
         </div>
       </section>
     </div>
