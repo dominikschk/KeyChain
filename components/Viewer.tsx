@@ -7,9 +7,15 @@ import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
 
 // Fix for JSX Intrinsic Elements to ensure @react-three/fiber elements are recognized by the TypeScript compiler
+// We augment both the global JSX namespace and the React.JSX namespace to handle React 18+ type definitions correctly.
 declare global {
   namespace JSX {
     interface IntrinsicElements extends ThreeElements {}
+  }
+  namespace React {
+    namespace JSX {
+      interface IntrinsicElements extends ThreeElements {}
+    }
   }
 }
 
