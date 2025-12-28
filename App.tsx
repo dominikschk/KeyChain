@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { Download, Upload, Box, AlertCircle, CheckCircle2, Loader2, Printer, ShoppingCart, HelpCircle } from 'lucide-react';
+import { Download, Upload, AlertCircle, CheckCircle2, Loader2, Printer, ShoppingCart, HelpCircle } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
 import { ShopifyGuide } from './components/ShopifyGuide';
@@ -114,8 +114,10 @@ const App: React.FC = () => {
       const exportGroup = viewerRef.current.getExportableGroup();
       if (!exportGroup) throw new Error("Export-Geometrie konnte nicht generiert werden.");
       const exporter = new STLExporter();
-      const stlString = exporter.parse(exportGroup, { binary: true });
-      const blob = new Blob([stlString], { type: 'application/octet-stream' });
+      const stlResult = exporter.parse(exportGroup, { binary: true });
+      
+      // Fix: Sicherstellen, dass der Blob mit dem korrekten Buffer erstellt wird
+      const blob = new Blob([stlResult as any], { type: 'application/octet-stream' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `3D_Logo_Plate_${Date.now()}.stl`;
@@ -138,9 +140,9 @@ const App: React.FC = () => {
     setError(null);
     try {
       const screenshot = await viewerRef.current.takeScreenshot();
-      const base64Data = screenshot.split(',')[1];
+      if (!screenshot) throw new Error("Screenshot konnte nicht erstellt werden.");
       
-      // Fix: Manual base64 to Uint8Array conversion for Supabase upload as FileLoader.decodeText is not intended for public use
+      const base64Data = screenshot.split(',')[1];
       const binaryString = atob(base64Data);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
@@ -148,7 +150,7 @@ const App: React.FC = () => {
       }
       
       const fileName = `preview_${Date.now()}.png`;
-      const { data, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('previews')
         .upload(fileName, bytes, {
           contentType: 'image/png'
@@ -159,15 +161,19 @@ const App: React.FC = () => {
       const { data: { publicUrl } } = supabase.storage.from('previews').getPublicUrl(fileName);
 
       // Shopify URL Konstruktion
-      const shopifyUrl = new URL('https://mein-shop.myshopify.com/cart/add');
-      shopifyUrl.searchParams.append('id', 'YOUR_VARIANT_ID'); // Ersetze dies durch deine echte Shopify Variant ID
+      // HINWEIS: Hier deine echte Shopify Shop URL und Variant ID einsetzen
+      const shopDomain = 'mein-shop.myshopify.com';
+      const variantId = 'YOUR_VARIANT_ID'; 
+      
+      const shopifyUrl = new URL(`https://${shopDomain}/cart/add`);
+      shopifyUrl.searchParams.append('id', variantId);
       shopifyUrl.searchParams.append('quantity', '1');
       shopifyUrl.searchParams.append('properties[Vorschau]', publicUrl);
-      shopifyUrl.searchParams.append('properties[Modell]', 'Custom 3D Plate');
+      shopifyUrl.searchParams.append('properties[Material]', 'PLA Custom');
 
       window.location.href = shopifyUrl.toString();
     } catch (err: any) {
-      setError("Fehler beim Warenkorb-Prozess: " + err.message);
+      setError("Fehler beim Warenkorb-Prozess: " + (err.message || "Unbekannter Fehler"));
     } finally {
       setIsAddingToCart(false);
     }
@@ -190,7 +196,7 @@ const App: React.FC = () => {
           </div>
           <button 
             onClick={() => setShowGuide(true)}
-            className="text-zinc-500 hover:text-white transition-colors"
+            className="text-zinc-500 hover:text-white transition-colors p-1"
             title="Shopify Setup Guide"
           >
             <HelpCircle size={18} />
