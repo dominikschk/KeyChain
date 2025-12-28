@@ -116,8 +116,6 @@ const App: React.FC = () => {
       const exporter = new STLExporter();
       const stlResult = exporter.parse(exportGroup, { binary: true });
       
-      // Fix: Sicherstellen, dass der Blob mit dem korrekten Buffer erstellt wird
-      // STLExporter gibt im Binary-Mode ein DataView zurück. Wir brauchen dessen .buffer
       const stlBuffer = (stlResult instanceof DataView) ? stlResult.buffer : stlResult;
       const blob = new Blob([stlBuffer as BlobPart], { type: 'application/octet-stream' });
       
@@ -165,13 +163,17 @@ const App: React.FC = () => {
 
       // Shopify URL nudaim3d.de
       const shopDomain = 'nudaim3d.de';
-      const variantId = 'YOUR_VARIANT_ID'; 
+      const variantId = '56564338262361'; 
       
       const shopifyUrl = new URL(`https://${shopDomain}/cart/add`);
       shopifyUrl.searchParams.append('id', variantId);
       shopifyUrl.searchParams.append('quantity', '1');
       shopifyUrl.searchParams.append('properties[Vorschau]', publicUrl);
       shopifyUrl.searchParams.append('properties[Material]', 'PLA Custom');
+      
+      if (config.customLink && config.customLink.trim() !== '') {
+        shopifyUrl.searchParams.append('properties[Text-Addon]', config.customLink);
+      }
 
       window.location.href = shopifyUrl.toString();
     } catch (err: any) {
