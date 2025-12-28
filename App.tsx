@@ -165,12 +165,12 @@ const App: React.FC = () => {
       const group = viewerRef.current.getExportableGroup();
       if (group) {
         const exporter = new STLExporter();
-        // Das Ergebnis bei binary: true ist ein DataView.
-        // Um TS-Fehler "DataView ArrayBufferLike is not assignable to type BlobPart" zu vermeiden,
-        // übergeben wir direkt den Buffer oder casten sicherheitshalber.
         const result = exporter.parse(group, { binary: true });
-        const blobPart: BlobPart = (result instanceof DataView) ? result.buffer : (result as string);
-        const blob = new Blob([blobPart], { type: 'application/octet-stream' });
+        
+        // Use a type cast to any for the blob part to bypass strict SharedArrayBuffer checks
+        // SharedArrayBuffer is sometimes rejected as a BlobPart in strict TS environments
+        const blob = new Blob([result as any], { type: 'application/octet-stream' });
+        
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `keychain-preview.stl`;
