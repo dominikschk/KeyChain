@@ -6,7 +6,7 @@ import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
 
 // Extend the global JSX namespace to include Three.js elements for standard R3F usage.
-// Fix: Updated the declaration to match modern React/Vite global namespace expectations.
+// This resolves the errors where 'group', 'mesh', etc. are not recognized in JSX.
 declare global {
   namespace JSX {
     interface IntrinsicElements extends ThreeElements {}
