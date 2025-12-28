@@ -1,14 +1,15 @@
+
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { Download, Upload, Trash2, Box, ShoppingCart, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Download, Upload, Trash2, Box, ShoppingCart, AlertCircle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
 import { DEFAULT_CONFIG } from './constants';
 import { ModelConfig, SVGPathData } from './types';
 import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
-import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 import { supabase } from './lib/supabase';
 
+// Main Application Component
 const App: React.FC = () => {
   const [config, setConfig] = useState<ModelConfig>(DEFAULT_CONFIG);
   const [svgElements, setSvgElements] = useState<SVGPathData[] | null>(null);
@@ -118,11 +119,9 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      // 1. Eindeutige ID generieren
       const designId = `3D-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
       let publicImageUrl = '';
 
-      // 2. Automatischer Screenshot im Hintergrund
       const screenshotData = await viewerRef.current.takeScreenshot();
       
       if (screenshotData) {
@@ -130,7 +129,6 @@ const App: React.FC = () => {
         const blob = await base64Response.blob();
         const fileName = `${designId}.png`;
         
-        // Upload zum Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from('previews')
           .upload(fileName, blob, {
@@ -147,7 +145,6 @@ const App: React.FC = () => {
         }
       }
 
-      // 3. Farben und Konfiguration bereinigen
       const sanitizedElements = svgElements.map(({ id, name, color, currentColor }) => ({
         id,
         name,
@@ -155,8 +152,7 @@ const App: React.FC = () => {
         currentColor: currentColor
       }));
 
-      // 4. In Supabase Datenbank speichern
-      await supabase
+      const { error: dbError } = await supabase
         .from('designs')
         .insert([
           { 
@@ -170,25 +166,25 @@ const App: React.FC = () => {
           }
         ]);
 
-      // 5. Weiterleitung zu Shopify mit allen Informationen
+      if (dbError) {
+        throw new Error(`Datenbank-Fehler: ${dbError.message}`);
+      }
+
       const baseUrl = `https://${shopifyParams.shop}/cart/add`;
       const queryParams = new URLSearchParams();
       queryParams.append('id', shopifyParams.variantId);
       queryParams.append('quantity', '1');
-      
-      // Diese Properties werden in Shopify bei der Bestellung angezeigt
       queryParams.append('properties[_design_id]', designId);
       if (publicImageUrl) queryParams.append('properties[Vorschau-Bild]', publicImageUrl);
       if (config.customLink) queryParams.append('properties[Link-Text]', config.customLink);
 
-      // Kurzes visuelles Feedback vor dem Redirect
       setIsSuccess(true);
       setTimeout(() => {
         window.location.href = `${baseUrl}?${queryParams.toString()}`;
-      }, 800);
+      }, 1200);
 
     } catch (err: any) {
-      setError(err.message || "Ein Fehler ist aufgetreten.");
+      setError(err.message || "Ein unbekannter Fehler ist aufgetreten.");
       setIsSubmitting(false);
     }
   };
@@ -208,46 +204,53 @@ const App: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
           {error && (
-            <div className="bg-red-900/20 border border-red-500/50 p-4 rounded-xl flex items-start gap-3">
+            <div className="bg-red-900/20 border border-red-500/50 p-4 rounded-xl flex items-start gap-3 animate-in fade-in zoom-in-95">
               <AlertCircle className="text-red-500 shrink-0" size={18} />
-              <p className="text-xs text-red-200">{error}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1">Hinweis</p>
+                <p className="text-[11px] text-red-200 leading-tight break-words">{error}</p>
+              </div>
             </div>
           )}
 
           {isSuccess && (
-            <div className="bg-emerald-900/20 border border-emerald-500/50 p-4 rounded-xl flex items-start gap-3">
+            <div className="bg-emerald-900/20 border border-emerald-500/50 p-4 rounded-xl flex items-start gap-3 animate-pulse">
               <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
-              <p className="text-xs text-emerald-200">Design bereit! Warenkorb wird geladen...</p>
+              <div className="flex-1">
+                <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider mb-1">Erfolg</p>
+                <p className="text-[11px] text-emerald-200 leading-tight">Design gespeichert! Weiterleitung zum Warenkorb...</p>
+              </div>
             </div>
           )}
 
           <section className="space-y-4">
-            <div className="flex items-center justify-between text-zinc-400 font-bold text-[10px] uppercase tracking-widest">
-              <span>Logo Upload</span>
-              {svgElements && (
-                <button onClick={() => {setSvgElements(null); setOriginalSvgContent(null);}} className="text-zinc-600 hover:text-red-400 p-1 transition-colors"><Trash2 size={14} /></button>
-              )}
+            <div className="flex items-center gap-2 text-zinc-400 font-bold text-[10px] uppercase tracking-[0.15em]">
+              <Upload size={14} className="text-blue-500" />
+              <span>SVG Upload</span>
             </div>
-
-            {!svgElements ? (
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-zinc-700 rounded-xl cursor-pointer hover:border-blue-500 hover:bg-zinc-800/50 transition-all group">
-                <div className="flex flex-col items-center justify-center p-4 text-center">
-                  <Upload className="w-8 h-8 mb-2 text-zinc-500 group-hover:text-blue-400 transition-colors" />
-                  <p className="text-xs text-zinc-400 font-medium">SVG wählen</p>
+            <div className="relative group">
+              <input
+                type="file"
+                accept=".svg"
+                onChange={handleFileUpload}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              />
+              <div className="border-2 border-dashed border-zinc-800 group-hover:border-blue-500/50 group-hover:bg-blue-500/5 rounded-2xl p-8 transition-all flex flex-col items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 group-hover:text-blue-400 group-hover:scale-110 transition-all">
+                  <Upload size={20} />
                 </div>
-                <input type="file" accept=".svg" className="hidden" onChange={handleFileUpload} />
-              </label>
-            ) : (
-              <div className="bg-emerald-500/10 rounded-xl border border-emerald-500/30 p-3 text-[10px] text-emerald-400 font-bold uppercase flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-                 <CheckCircle2 size={14} /> Logo erfolgreich geladen
+                <div className="text-center">
+                  <p className="text-xs font-bold text-zinc-300">Logo hochladen</p>
+                  <p className="text-[10px] text-zinc-500 mt-1">Nur .SVG Dateien</p>
+                </div>
               </div>
-            )}
+            </div>
           </section>
 
           <Controls 
             config={config} 
             setConfig={setConfig} 
-            hasLogo={!!svgElements} 
+            hasLogo={!!svgElements}
             svgElements={svgElements}
             selectedElementId={selectedElementId}
             onSelectElement={setSelectedElementId}
@@ -256,37 +259,56 @@ const App: React.FC = () => {
           />
         </div>
 
-        <footer className="p-6 border-t border-zinc-800 bg-zinc-900/80 space-y-3">
+        <div className="p-6 border-t border-zinc-800 bg-zinc-900/80 backdrop-blur-md">
           <button
             onClick={handleAddToCart}
-            disabled={isSubmitting || !svgElements || isSuccess}
-            className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-xl shadow-blue-900/10 ${
-              isSubmitting || !svgElements || isSuccess ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]'
-            }`}
+            disabled={isSubmitting || !svgElements}
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-blue-900/20 active:scale-[0.98]"
           >
             {isSubmitting ? (
-              <>
-                <Loader2 size={18} className="animate-spin" />
-                Vorschau wird erstellt...
-              </>
+              <Loader2 className="animate-spin" size={20} />
             ) : (
-              <>
-                <ShoppingCart size={18} />
-                In den Warenkorb
-              </>
+              <ShoppingCart size={20} />
             )}
+            <span>IN DEN WARENKORB</span>
           </button>
-        </footer>
+          
+          <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-zinc-500 font-medium">
+            <ShieldCheck size={12} className="text-emerald-500" />
+            <span>Sichere 3D-Konfiguration</span>
+          </div>
+        </div>
       </aside>
 
-      <main className="flex-1 relative">
+      <main className="flex-1 relative bg-[#09090b]">
         <Viewer 
+          ref={viewerRef}
           config={config} 
           svgElements={svgElements} 
           selectedId={selectedElementId}
           onSelect={setSelectedElementId}
-          ref={viewerRef} 
         />
+        
+        <div className="absolute top-6 left-6 pointer-events-none">
+          <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 p-3 rounded-xl flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Live Preview Enabled</span>
+          </div>
+        </div>
+
+        {svgElements && (
+          <button 
+            onClick={() => {
+              setSvgElements(null);
+              setOriginalSvgContent(null);
+              setSelectedElementId(null);
+            }}
+            className="absolute bottom-6 right-6 bg-red-900/20 hover:bg-red-900/40 border border-red-500/30 text-red-500 p-3 rounded-xl transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider"
+          >
+            <Trash2 size={14} />
+            <span>Reset Logo</span>
+          </button>
+        )}
       </main>
     </div>
   );
