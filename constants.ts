@@ -1,4 +1,3 @@
-
 import { ModelConfig } from './types';
 
 export const DEFAULT_CONFIG: ModelConfig = {
@@ -15,6 +14,7 @@ export const DEFAULT_CONFIG: ModelConfig = {
   isHollow: false,
   mirrorX: false,
   hasChain: true,
+  customLink: '', // Standardmäßig leer
 };
 
 export const MIN_LOGO_SCALE = 0.01;

@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 
 export interface ModelConfig {
@@ -14,7 +13,8 @@ export interface ModelConfig {
   wallThickness: number;
   isHollow: boolean;
   mirrorX: boolean;
-  hasChain: boolean; // Neues Add-on
+  hasChain: boolean;
+  customLink: string; // Neues Feld für Link oder Text-Addon
 }
 
 export interface SVGPathData {

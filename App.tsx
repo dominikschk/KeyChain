@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef } from 'react';
 import { Download, Upload, Trash2, Box, ShoppingCart, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Viewer } from './components/Viewer';
@@ -18,9 +17,8 @@ const App: React.FC = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
-  const viewerRef = useRef<{ getExportableGroup: () => THREE.Group | null }>(null);
+  const viewerRef = useRef<{ getExportableGroup: () => THREE.Group | null, takeScreenshot: () => Promise<string> }>(null);
 
-  // Parameter von Shopify oder Fallback-Werte deiner URL
   const [shopifyParams] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return {
@@ -88,11 +86,8 @@ const App: React.FC = () => {
     reader.readAsText(file);
   };
 
-  /**
-   * PROZESS: Supabase Upload -> Shopify Redirect (CORS-Safe)
-   */
   const handleAddToCart = async () => {
-    if (!originalSvgContent || !svgElements) {
+    if (!originalSvgContent || !svgElements || !viewerRef.current) {
       setError("Bitte laden Sie zuerst ein Logo hoch.");
       return;
     }
@@ -101,47 +96,69 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      // 1. Eindeutige Design ID generieren
       const designId = `3D-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+      let publicImageUrl = '';
 
-      // 2. Upload zu Supabase (Optionaler Step, schlägt fehl wenn keine Keys gesetzt sind)
+      const screenshotData = await viewerRef.current.takeScreenshot();
+      
+      if (screenshotData) {
+        const base64Response = await fetch(screenshotData);
+        const blob = await base64Response.blob();
+        const fileName = `${designId}.png`;
+        const { error: uploadError } = await supabase.storage
+          .from('previews')
+          .upload(fileName, blob, {
+            contentType: 'image/png',
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('previews')
+            .getPublicUrl(fileName);
+          publicImageUrl = urlData.publicUrl;
+        }
+      }
+
       try {
-        const { error: dbError } = await supabase
+        await supabase
           .from('designs')
           .insert([
             { 
               id: designId, 
               config: config, 
-              svg_content: originalSvgContent 
+              svg_content: originalSvgContent,
+              preview_url: publicImageUrl
             }
           ]);
-        if (dbError) console.warn("Supabase Config fehlt oder fehlerhaft:", dbError.message);
       } catch (e) {
-        console.warn("Supabase Verbindung nicht möglich.");
+        console.warn("Datenbank-Verbindung fehlgeschlagen.");
       }
 
-      // 3. Shopify Redirect URL bauen (Umgeht CORS)
-      // Format: https://{shop}/cart/add?id={variantId}&quantity=1&properties[key]=value
       const baseUrl = `https://${shopifyParams.shop}/cart/add`;
       const queryParams = new URLSearchParams();
       queryParams.append('id', shopifyParams.variantId);
       queryParams.append('quantity', '1');
       
-      // Line Item Properties hinzufügen
       queryParams.append('properties[_design_id]', designId);
-      queryParams.append('properties[Vorschau]', '3D-Konfiguriert');
-      queryParams.append('properties[Material]', 'Kunststoff (3D-Druck)');
+      if (publicImageUrl) {
+        queryParams.append('properties[Vorschau-Bild]', publicImageUrl);
+      }
+      
+      // HIER WIRD DER LINK ÜBERGEBEN
+      if (config.customLink) {
+        queryParams.append('properties[Link-Text]', config.customLink);
+      }
+
+      queryParams.append('properties[Konfiguration]', 'Individuell');
       queryParams.append('properties[Kette]', config.hasChain ? 'Inklusive' : 'Ohne');
 
       const finalShopifyUrl = `${baseUrl}?${queryParams.toString()}`;
-
-      console.log(`Leite weiter zu Shopify: ${finalShopifyUrl}`);
       setIsSuccess(true);
-      
-      // Kurze Verzögerung für visuelles Feedback
       setTimeout(() => {
         window.location.href = finalShopifyUrl;
-      }, 500);
+      }, 800);
 
     } catch (err: any) {
       setError(err.message || "Ein Fehler ist aufgetreten.");
@@ -191,7 +208,7 @@ const App: React.FC = () => {
           {isSuccess && (
             <div className="bg-emerald-900/20 border border-emerald-500/50 p-4 rounded-xl flex items-start gap-3 animate-pulse">
               <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
-              <p className="text-xs text-emerald-200">Leite zum Shopify Warenkorb weiter...</p>
+              <p className="text-xs text-emerald-200">Design gespeichert. Leite weiter...</p>
             </div>
           )}
 
@@ -199,7 +216,7 @@ const App: React.FC = () => {
             <div className="flex items-center justify-between text-zinc-400 font-bold text-[10px] uppercase tracking-widest">
               <span>Logo Upload</span>
               {svgElements && (
-                <button onClick={() => setSvgElements(null)} className="text-zinc-600 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                <button onClick={() => {setSvgElements(null); setOriginalSvgContent(null);}} className="text-zinc-600 hover:text-red-400 p-1"><Trash2 size={14} /></button>
               )}
             </div>
 
@@ -231,7 +248,7 @@ const App: React.FC = () => {
             }`}
           >
             <ShoppingCart size={18} />
-            {isSubmitting ? 'Wird übertragen...' : 'In den Warenkorb'}
+            {isSubmitting ? 'Vorschau wird erstellt...' : 'In den Warenkorb'}
           </button>
           
           <button 

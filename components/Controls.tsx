@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { ModelConfig } from '../types';
-import { Layers, Maximize2, Move, RotateCw, Box, ShieldCheck, ToggleLeft, ToggleRight, FlipHorizontal, Link } from 'lucide-react';
+import { Layers, Maximize2, Move, RotateCw, Box, ShieldCheck, ToggleLeft, ToggleRight, FlipHorizontal, Link as LinkIcon, Type } from 'lucide-react';
 
 interface ControlsProps {
   config: ModelConfig;
@@ -58,7 +57,7 @@ export const Controls: React.FC<ControlsProps> = ({ config, setConfig, hasLogo }
         <div className="space-y-5 bg-zinc-900/40 p-5 rounded-2xl border border-zinc-800/80 shadow-inner">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-2">
-              <Link size={12} /> Schlüsselkette
+              <LinkIcon size={12} /> Schlüsselkette
             </span>
             <button 
               onClick={() => updateConfig('hasChain', !config.hasChain)}
@@ -68,7 +67,21 @@ export const Controls: React.FC<ControlsProps> = ({ config, setConfig, hasLogo }
             </button>
           </div>
 
-          <div className="flex justify-between items-center text-[10px] text-zinc-500 font-bold uppercase">
+          {/* Link / Text Addon Field */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase flex items-center gap-2">
+              <Type size={12} /> Link / Text auf Rückseite
+            </label>
+            <input 
+              type="text"
+              placeholder="z.B. @deinname oder URL"
+              value={config.customLink}
+              onChange={(e) => updateConfig('customLink', e.target.value)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-zinc-600"
+            />
+          </div>
+
+          <div className="flex justify-between items-center text-[10px] text-zinc-500 font-bold uppercase mt-2">
              <span>Abmessungen (fix)</span>
              <span className="text-zinc-400">45 x 45 mm</span>
           </div>

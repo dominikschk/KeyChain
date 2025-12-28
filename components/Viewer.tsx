@@ -1,3 +1,4 @@
+
 import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Canvas, useFrame, ThreeElements } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Environment, ContactShadows } from '@react-three/drei';
@@ -5,9 +6,9 @@ import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
 
-// Augment the JSX namespace to include Three.js elements provided by React Three Fiber.
-// This ensures that elements like <group>, <mesh>, and <torusGeometry> are recognized as valid JSX.
-// Added a string indexer to IntrinsicElements to provide a flexible fallback for all Three.js intrinsic elements.
+// Extend the global JSX namespace to include Three.js elements provided by @react-three/fiber.
+// This resolves the "Property '...' does not exist on type 'JSX.IntrinsicElements'" errors
+// by ensuring that Three.js primitives like <group />, <mesh />, etc. are recognized.
 declare global {
   namespace JSX {
     interface IntrinsicElements extends ThreeElements {
@@ -23,9 +24,6 @@ export interface ViewerProps {
   onSelect: (id: string | null) => void;
 }
 
-/**
- * KeychainChain: Koaxiale Platzierung durch worldToLocal Transformation.
- */
 const KeychainChain: React.FC<{ 
   markerRef: React.RefObject<THREE.Group | null>;
   parentRef: React.RefObject<THREE.Group | null>;
@@ -49,14 +47,11 @@ const KeychainChain: React.FC<{
   }, []);
 
   useFrame(() => {
-    // Sicherer Check auf alle beteiligten Refs
     if (markerRef.current && groupRef.current && parentRef.current) {
       markerRef.current.updateWorldMatrix(true, true);
       markerRef.current.getWorldPosition(worldPos);
-      
       parentRef.current.updateWorldMatrix(true, true);
       parentRef.current.worldToLocal(worldPos);
-      
       groupRef.current.position.copy(worldPos);
     }
   });
@@ -184,11 +179,12 @@ const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig; markerRef: Re
   );
 });
 
-export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null }, ViewerProps>((props, ref) => {
+export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null, takeScreenshot: () => Promise<string> }, ViewerProps>((props, ref) => {
   const { config, svgElements } = props;
   const sceneGroupRef = useRef<THREE.Group>(null);
   const plateRef = useRef<THREE.Mesh>(null);
   const holeMarkerRef = useRef<THREE.Group>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useImperativeHandle(ref, () => ({
     getExportableGroup: () => {
@@ -206,12 +202,28 @@ export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null 
       };
       traverse(sceneGroupRef.current);
       return exportGroup;
+    },
+    takeScreenshot: async () => {
+      return new Promise((resolve) => {
+        const canvas = document.querySelector('canvas');
+        if (canvas) {
+          // Wir geben dem Renderer einen Moment Zeit, um sicherzustellen, dass das Bild aktuell ist
+          requestAnimationFrame(() => {
+            resolve(canvas.toDataURL('image/png'));
+          });
+        } else {
+          resolve('');
+        }
+      });
     }
   }));
 
   return (
     <div className="w-full h-full bg-[#09090b]">
-      <Canvas shadows gl={{ antialias: true }}>
+      <Canvas 
+        shadows 
+        gl={{ antialias: true, preserveDrawingBuffer: true }}
+      >
         <PerspectiveCamera makeDefault position={[80, 80, 80]} fov={35} />
         <OrbitControls makeDefault minDistance={30} maxDistance={400} />
         <ambientLight intensity={1} />
