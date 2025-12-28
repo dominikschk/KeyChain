@@ -8,10 +8,12 @@ import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
 
 // Fix for JSX intrinsic elements errors by augmenting the global JSX namespace for React-Three-Fiber.
 // This ensures that 'mesh', 'group', 'torusGeometry', etc. are recognized by the TypeScript compiler
-// when used inside the Fiber Canvas.
+// when used inside the Fiber Canvas by putting the extension within the React namespace.
 declare global {
-  namespace JSX {
-    interface IntrinsicElements extends ThreeElements {}
+  namespace React {
+    namespace JSX {
+      interface IntrinsicElements extends ThreeElements {}
+    }
   }
 }
 

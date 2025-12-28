@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { Download, Upload, Trash2, Box, ShoppingCart, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Download, Upload, Trash2, Box, ShoppingCart, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
 import { DEFAULT_CONFIG } from './constants';
@@ -118,15 +118,19 @@ const App: React.FC = () => {
     setError(null);
 
     try {
+      // 1. Eindeutige ID generieren
       const designId = `3D-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
       let publicImageUrl = '';
 
+      // 2. Automatischer Screenshot im Hintergrund
       const screenshotData = await viewerRef.current.takeScreenshot();
       
       if (screenshotData) {
         const base64Response = await fetch(screenshotData);
         const blob = await base64Response.blob();
         const fileName = `${designId}.png`;
+        
+        // Upload zum Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from('previews')
           .upload(fileName, blob, {
@@ -143,8 +147,7 @@ const App: React.FC = () => {
         }
       }
 
-      // Wir erstellen eine bereinigte Liste der Elemente OHNE die Three.js Shapes, 
-      // damit nur ID, Name und vor allem die gewählten FARBEN in Supabase gespeichert werden.
+      // 3. Farben und Konfiguration bereinigen
       const sanitizedElements = svgElements.map(({ id, name, color, currentColor }) => ({
         id,
         name,
@@ -152,6 +155,7 @@ const App: React.FC = () => {
         currentColor: currentColor
       }));
 
+      // 4. In Supabase Datenbank speichern
       await supabase
         .from('designs')
         .insert([
@@ -166,38 +170,28 @@ const App: React.FC = () => {
           }
         ]);
 
+      // 5. Weiterleitung zu Shopify mit allen Informationen
       const baseUrl = `https://${shopifyParams.shop}/cart/add`;
       const queryParams = new URLSearchParams();
       queryParams.append('id', shopifyParams.variantId);
       queryParams.append('quantity', '1');
+      
+      // Diese Properties werden in Shopify bei der Bestellung angezeigt
       queryParams.append('properties[_design_id]', designId);
       if (publicImageUrl) queryParams.append('properties[Vorschau-Bild]', publicImageUrl);
       if (config.customLink) queryParams.append('properties[Link-Text]', config.customLink);
 
-      window.location.href = `${baseUrl}?${queryParams.toString()}`;
+      // Kurzes visuelles Feedback vor dem Redirect
+      setIsSuccess(true);
+      setTimeout(() => {
+        window.location.href = `${baseUrl}?${queryParams.toString()}`;
+      }, 800);
+
     } catch (err: any) {
       setError(err.message || "Ein Fehler ist aufgetreten.");
       setIsSubmitting(false);
     }
   };
-
-  const handleExport = useCallback(() => {
-    if (!viewerRef.current) return;
-    try {
-      const group = viewerRef.current.getExportableGroup();
-      if (group) {
-        const exporter = new STLExporter();
-        const result = exporter.parse(group, { binary: true });
-        const blob = new Blob([result as any], { type: 'application/octet-stream' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `keychain-preview.stl`;
-        link.click();
-      }
-    } catch (err) {
-      setError("STL Export fehlgeschlagen.");
-    }
-  }, []);
 
   return (
     <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
@@ -221,9 +215,9 @@ const App: React.FC = () => {
           )}
 
           {isSuccess && (
-            <div className="bg-emerald-900/20 border border-emerald-500/50 p-4 rounded-xl flex items-start gap-3 animate-pulse">
+            <div className="bg-emerald-900/20 border border-emerald-500/50 p-4 rounded-xl flex items-start gap-3">
               <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
-              <p className="text-xs text-emerald-200">Design gespeichert...</p>
+              <p className="text-xs text-emerald-200">Design bereit! Warenkorb wird geladen...</p>
             </div>
           )}
 
@@ -231,7 +225,7 @@ const App: React.FC = () => {
             <div className="flex items-center justify-between text-zinc-400 font-bold text-[10px] uppercase tracking-widest">
               <span>Logo Upload</span>
               {svgElements && (
-                <button onClick={() => {setSvgElements(null); setOriginalSvgContent(null);}} className="text-zinc-600 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                <button onClick={() => {setSvgElements(null); setOriginalSvgContent(null);}} className="text-zinc-600 hover:text-red-400 p-1 transition-colors"><Trash2 size={14} /></button>
               )}
             </div>
 
@@ -244,7 +238,7 @@ const App: React.FC = () => {
                 <input type="file" accept=".svg" className="hidden" onChange={handleFileUpload} />
               </label>
             ) : (
-              <div className="bg-emerald-500/10 rounded-xl border border-emerald-500/30 p-3 text-[10px] text-emerald-400 font-bold uppercase flex items-center gap-2">
+              <div className="bg-emerald-500/10 rounded-xl border border-emerald-500/30 p-3 text-[10px] text-emerald-400 font-bold uppercase flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
                  <CheckCircle2 size={14} /> Logo erfolgreich geladen
               </div>
             )}
@@ -266,12 +260,21 @@ const App: React.FC = () => {
           <button
             onClick={handleAddToCart}
             disabled={isSubmitting || !svgElements || isSuccess}
-            className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-xl ${
-              isSubmitting || !svgElements || isSuccess ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95'
+            className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-xl shadow-blue-900/10 ${
+              isSubmitting || !svgElements || isSuccess ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.98]'
             }`}
           >
-            <ShoppingCart size={18} />
-            {isSubmitting ? 'Verarbeite...' : 'Jetzt bestellen'}
+            {isSubmitting ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                Vorschau wird erstellt...
+              </>
+            ) : (
+              <>
+                <ShoppingCart size={18} />
+                In den Warenkorb
+              </>
+            )}
           </button>
         </footer>
       </aside>
