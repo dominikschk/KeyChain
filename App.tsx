@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { Download, Upload, AlertCircle, CheckCircle2, Loader2, Printer, ShoppingCart, HelpCircle } from 'lucide-react';
+import { Download, Upload, AlertCircle, CheckCircle2, Loader2, Printer, ShoppingCart, HelpCircle, Palette, Box, Type, MousePointer2, Settings2, Sliders, X, ChevronUp, ArrowRight } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
 import { ShopifyGuide } from './components/ShopifyGuide';
@@ -8,15 +8,16 @@ import { DEFAULT_CONFIG } from './constants';
 import { ModelConfig, SVGPathData } from './types';
 import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
-import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 import { supabase } from './lib/supabase';
+
+type TabType = 'upload' | 'adjust' | 'style';
 
 const App: React.FC = () => {
   const [config, setConfig] = useState<ModelConfig>(DEFAULT_CONFIG);
   const [svgElements, setSvgElements] = useState<SVGPathData[] | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('upload');
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
@@ -45,28 +46,19 @@ const App: React.FC = () => {
     setSvgElements(prev => prev ? prev.map(el => el.id === id ? { ...el, currentColor: color } : el) : null);
   };
 
-  const calculateAutoFitScale = useCallback((elements: SVGPathData[]) => {
-    const totalBox = new THREE.Box3();
-    elements.forEach(el => {
-      el.shapes.forEach(shape => {
-        const geo = new THREE.ShapeGeometry(shape);
-        geo.computeBoundingBox();
-        if (geo.boundingBox) totalBox.union(geo.boundingBox);
-      });
-    });
-    const size = new THREE.Vector3();
-    totalBox.getSize(size);
-    if (size.x === 0 || size.y === 0) return 1;
-    const padding = 12; 
-    const targetSize = 45 - padding;
-    return Math.min(targetSize / size.x, targetSize / size.y);
-  }, []);
+  const handleTabClick = (tab: TabType) => {
+    if (activeTab === tab && isDrawerOpen) {
+      setIsDrawerOpen(false);
+    } else {
+      setActiveTab(tab);
+      setIsDrawerOpen(true);
+    }
+  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setError(null);
-    setIsSuccess(false);
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -74,217 +66,107 @@ const App: React.FC = () => {
       const loader = new SVGLoader();
       try {
         const svgData = loader.parse(contents);
-        const elements: SVGPathData[] = svgData.paths.map((path, index) => {
-          const shapes = SVGLoader.createShapes(path);
-          const color = path.color.getStyle();
-          return {
-            id: `path-${index}-${Math.random().toString(36).substr(2, 9)}`,
-            shapes: shapes,
-            color: color,
-            currentColor: color,
-            name: (path.userData as any)?.node?.id || `Form ${index + 1}`
-          };
-        });
-
-        const autoScale = calculateAutoFitScale(elements);
-        setSvgElements(elements);
-        setSelectedElementId(null);
-        setConfig(prev => ({
-          ...prev,
-          logoScale: autoScale,
-          logoPosX: 0,
-          logoPosY: 0,
-          logoRotation: 0
+        const elements: SVGPathData[] = svgData.paths.map((path, index) => ({
+          id: `path-${index}-${Math.random().toString(36).substr(2, 9)}`,
+          shapes: SVGLoader.createShapes(path),
+          color: path.color.getStyle(),
+          currentColor: path.color.getStyle(),
+          name: (path.userData as any)?.node?.id || `Teil ${index + 1}`
         }));
+
+        setSvgElements(elements);
+        setActiveTab('adjust');
+        setIsDrawerOpen(true);
       } catch (err) {
-        setError("Die SVG konnte nicht verarbeitet werden.");
+        setError("Die Datei konnte nicht verarbeitet werden.");
       }
     };
     reader.readAsText(file);
   };
 
-  const handleExportSTL = async () => {
-    if (!svgElements || !viewerRef.current) {
-      setError("Bitte laden Sie zuerst ein Logo hoch.");
-      return;
-    }
-    setIsExporting(true);
-    setError(null);
-    try {
-      const exportGroup = viewerRef.current.getExportableGroup();
-      if (!exportGroup) throw new Error("Export-Geometrie konnte nicht generiert werden.");
-      const exporter = new STLExporter();
-      const stlResult = exporter.parse(exportGroup, { binary: true });
-      
-      const stlBuffer = (stlResult instanceof DataView) ? stlResult.buffer : stlResult;
-      const blob = new Blob([stlBuffer as BlobPart], { type: 'application/octet-stream' });
-      
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `3D_Logo_Plate_${Date.now()}.stl`;
-      link.click();
-      setIsSuccess(true);
-      setTimeout(() => setIsSuccess(false), 3000);
-    } catch (err: any) {
-      setError(err.message || "STL Export fehlgeschlagen.");
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   const handleAddToCart = async () => {
-    if (!svgElements || !viewerRef.current) {
-      setError("Bitte laden Sie zuerst ein Logo hoch.");
-      return;
-    }
+    if (!svgElements) return;
     setIsAddingToCart(true);
-    setError(null);
     try {
-      const screenshot = await viewerRef.current.takeScreenshot();
-      if (!screenshot) throw new Error("Screenshot konnte nicht erstellt werden.");
-      
-      const base64Data = screenshot.split(',')[1];
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      
+      const screenshot = await viewerRef.current?.takeScreenshot();
+      const base64Data = screenshot?.split(',')[1];
+      if (!base64Data) throw new Error();
       const fileName = `preview_${Date.now()}.png`;
-      const { error: uploadError } = await supabase.storage
-        .from('previews')
-        .upload(fileName, bytes, {
-          contentType: 'image/png'
-        });
-
-      if (uploadError) throw uploadError;
-
+      const binary = atob(base64Data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      await supabase.storage.from('previews').upload(fileName, bytes, { contentType: 'image/png' });
       const { data: { publicUrl } } = supabase.storage.from('previews').getPublicUrl(fileName);
-
-      // Shopify URL nudaim3d.de
-      const shopDomain = 'nudaim3d.de';
-      const variantId = '56564338262361'; 
-      
-      const shopifyUrl = new URL(`https://${shopDomain}/cart/add`);
-      shopifyUrl.searchParams.append('id', variantId);
-      shopifyUrl.searchParams.append('quantity', '1');
-      shopifyUrl.searchParams.append('properties[Vorschau]', publicUrl);
-      shopifyUrl.searchParams.append('properties[Material]', 'PLA Custom');
-      
-      if (config.customLink && config.customLink.trim() !== '') {
-        shopifyUrl.searchParams.append('properties[Text-Addon]', config.customLink);
-      }
-
-      window.location.href = shopifyUrl.toString();
-    } catch (err: any) {
-      setError("Fehler beim Warenkorb-Prozess: " + (err.message || "Unbekannter Fehler"));
+      window.location.href = `https://nudaim3d.de/cart/add?id=56564338262361&properties[Vorschau]=${publicUrl}&properties[Text]=${config.customLink || ''}`;
+    } catch (err) {
+      setError("Verbindung zum Shop fehlgeschlagen.");
     } finally {
       setIsAddingToCart(false);
     }
   };
 
   return (
-    <div className="flex h-screen w-screen bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
+    <div className="flex h-screen w-screen bg-cream text-navy overflow-hidden font-sans">
       {showGuide && <ShopifyGuide onClose={() => setShowGuide(false)} />}
       
-      <aside className="w-80 border-r border-zinc-800 bg-zinc-900/50 flex flex-col z-10 shrink-0 shadow-2xl">
-        <header className="p-6 border-b border-zinc-800 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-900/20">
-              <Printer size={20} className="text-white" />
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex w-[400px] flex-col bg-white border-r border-navy/5 z-50 shadow-2xl overflow-hidden">
+        <header className="p-10 border-b border-navy/5 bg-white/80 backdrop-blur-md">
+          <div className="flex items-center gap-4 mb-2">
+            <div className="bg-petrol p-2.5 rounded-button shadow-lg shadow-petrol/20">
+              <Printer size={24} className="text-white" />
             </div>
-            <div>
-              <h1 className="font-bold text-lg tracking-tight leading-none">PrintStudio</h1>
-              <p className="text-[9px] text-zinc-500 uppercase tracking-widest mt-1">Personalizer</p>
-            </div>
+            <h1 className="serif-headline font-black text-2xl tracking-tight leading-none text-navy uppercase">FUKUMA</h1>
           </div>
-          <button 
-            onClick={() => setShowGuide(true)}
-            className="text-zinc-500 hover:text-white transition-colors p-1"
-            title="Shopify Setup Guide"
-          >
-            <HelpCircle size={18} />
-          </button>
+          <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-action ml-14">Personalization Studio</p>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-          {error && (
-            <div className="bg-red-900/20 border border-red-500/50 p-4 rounded-xl flex items-start gap-3 animate-in fade-in zoom-in-95">
-              <AlertCircle className="text-red-500 shrink-0" size={18} />
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1">Fehler</p>
-                <p className="text-[11px] text-red-200 leading-tight break-words">{error}</p>
-              </div>
-            </div>
-          )}
+        <nav className="flex p-6 gap-2 bg-cream/50">
+          {(['upload', 'adjust', 'style'] as TabType[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-3.5 rounded-button text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
+                activeTab === tab ? 'bg-petrol text-white shadow-lg' : 'text-zinc-400 hover:text-navy hover:bg-navy/5'
+              }`}
+            >
+              {tab === 'upload' ? 'Upload' : tab === 'adjust' ? 'Design' : 'Farben'}
+            </button>
+          ))}
+        </nav>
 
-          {isSuccess && (
-            <div className="bg-emerald-900/20 border border-emerald-500/50 p-4 rounded-xl flex items-start gap-3 animate-in fade-in">
-              <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
-              <div className="flex-1">
-                <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider mb-1">Erfolg</p>
-                <p className="text-[11px] text-emerald-200 leading-tight">STL erfolgreich exportiert!</p>
-              </div>
-            </div>
-          )}
-
-          <section className="space-y-4">
-            <div className="flex items-center gap-2 text-zinc-400 font-bold text-[10px] uppercase tracking-[0.15em]">
-              <Upload size={14} className="text-blue-500" />
-              <span>Logo hochladen (SVG)</span>
-            </div>
-            <div className="relative group">
-              <input
-                type="file"
-                accept=".svg"
-                onChange={handleFileUpload}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-              />
-              <div className={`border-2 border-dashed rounded-2xl p-8 transition-all flex flex-col items-center gap-3 ${svgElements ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-zinc-800 group-hover:border-blue-500/50 group-hover:bg-blue-500/5'}`}>
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${svgElements ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-400 group-hover:text-blue-400 group-hover:scale-110'}`}>
-                  {svgElements ? <CheckCircle2 size={24} /> : <Upload size={20} />}
-                </div>
-                <div className="text-center">
-                  <p className="text-xs font-bold text-zinc-300">{svgElements ? 'Logo geladen' : 'Datei wählen'}</p>
-                </div>
-              </div>
-            </div>
-          </section>
-
+        <div className="flex-1 overflow-y-auto p-10 custom-scrollbar space-y-8 technical-grid-fine">
           <Controls 
+            activeTab={activeTab}
             config={config} 
             setConfig={setConfig} 
-            hasLogo={!!svgElements}
             svgElements={svgElements}
             selectedElementId={selectedElementId}
             onSelectElement={setSelectedElementId}
             onUpdateColor={updateElementColor}
             logoDimensions={logoDimensions}
+            onUpload={handleFileUpload}
           />
         </div>
 
-        <div className="p-6 border-t border-zinc-800 bg-zinc-900/80 backdrop-blur-md space-y-3">
+        <div className="p-10 border-t border-navy/5 bg-white">
           <button
             onClick={handleAddToCart}
-            disabled={isAddingToCart || !svgElements}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-3 shadow-lg active:scale-[0.98]"
+            disabled={!svgElements || isAddingToCart}
+            className="group w-full h-16 bg-petrol hover:bg-action disabled:bg-softgrey disabled:text-navy/20 text-white font-black rounded-button flex items-center justify-center gap-4 transition-all duration-500 hover:scale-[1.02] active:scale-95 glow-action"
           >
-            {isAddingToCart ? <Loader2 className="animate-spin" size={20} /> : <ShoppingCart size={20} />}
-            <span>IN DEN WARENKORB</span>
-          </button>
-          
-          <button
-            onClick={handleExportSTL}
-            disabled={isExporting || !svgElements}
-            className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-3 active:scale-[0.98] text-xs"
-          >
-            {isExporting ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-            <span>STL DOWNLOAD</span>
+            {isAddingToCart ? <Loader2 className="animate-spin" /> : <ShoppingCart size={20} />}
+            <span className="tracking-[0.2em] text-xs">BESTELLEN</span>
+            <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 relative bg-[#09090b]">
+      {/* Main Content (3D Viewer) */}
+      <main className="flex-1 relative bg-cream overflow-hidden">
+        {/* Background Layer with larger orientation circles, no lines */}
+        <div className="absolute inset-0 technical-circles opacity-100 pointer-events-none" />
+        
         <Viewer 
           ref={viewerRef}
           config={config} 
@@ -292,6 +174,78 @@ const App: React.FC = () => {
           selectedId={selectedElementId}
           onSelect={setSelectedElementId}
         />
+
+        {/* Mobile Navbar Dock */}
+        <div className="md:hidden fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-white/95 backdrop-blur-2xl p-2 rounded-full border border-navy/10 shadow-luxury z-[100] glow-action">
+          <button 
+            onClick={() => handleTabClick('upload')}
+            className={`p-4 rounded-full transition-all duration-300 ${activeTab === 'upload' && isDrawerOpen ? 'bg-petrol text-white shadow-lg' : 'text-navy/30'}`}
+          >
+            <Upload size={20} />
+          </button>
+          <div className="w-[1px] h-6 bg-navy/10 mx-1" />
+          <button 
+            onClick={() => handleTabClick('adjust')}
+            className={`flex items-center gap-2.5 px-6 py-4 rounded-full transition-all duration-300 ${activeTab === 'adjust' && isDrawerOpen ? 'bg-petrol text-white shadow-lg' : 'text-navy/30'}`}
+          >
+            <Sliders size={18} />
+            <span className="text-[9px] font-black uppercase tracking-[0.2em]">Form</span>
+          </button>
+          <button 
+            onClick={() => handleTabClick('style')}
+            className={`flex items-center gap-2.5 px-6 py-4 rounded-full transition-all duration-300 ${activeTab === 'style' && isDrawerOpen ? 'bg-petrol text-white shadow-lg' : 'text-navy/30'}`}
+          >
+            <Palette size={18} />
+            <span className="text-[9px] font-black uppercase tracking-[0.2em]">Farbe</span>
+          </button>
+          <div className="w-[1px] h-6 bg-navy/10 mx-1" />
+          <button 
+            onClick={handleAddToCart}
+            disabled={!svgElements || isAddingToCart}
+            className="p-4 bg-navy rounded-full text-white shadow-xl active:scale-90 transition-all disabled:opacity-20"
+          >
+            {isAddingToCart ? <Loader2 className="animate-spin" size={20} /> : <ShoppingCart size={20} />}
+          </button>
+        </div>
+
+        {/* Mobile: Drawer (Der Reiter) */}
+        <div className={`
+          md:hidden fixed inset-x-0 bottom-0 z-[90] bg-white border-t border-navy/5 rounded-t-[32px] shadow-[0_-20px_50px_rgba(17,35,90,0.1)] transition-all duration-700 cubic-bezier(0.16, 1, 0.3, 1)
+          ${isDrawerOpen ? 'h-[75vh] translate-y-0' : 'h-0 translate-y-full'}
+        `}>
+          <div className="w-full h-12 flex items-center justify-center pt-2" onClick={() => setIsDrawerOpen(false)}>
+             <div className="w-14 h-1.5 bg-softgrey rounded-full" />
+          </div>
+          
+          <div className="px-10 pb-36 pt-4 h-full overflow-y-auto custom-scrollbar technical-grid-fine">
+            <div className="flex justify-between items-center mb-10">
+              <h2 className="serif-headline font-black text-2xl uppercase tracking-tight text-navy">
+                {activeTab === 'upload' ? 'Logo laden' : activeTab === 'adjust' ? 'Logo-Editor' : 'Finishing'}
+              </h2>
+              <button onClick={() => setIsDrawerOpen(false)} className="bg-cream p-3 rounded-full text-navy/30 hover:text-navy border border-navy/5"><X size={20} /></button>
+            </div>
+
+            <Controls 
+              activeTab={activeTab}
+              config={config} 
+              setConfig={setConfig} 
+              svgElements={svgElements}
+              selectedElementId={selectedElementId}
+              onSelectElement={setSelectedElementId}
+              onUpdateColor={updateElementColor}
+              logoDimensions={logoDimensions}
+              onUpload={handleFileUpload}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[200] bg-white border border-red-100 text-navy px-8 py-5 rounded-button shadow-2xl flex items-center gap-5 animate-in slide-in-from-top-10">
+            <AlertCircle size={24} className="text-red-500" />
+            <span className="text-sm font-bold tracking-wide">{error}</span>
+            <button onClick={() => setError(null)} className="ml-4 opacity-30 hover:opacity-100"><X size={20} /></button>
+          </div>
+        )}
       </main>
     </div>
   );

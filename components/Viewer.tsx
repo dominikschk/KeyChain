@@ -6,12 +6,9 @@ import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
 
-// Augment the global JSX namespace to include Three.js elements for React Three Fiber.
-// This allows TypeScript to recognize elements like <mesh />, <group />, <torusGeometry />, etc.
 declare global {
   namespace JSX {
     interface IntrinsicElements extends ThreeElements {
-      // Fix: Add indexer to satisfy compiler for custom intrinsic elements in this environment
       [tagName: string]: any;
     }
   }
@@ -61,7 +58,7 @@ const KeychainChain: React.FC<{
       {chainLinks.map((link, idx) => (
         <mesh key={idx} position={link.position as [number, number, number]} rotation={link.rotation as [number, number, number]}>
           <torusGeometry args={[link.radius, link.tube, 24, 48]} />
-          <meshStandardMaterial color="#94a3b8" metalness={1} roughness={0.05} side={THREE.DoubleSide} />
+          <meshStandardMaterial color="#cbd5e1" metalness={0.8} roughness={0.1} />
         </mesh>
       ))}
     </group>
@@ -83,11 +80,11 @@ const LogoElement: React.FC<{ element: SVGPathData; config: ModelConfig; isSelec
     <mesh geometry={geometry} castShadow receiveShadow>
       <meshStandardMaterial 
         color={element.currentColor} 
-        roughness={0.2} 
-        metalness={0.4} 
+        roughness={0.3} 
+        metalness={0.1} 
         side={THREE.DoubleSide} 
-        emissive={isSelected ? element.currentColor : '#000000'}
-        emissiveIntensity={isSelected ? 0.5 : 0}
+        emissive={isSelected ? "#006699" : '#000000'}
+        emissiveIntensity={isSelected ? 0.2 : 0}
       />
     </mesh>
   );
@@ -151,7 +148,7 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
 const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig; markerRef: React.RefObject<THREE.Group | null> }>(({ config, markerRef }, ref) => {
   const geometry = useMemo(() => {
     const s = 45;
-    const r = 5;
+    const r = 8;
     const shape = new THREE.Shape();
     shape.moveTo(-s/2+r, -s/2); shape.lineTo(s/2-r, -s/2);
     shape.absarc(s/2-r, -s/2+r, r, -Math.PI/2, 0, false);
@@ -163,12 +160,12 @@ const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig; markerRef: Re
     shape.absarc(-s/2+r, -s/2+r, r, Math.PI, Math.PI*1.5, false);
 
     const eyelet = new THREE.Shape();
-    eyelet.absarc(-22.5, 22.5, 8.5, 0, Math.PI*2, false);
+    eyelet.absarc(-22.5, 22.5, 9.5, 0, Math.PI*2, false);
     const hole = new THREE.Path();
-    hole.absarc(-22.5, 22.5, 4.0, 0, Math.PI*2, true);
+    hole.absarc(-22.5, 22.5, 4.5, 0, Math.PI*2, true);
     eyelet.holes.push(hole);
 
-    const sets = { depth: config.plateDepth, bevelEnabled: true, bevelThickness: 0.4, bevelSize: 0.4, bevelSegments: 4 };
+    const sets = { depth: config.plateDepth, bevelEnabled: true, bevelThickness: 0.5, bevelSize: 0.5, bevelSegments: 6 };
     const bodyG = new THREE.ExtrudeGeometry(shape, sets);
     const eyeG = new THREE.ExtrudeGeometry(eyelet, sets);
     
@@ -186,7 +183,7 @@ const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig; markerRef: Re
   return (
     <group>
       <mesh ref={ref} geometry={geometry} castShadow receiveShadow>
-        <meshStandardMaterial color="#18181b" roughness={0.8} metalness={0.1} side={THREE.DoubleSide} />
+        <meshStandardMaterial color="#f8fafc" roughness={0.6} metalness={0.1} />
       </mesh>
       <group ref={markerRef} position={[-22.5, 0, -22.5]} />
     </group>
@@ -231,16 +228,16 @@ export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null,
   }));
 
   return (
-    <div className="w-full h-full bg-[#09090b]">
+    <div className="w-full h-full bg-[#FDFCF8]">
       <Canvas 
         shadows 
-        gl={{ antialias: true, preserveDrawingBuffer: true }}
+        gl={{ antialias: true, preserveDrawingBuffer: true, alpha: true }}
       >
-        <PerspectiveCamera makeDefault position={[80, 80, 80]} fov={35} />
+        <PerspectiveCamera makeDefault position={[90, 90, 90]} fov={35} />
         <OrbitControls makeDefault minDistance={30} maxDistance={400} />
-        <ambientLight intensity={0.5} />
-        <spotLight position={[50, 100, 50]} angle={0.15} penumbra={1} intensity={2} castShadow />
-        <pointLight position={[-50, -50, -50]} intensity={1} color="#3b82f6" />
+        <ambientLight intensity={1.5} />
+        <spotLight position={[50, 150, 50]} angle={0.2} penumbra={1} intensity={2.5} castShadow shadow-mapSize={[1024, 1024]} />
+        <directionalLight position={[-50, 50, -20]} intensity={1} color="#ffffff" />
         
         <group ref={sceneGroupRef}>
           <KeychainBase config={config} ref={plateRef} markerRef={holeMarkerRef} />
@@ -252,9 +249,8 @@ export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null,
           )}
         </group>
 
-        <gridHelper args={[600, 60, 0x18181b, 0x0c0c0e]} position={[0, -10, 0]} />
-        <ContactShadows opacity={0.6} scale={150} blur={3} far={20} color="#000000" position={[0, -8, 0]} />
-        <Environment preset="night" />
+        <ContactShadows opacity={0.15} scale={180} blur={4} far={40} color="#11235A" position={[0, -1, 0]} />
+        <Environment preset="studio" />
       </Canvas>
     </div>
   );

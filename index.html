@@ -4,17 +4,58 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>3D Logo Customizer</title>
+    <title>FUKUMA | 3D Personalization Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              petrol: '#006699',
+              action: '#12A9E0',
+              navy: '#11235A',
+              cream: '#FDFCF8',
+              offwhite: '#F9FBFC',
+              mint: '#46C1E9',
+              gold: '#D4C7B0',
+            },
+            fontFamily: {
+              serif: ['"Playfair Display"', 'serif'],
+              sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            },
+            borderRadius: {
+              'button': '10px',
+            }
+          }
+        }
+      }
+    </script>
     <style>
       body {
         margin: 0;
         padding: 0;
         overflow: hidden;
-        background-color: #09090b;
+        background-color: #FDFCF8;
+        color: #11235A;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        -webkit-font-smoothing: antialiased;
       }
       #root {
         height: 100vh;
+      }
+      /* Nur Orientierungspunkte, keine Linien mehr */
+      .technical-circles {
+        background-image: radial-gradient(circle, rgba(0, 102, 153, 0.07) 2.2px, transparent 2.2px);
+        background-size: 32px 32px;
+      }
+      .technical-grid-fine {
+        background-image: 
+          linear-gradient(rgba(18, 169, 224, 0.02) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(18, 169, 224, 0.02) 1px, transparent 1px);
+        background-size: 10px 10px;
       }
       .custom-scrollbar::-webkit-scrollbar {
         width: 4px;
@@ -23,11 +64,17 @@
         background: transparent;
       }
       .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #27272a;
+        background: #006699;
         border-radius: 10px;
       }
-      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #3f3f46;
+      .serif-headline {
+        font-family: 'Playfair Display', serif;
+      }
+      .soft-shadow {
+        box-shadow: 0 10px 30px -5px rgba(17, 35, 90, 0.07);
+      }
+      .glow-action {
+        box-shadow: 0 0 20px rgba(18, 169, 224, 0.2);
       }
     </style>
   <script type="importmap">
