@@ -205,7 +205,6 @@ create policy "Allow anonymous selects" on previews for select to anon using (tr
               </div>
               <div className="space-y-2">
                 <h2 className="serif-headline text-3xl font-black uppercase">Erfolgreich!</h2>
-                <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest">In Cloud gespeichert</p>
               </div>
               <p className="text-xs font-bold animate-pulse text-emerald-600 uppercase tracking-widest">Weiterleitung...</p>
             </div>
