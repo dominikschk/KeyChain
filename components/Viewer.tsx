@@ -1,10 +1,10 @@
 
 import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { Canvas, useFrame, ThreeElements } from '@react-three/fiber';
+import { Canvas, useFrame, ThreeElements, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Environment, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
-import { ADDITION, Brush, Evaluator } from 'three-bvh-csg';
+import { ADDITION, SUBTRACTION, Brush, Evaluator } from 'three-bvh-csg';
 
 declare global {
   namespace JSX {
@@ -21,53 +21,15 @@ export interface ViewerProps {
   onSelect: (id: string | null) => void;
 }
 
-const KeychainChain: React.FC<{ 
-  markerRef: React.RefObject<THREE.Group | null>;
-  parentRef: React.RefObject<THREE.Group | null>;
-}> = ({ markerRef, parentRef }) => {
-  const groupRef = useRef<THREE.Group>(null);
-  const worldPos = useMemo(() => new THREE.Vector3(), []);
-
-  const chainLinks = useMemo(() => {
-    const links = [];
-    const ringRadius = 6.5;
-    const tubeRadius = 1.1;
-    for (let i = 0; i < 6; i++) {
-      links.push({
-        position: i === 0 ? [0, 0, 0] : [-ringRadius * 1.5 * i, 0, i * 0.2],
-        rotation: i === 0 ? [0, Math.PI / 4, 0] : [Math.PI / 2, 0, i % 2 === 0 ? 0.8 : -0.8],
-        radius: ringRadius,
-        tube: tubeRadius
-      });
-    }
-    return links;
-  }, []);
-
-  useFrame(() => {
-    if (markerRef.current && groupRef.current && parentRef.current) {
-      markerRef.current.updateWorldMatrix(true, true);
-      markerRef.current.getWorldPosition(worldPos);
-      parentRef.current.updateWorldMatrix(true, true);
-      parentRef.current.worldToLocal(worldPos);
-      groupRef.current.position.copy(worldPos);
-    }
-  });
-
-  return (
-    <group ref={groupRef} userData={{ excludeFromExport: true }}>
-      {chainLinks.map((link, idx) => (
-        <mesh key={idx} position={link.position as [number, number, number]} rotation={link.rotation as [number, number, number]}>
-          <torusGeometry args={[link.radius, link.tube, 24, 48]} />
-          <meshStandardMaterial color="#cbd5e1" metalness={0.8} roughness={0.1} />
-        </mesh>
-      ))}
-    </group>
-  );
-};
-
 const LogoElement: React.FC<{ element: SVGPathData; config: ModelConfig; isSelected: boolean }> = ({ element, config, isSelected }) => {
   const geometry = useMemo(() => {
-    const geo = new THREE.ExtrudeGeometry(element.shapes, { depth: config.logoDepth, bevelEnabled: false });
+    const geo = new THREE.ExtrudeGeometry(element.shapes, { 
+      depth: config.logoDepth, 
+      bevelEnabled: true,
+      bevelThickness: 0.3,
+      bevelSize: 0.2,
+      bevelSegments: 5
+    });
     geo.scale(1, -1, 1);
     geo.rotateX(-Math.PI / 2);
     geo.computeBoundingBox();
@@ -80,11 +42,11 @@ const LogoElement: React.FC<{ element: SVGPathData; config: ModelConfig; isSelec
     <mesh geometry={geometry} castShadow receiveShadow>
       <meshStandardMaterial 
         color={element.currentColor} 
-        roughness={0.3} 
+        roughness={0.4} 
         metalness={0.1} 
         side={THREE.DoubleSide} 
-        emissive={isSelected ? "#006699" : '#000000'}
-        emissiveIntensity={isSelected ? 0.2 : 0}
+        emissive={isSelected ? "#12A9E0" : '#000000'}
+        emissiveIntensity={isSelected ? 0.4 : 0}
       />
     </mesh>
   );
@@ -98,8 +60,8 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
   const centerOffset = useMemo(() => {
     const totalBox = new THREE.Box3();
     elements.forEach(el => {
-      el.shapes.forEach(s => {
-        const sg = new THREE.ShapeGeometry(s);
+      el.shapes.forEach(shape => {
+        const sg = new THREE.ShapeGeometry(shape);
         sg.computeBoundingBox();
         if (sg.boundingBox) totalBox.union(sg.boundingBox);
       });
@@ -115,7 +77,7 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
       groupRef.current.updateWorldMatrix(true, true);
       plateBox.setFromObject(plateRef.current);
       logoBox.setFromObject(groupRef.current);
-      const diffY = plateBox.max.y - logoBox.min.y;
+      const diffY = (plateBox.max.y - 0.01) - logoBox.min.y; 
       if (Math.abs(diffY) > 0.0001) {
         groupRef.current.position.y += diffY;
       }
@@ -145,112 +107,120 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
   );
 };
 
-const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig; markerRef: React.RefObject<THREE.Group | null> }>(({ config, markerRef }, ref) => {
+const SceneWrapper = forwardRef(( { children }: { children: React.ReactNode }, ref) => {
+  const { gl, scene, camera } = useThree();
+  useImperativeHandle(ref, () => ({
+    takeScreenshot: () => {
+      gl.render(scene, camera);
+      return gl.domElement.toDataURL('image/png');
+    }
+  }));
+  return <>{children}</>;
+});
+
+const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig }>(({ config }, ref) => {
   const geometry = useMemo(() => {
     const s = 45;
-    const r = 8;
-    const shape = new THREE.Shape();
-    shape.moveTo(-s/2+r, -s/2); shape.lineTo(s/2-r, -s/2);
-    shape.absarc(s/2-r, -s/2+r, r, -Math.PI/2, 0, false);
-    shape.lineTo(s/2, s/2-r);
-    shape.absarc(s/2-r, s/2-r, r, 0, Math.PI/2, false);
-    shape.lineTo(-s/2+r, s/2);
-    shape.absarc(-s/2+r, s/2-r, r, Math.PI/2, Math.PI, false);
-    shape.lineTo(-s/2, -s/2+r);
-    shape.absarc(-s/2+r, -s/2+r, r, Math.PI, Math.PI*1.5, false);
-
-    const eyelet = new THREE.Shape();
-    eyelet.absarc(-22.5, 22.5, 9.5, 0, Math.PI*2, false);
-    const hole = new THREE.Path();
-    hole.absarc(-22.5, 22.5, 4.5, 0, Math.PI*2, true);
-    eyelet.holes.push(hole);
-
-    const sets = { depth: config.plateDepth, bevelEnabled: true, bevelThickness: 0.5, bevelSize: 0.5, bevelSegments: 6 };
-    const bodyG = new THREE.ExtrudeGeometry(shape, sets);
-    const eyeG = new THREE.ExtrudeGeometry(eyelet, sets);
+    const r = 10;
+    // Eyelet position further out (moved from 18.5 to 23.0)
+    const EYELET_X = -23.0;
+    const EYELET_Y_2D = 23.0;
     
-    bodyG.translate(0, 0, -config.plateDepth/2);
-    eyeG.translate(0, 0, -config.plateDepth/2);
-    bodyG.rotateX(-Math.PI/2);
-    eyeG.rotateX(-Math.PI/2);
+    // Grundplatte
+    const plateShape = new THREE.Shape();
+    plateShape.moveTo(-s/2+r, -s/2); 
+    plateShape.lineTo(s/2-r, -s/2);
+    plateShape.absarc(s/2-r, -s/2+r, r, -Math.PI/2, 0, false);
+    plateShape.lineTo(s/2, s/2-r);
+    plateShape.absarc(s/2-r, s/2-r, r, 0, Math.PI/2, false);
+    plateShape.lineTo(-s/2+r, s/2);
+    plateShape.absarc(-s/2+r, s/2-r, r, Math.PI/2, Math.PI, false);
+    plateShape.lineTo(-s/2, -s/2+r);
+    plateShape.absarc(-s/2+r, -s/2+r, r, Math.PI, Math.PI*1.5, false);
 
-    try {
-      const evaler = new Evaluator();
-      return evaler.evaluate(new Brush(bodyG), new Brush(eyeG), ADDITION).geometry;
-    } catch { return bodyG; }
+    const extrudeSettings = { 
+      depth: config.plateDepth, 
+      bevelEnabled: true,
+      bevelThickness: 0.5,
+      bevelSize: 0.5,
+      bevelSegments: 5
+    };
+
+    const plateGeo = new THREE.ExtrudeGeometry(plateShape, extrudeSettings);
+
+    // Ösen-Geometrie
+    const eyeletShape = new THREE.Shape();
+    eyeletShape.absarc(0, 0, 7.5, 0, Math.PI * 2, false);
+    const eyeletGeo = new THREE.ExtrudeGeometry(eyeletShape, extrudeSettings);
+    eyeletGeo.translate(EYELET_X, EYELET_Y_2D, 0);
+
+    // Das Loch in der Öse
+    const holeShape = new THREE.Shape();
+    holeShape.absarc(0, 0, 4.0, 0, Math.PI * 2, false);
+    const holeGeo = new THREE.ExtrudeGeometry(holeShape, { 
+      depth: config.plateDepth + 10, 
+      bevelEnabled: false 
+    });
+    holeGeo.translate(EYELET_X, EYELET_Y_2D, -5);
+
+    // Kombinieren mit CSG
+    const evaluator = new Evaluator();
+    const plateBrush = new Brush(plateGeo);
+    const eyeletBrush = new Brush(eyeletGeo);
+    const holeBrush = new Brush(holeGeo);
+
+    const combined = evaluator.evaluate(plateBrush, eyeletBrush, ADDITION);
+    const final = evaluator.evaluate(combined, holeBrush, SUBTRACTION);
+    
+    final.geometry.rotateX(-Math.PI/2);
+    return final.geometry;
   }, [config.plateDepth]);
 
   return (
-    <group>
-      <mesh ref={ref} geometry={geometry} castShadow receiveShadow>
-        <meshStandardMaterial color="#f8fafc" roughness={0.6} metalness={0.1} />
-      </mesh>
-      <group ref={markerRef} position={[-22.5, 0, -22.5]} />
-    </group>
+    <mesh ref={ref} geometry={geometry} castShadow receiveShadow>
+      <meshStandardMaterial color="#ffffff" roughness={0.3} metalness={0.05} />
+    </mesh>
   );
 });
 
-export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null, takeScreenshot: () => Promise<string> }, ViewerProps>((props, ref) => {
-  const { config, svgElements, selectedId } = props;
-  const sceneGroupRef = useRef<THREE.Group>(null);
+export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null, takeScreenshot: () => Promise<string> }, ViewerProps>(({ config, svgElements, selectedId, onSelect }, ref) => {
+  const groupRef = useRef<THREE.Group>(null);
   const plateRef = useRef<THREE.Mesh>(null);
-  const holeMarkerRef = useRef<THREE.Group>(null);
+  const sceneWrapperRef = useRef<{ takeScreenshot: () => string }>(null);
 
   useImperativeHandle(ref, () => ({
-    getExportableGroup: () => {
-      if (!sceneGroupRef.current) return null;
-      const exportGroup = new THREE.Group();
-      const traverse = (obj: THREE.Object3D) => {
-        if (obj.userData.excludeFromExport) return;
-        if (obj instanceof THREE.Mesh) {
-          const clone = obj.clone();
-          obj.updateWorldMatrix(true, false);
-          clone.applyMatrix4(obj.matrixWorld);
-          exportGroup.add(clone);
-        }
-        obj.children.forEach(traverse);
-      };
-      traverse(sceneGroupRef.current);
-      return exportGroup;
-    },
+    getExportableGroup: () => groupRef.current,
     takeScreenshot: async () => {
-      return new Promise((resolve) => {
-        const canvas = document.querySelector('canvas');
-        if (canvas) {
-          requestAnimationFrame(() => {
-            resolve(canvas.toDataURL('image/png'));
-          });
-        } else {
-          resolve('');
-        }
-      });
+      return sceneWrapperRef.current?.takeScreenshot() || "";
     }
   }));
 
   return (
-    <div className="w-full h-full bg-[#FDFCF8]">
-      <Canvas 
-        shadows 
-        gl={{ antialias: true, preserveDrawingBuffer: true, alpha: true }}
-      >
-        <PerspectiveCamera makeDefault position={[90, 90, 90]} fov={35} />
-        <OrbitControls makeDefault minDistance={30} maxDistance={400} />
-        <ambientLight intensity={1.5} />
-        <spotLight position={[50, 150, 50]} angle={0.2} penumbra={1} intensity={2.5} castShadow shadow-mapSize={[1024, 1024]} />
-        <directionalLight position={[-50, 50, -20]} intensity={1} color="#ffffff" />
-        
-        <group ref={sceneGroupRef}>
-          <KeychainBase config={config} ref={plateRef} markerRef={holeMarkerRef} />
-          {svgElements && (
-            <LogoGroup elements={svgElements} config={config} plateRef={plateRef} selectedId={selectedId} />
-          )}
-          {config.hasChain && (
-            <KeychainChain markerRef={holeMarkerRef} parentRef={sceneGroupRef} />
-          )}
-        </group>
+    <div className="w-full h-full">
+      <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true }}>
+        <SceneWrapper ref={sceneWrapperRef}>
+          <PerspectiveCamera makeDefault position={[0, 80, 120]} fov={35} />
+          <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 1.75} enableDamping />
+          
+          <Environment preset="city" />
+          <ambientLight intensity={0.5} />
+          <spotLight position={[50, 100, 50]} angle={0.2} penumbra={1} castShadow intensity={1.5} />
+          <directionalLight position={[-50, 50, -50]} intensity={0.5} />
 
-        <ContactShadows opacity={0.15} scale={180} blur={4} far={40} color="#11235A" position={[0, -1, 0]} />
-        <Environment preset="studio" />
+          <group ref={groupRef}>
+            <KeychainBase ref={plateRef} config={config} />
+            {svgElements && (
+              <LogoGroup 
+                elements={svgElements} 
+                config={config} 
+                plateRef={plateRef} 
+                selectedId={selectedId} 
+              />
+            )}
+          </group>
+
+          <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={150} blur={2.5} far={15} />
+        </SceneWrapper>
       </Canvas>
     </div>
   );

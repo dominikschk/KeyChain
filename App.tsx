@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { Download, Upload, AlertCircle, CheckCircle2, Loader2, Printer, ShoppingCart, HelpCircle, Palette, Box, Type, MousePointer2, Settings2, Sliders, X, ChevronUp, ArrowRight } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
@@ -24,7 +24,8 @@ const App: React.FC = () => {
   
   const viewerRef = useRef<{ getExportableGroup: () => THREE.Group | null, takeScreenshot: () => Promise<string> }>(null);
 
-  const logoDimensions = useMemo(() => {
+  // Berechnet die "natürliche" Größe des Logos (bei Skalierung 1.0)
+  const naturalLogoDimensions = useMemo(() => {
     if (!svgElements) return { width: 0, height: 0 };
     const totalBox = new THREE.Box3();
     svgElements.forEach(el => {
@@ -36,11 +37,13 @@ const App: React.FC = () => {
     });
     const size = new THREE.Vector3();
     totalBox.getSize(size);
-    return {
-      width: size.x * config.logoScale,
-      height: size.y * config.logoScale
-    };
-  }, [svgElements, config.logoScale]);
+    return { width: size.x, height: size.y };
+  }, [svgElements]);
+
+  const logoDimensions = useMemo(() => ({
+    width: naturalLogoDimensions.width * config.logoScale,
+    height: naturalLogoDimensions.height * config.logoScale
+  }), [naturalLogoDimensions, config.logoScale]);
 
   const updateElementColor = (id: string, color: string) => {
     setSvgElements(prev => prev ? prev.map(el => el.id === id ? { ...el, currentColor: color } : el) : null);
@@ -75,6 +78,29 @@ const App: React.FC = () => {
         }));
 
         setSvgElements(elements);
+
+        // Automatische Skalierung berechnen, damit es auf die 45mm Platte passt (mit etwas Rand)
+        const tempBox = new THREE.Box3();
+        elements.forEach(el => el.shapes.forEach(s => {
+          const g = new THREE.ShapeGeometry(s);
+          g.computeBoundingBox();
+          if (g.boundingBox) tempBox.union(g.boundingBox);
+        }));
+        const size = new THREE.Vector3();
+        tempBox.getSize(size);
+        
+        const maxDim = Math.max(size.x, size.y);
+        const targetDim = 38; // Zielgröße in mm (Platte ist 45mm)
+        const initialScale = targetDim / maxDim;
+
+        setConfig(prev => ({
+          ...prev,
+          logoScale: initialScale,
+          logoPosX: 0,
+          logoPosY: 0,
+          logoRotation: 0
+        }));
+
         setActiveTab('adjust');
         setIsDrawerOpen(true);
       } catch (err) {
@@ -109,14 +135,13 @@ const App: React.FC = () => {
     <div className="flex h-screen w-screen bg-cream text-navy overflow-hidden font-sans">
       {showGuide && <ShopifyGuide onClose={() => setShowGuide(false)} />}
       
-      {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-[400px] flex-col bg-white border-r border-navy/5 z-50 shadow-2xl overflow-hidden">
         <header className="p-10 border-b border-navy/5 bg-white/80 backdrop-blur-md">
           <div className="flex items-center gap-4 mb-2">
             <div className="bg-petrol p-2.5 rounded-button shadow-lg shadow-petrol/20">
               <Printer size={24} className="text-white" />
             </div>
-            <h1 className="serif-headline font-black text-2xl tracking-tight leading-none text-navy uppercase">FUKUMA</h1>
+            <h1 className="serif-headline font-black text-2xl tracking-tight leading-none text-navy uppercase">NUDAIM3D</h1>
           </div>
           <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-action ml-14">Personalization Studio</p>
         </header>
@@ -145,6 +170,7 @@ const App: React.FC = () => {
             onSelectElement={setSelectedElementId}
             onUpdateColor={updateElementColor}
             logoDimensions={logoDimensions}
+            naturalLogoDimensions={naturalLogoDimensions}
             onUpload={handleFileUpload}
           />
         </div>
@@ -162,9 +188,7 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content (3D Viewer) */}
       <main className="flex-1 relative bg-cream overflow-hidden">
-        {/* Background Layer with larger orientation circles, no lines */}
         <div className="absolute inset-0 technical-circles opacity-100 pointer-events-none" />
         
         <Viewer 
@@ -175,7 +199,6 @@ const App: React.FC = () => {
           onSelect={setSelectedElementId}
         />
 
-        {/* Mobile Navbar Dock */}
         <div className="md:hidden fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-white/95 backdrop-blur-2xl p-2 rounded-full border border-navy/10 shadow-luxury z-[100] glow-action">
           <button 
             onClick={() => handleTabClick('upload')}
@@ -208,7 +231,6 @@ const App: React.FC = () => {
           </button>
         </div>
 
-        {/* Mobile: Drawer (Der Reiter) */}
         <div className={`
           md:hidden fixed inset-x-0 bottom-0 z-[90] bg-white border-t border-navy/5 rounded-t-[32px] shadow-[0_-20px_50px_rgba(17,35,90,0.1)] transition-all duration-700 cubic-bezier(0.16, 1, 0.3, 1)
           ${isDrawerOpen ? 'h-[75vh] translate-y-0' : 'h-0 translate-y-full'}
@@ -234,6 +256,7 @@ const App: React.FC = () => {
               onSelectElement={setSelectedElementId}
               onUpdateColor={updateElementColor}
               logoDimensions={logoDimensions}
+              naturalLogoDimensions={naturalLogoDimensions}
               onUpload={handleFileUpload}
             />
           </div>

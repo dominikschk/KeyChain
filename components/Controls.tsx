@@ -12,6 +12,7 @@ interface ControlsProps {
   onSelectElement: (id: string | null) => void;
   onUpdateColor: (id: string, color: string) => void;
   logoDimensions: { width: number, height: number };
+  naturalLogoDimensions: { width: number, height: number };
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
@@ -35,7 +36,7 @@ const ControlGroup: React.FC<{
           <span className="text-[10px] font-black uppercase tracking-[0.25em] text-navy/40">{label}</span>
         </div>
         <div className="px-3 py-1.5 bg-cream/50 rounded-full border border-navy/5 font-mono text-[10px] font-black text-petrol">
-          {value.toFixed(step < 1 ? 1 : 0)}{unit}
+          {value.toFixed(step < 1 ? 2 : 0)}{unit}
         </div>
       </div>
       
@@ -50,7 +51,7 @@ const ControlGroup: React.FC<{
         <div className="flex-1 relative h-1.5 bg-softgrey rounded-full overflow-hidden border border-white shadow-inner">
           <div 
             className="absolute h-full bg-petrol rounded-full" 
-            style={{ width: `${((value - min) / (max - min)) * 100}%` }}
+            style={{ width: `${Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100))}%` }}
           />
           <input
             type="range"
@@ -82,6 +83,7 @@ export const Controls: React.FC<ControlsProps> = ({
   selectedElementId, 
   onSelectElement, 
   onUpdateColor,
+  naturalLogoDimensions,
   onUpload
 }) => {
   const updateConfig = (key: keyof ModelConfig, value: any) => {
@@ -89,6 +91,13 @@ export const Controls: React.FC<ControlsProps> = ({
   };
 
   const trendColors = ['#FFFFFF', '#11235A', '#006699', '#12A9E0', '#46C1E9', '#FF3E3E', '#F59E0B', '#000000'];
+
+  // Dynamische Begrenzung der Skalierung basierend auf der 45mm Platte
+  const maxPossibleScale = React.useMemo(() => {
+    if (!naturalLogoDimensions.width || !naturalLogoDimensions.height) return 2;
+    const maxDimOnPlate = 42; // Platte ist 45mm, lassen 3mm Puffer
+    return maxDimOnPlate / Math.max(naturalLogoDimensions.width, naturalLogoDimensions.height);
+  }, [naturalLogoDimensions]);
 
   if (activeTab === 'upload') {
     return (
@@ -125,10 +134,19 @@ export const Controls: React.FC<ControlsProps> = ({
            </div>
         ) : (
           <>
-            <ControlGroup label="Skalierung" value={config.logoScale} min={0.1} max={2.0} step={0.05} unit="x" onChange={(v) => updateConfig('logoScale', v)} icon={<Maximize2 size={18} />} />
+            <ControlGroup 
+              label="Skalierung" 
+              value={config.logoScale} 
+              min={0.01} 
+              max={maxPossibleScale} 
+              step={0.01} 
+              unit="x" 
+              onChange={(v) => updateConfig('logoScale', v)} 
+              icon={<Maximize2 size={18} />} 
+            />
             <ControlGroup label="Relief-Höhe" value={config.logoDepth} min={0.5} max={10} step={0.5} onChange={(v) => updateConfig('logoDepth', v)} icon={<Layers size={18} />} />
-            <ControlGroup label="X-Position" value={config.logoPosX} min={-25} max={25} step={1} onChange={(v) => updateConfig('logoPosX', v)} icon={<Move size={18} />} />
-            <ControlGroup label="Y-Position" value={config.logoPosY} min={-25} max={25} step={1} onChange={(v) => updateConfig('logoPosY', v)} icon={<Move size={18} />} />
+            <ControlGroup label="X-Position" value={config.logoPosX} min={-15} max={15} step={1} onChange={(v) => updateConfig('logoPosX', v)} icon={<Move size={18} />} />
+            <ControlGroup label="Y-Position" value={config.logoPosY} min={-15} max={15} step={1} onChange={(v) => updateConfig('logoPosY', v)} icon={<Move size={18} />} />
             <ControlGroup label="Rotation" value={config.logoRotation} min={0} max={360} step={15} unit="°" onChange={(v) => updateConfig('logoRotation', v)} icon={<RotateCw size={18} />} />
           </>
         )}
