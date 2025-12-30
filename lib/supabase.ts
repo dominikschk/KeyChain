@@ -1,24 +1,37 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * SCHRITT-FÜR-SCHRITT ANLEITUNG:
+ * Supabase Konfiguration
  * 
- * 1. Gehe zu https://supabase.com und erstelle ein Projekt.
- * 2. Kopiere die "Project URL" und den "Anon Key" aus den Einstellungen (Settings > API).
- * 3. Ersetze die untenstehenden Platzhalter durch deine echten Daten.
- * 
- * Konfiguration für das Projekt: ncxeyarhrftcfwkcoqpa
+ * ACHTUNG: Der Key muss ein Supabase 'anon' Key sein (beginnt mit 'eyJ...').
+ * Dein aktueller Key 'sb_publishable_...' scheint ein Shopify Key zu sein und wird hier nicht funktionieren.
  */
 
-// Cast import.meta to any to access environment variables without needing vite/client types.
-const supabaseUrl = 
-  (import.meta as any).env?.VITE_SUPABASE_URL || 
-  (window as any).process?.env?.SUPABASE_URL || 
-  'https://ncxeyarhrftcfwkcoqpa.supabase.co';
+const getEnv = (name: string): string | undefined => {
+  try {
+    return (
+      (import.meta as any).env?.[name] || 
+      (window as any).process?.env?.[name] || 
+      (window as any)[name] ||
+      (window as any)._env_?.[name]
+    );
+  } catch (e) {
+    return undefined;
+  }
+};
 
-const supabaseAnonKey = 
-  (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 
-  (window as any).process?.env?.SUPABASE_ANON_KEY || 
-  'sb_publishable_2Beqh4O_zBNPXsyom73SVg_xIjyTZkM';
+const supabaseUrl = getEnv('VITE_SUPABASE_URL') || getEnv('SUPABASE_URL') || 'https://ncxeyarhrftcfwkcoqpa.supabase.co';
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY') || getEnv('SUPABASE_ANON_KEY') || 'sb_publishable_2Beqh4O_zBNPXsyom73SVg_xIjyTZkM';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const isValidKey = (key: string | undefined): boolean => {
+  // Supabase Keys sind JWTs und beginnen IMMER mit 'eyJ'
+  return !!key && key.startsWith('eyJ') && key.length > 50;
+};
+
+// Wir markieren es nur als READY, wenn es ein echter Supabase Key ist
+export const SUPABASE_READY = isValidKey(supabaseAnonKey);
+
+export const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : { storage: { from: () => ({ upload: async () => ({ error: new Error('Kein gültiger Supabase Key') }), getPublicUrl: () => ({ data: { publicUrl: '' } }) }) } } as any;

@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { Download, Upload, AlertCircle, CheckCircle2, Loader2, Printer, ShoppingCart, HelpCircle, Palette, Box, Type, MousePointer2, Settings2, Sliders, X, ChevronUp, ArrowRight } from 'lucide-react';
+import { Download, Upload, AlertCircle, CheckCircle2, Loader2, Printer, ShoppingCart, HelpCircle, Palette, Box, Type, MousePointer2, Settings2, Sliders, X, ChevronUp, ArrowRight, WifiOff, Settings } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
 import { ShopifyGuide } from './components/ShopifyGuide';
@@ -8,7 +8,7 @@ import { DEFAULT_CONFIG } from './constants';
 import { ModelConfig, SVGPathData } from './types';
 import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
-import { supabase } from './lib/supabase';
+import { supabase, SUPABASE_READY } from './lib/supabase';
 
 type TabType = 'upload' | 'adjust' | 'style';
 
@@ -19,12 +19,12 @@ const App: React.FC = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [showSetupInfo, setShowSetupInfo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   
   const viewerRef = useRef<{ getExportableGroup: () => THREE.Group | null, takeScreenshot: () => Promise<string> }>(null);
 
-  // Berechnet die "natürliche" Größe des Logos (bei Skalierung 1.0)
   const naturalLogoDimensions = useMemo(() => {
     if (!svgElements) return { width: 0, height: 0 };
     const totalBox = new THREE.Box3();
@@ -79,7 +79,6 @@ const App: React.FC = () => {
 
         setSvgElements(elements);
 
-        // Automatische Skalierung berechnen, damit es auf die 45mm Platte passt (mit etwas Rand)
         const tempBox = new THREE.Box3();
         elements.forEach(el => el.shapes.forEach(s => {
           const g = new THREE.ShapeGeometry(s);
@@ -90,7 +89,7 @@ const App: React.FC = () => {
         tempBox.getSize(size);
         
         const maxDim = Math.max(size.x, size.y);
-        const targetDim = 38; // Zielgröße in mm (Platte ist 45mm)
+        const targetDim = 38;
         const initialScale = targetDim / maxDim;
 
         setConfig(prev => ({
@@ -113,19 +112,59 @@ const App: React.FC = () => {
   const handleAddToCart = async () => {
     if (!svgElements) return;
     setIsAddingToCart(true);
+    setError(null);
+    
     try {
       const screenshot = await viewerRef.current?.takeScreenshot();
-      const base64Data = screenshot?.split(',')[1];
-      if (!base64Data) throw new Error();
-      const fileName = `preview_${Date.now()}.png`;
-      const binary = atob(base64Data);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      await supabase.storage.from('previews').upload(fileName, bytes, { contentType: 'image/png' });
-      const { data: { publicUrl } } = supabase.storage.from('previews').getPublicUrl(fileName);
-      window.location.href = `https://nudaim3d.de/cart/add?id=56564338262361&properties[Vorschau]=${publicUrl}&properties[Text]=${config.customLink || ''}`;
-    } catch (err) {
-      setError("Verbindung zum Shop fehlgeschlagen.");
+      if (!screenshot) throw new Error("Vorschau-Bild konnte nicht generiert werden.");
+
+      let publicUrl = "https://nudaim3d.de/preview-placeholder.png";
+
+      if (SUPABASE_READY) {
+        // Konvertiere Base64 zu Blob für den Upload
+        const base64Response = await fetch(screenshot);
+        const blob = await base64Response.blob();
+        const fileName = `order_${Date.now()}.png`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('previews')
+          .upload(fileName, blob, { 
+            contentType: 'image/png',
+            cacheControl: '3600',
+            upsert: false 
+          });
+
+        if (uploadError) {
+          console.error("Supabase Fehler:", uploadError);
+          // Zeige spezifische Fehler für den User
+          if (uploadError.message.includes("Bucket not found")) {
+            throw new Error("Fehler: Der Storage-Bucket 'previews' wurde in Supabase nicht gefunden.");
+          } else if (uploadError.message.includes("is not authorized") || uploadError.message.includes("JWT")) {
+            throw new Error("Fehler: Der API-Key ist ungültig oder hat keine Schreibrechte (RLS Policies prüfen).");
+          } else {
+            throw new Error(`Upload-Fehler: ${uploadError.message}`);
+          }
+        }
+
+        const { data: urlData } = supabase.storage.from('previews').getPublicUrl(fileName);
+        publicUrl = urlData.publicUrl;
+      } else {
+        throw new Error("Speichern nicht möglich: Kein gültiger Supabase API-Key konfiguriert.");
+      }
+
+      // Weiterleitung zu Shopify
+      const shopifyUrl = new URL('https://nudaim3d.de/cart/add');
+      shopifyUrl.searchParams.append('id', '56564338262361');
+      shopifyUrl.searchParams.append('properties[Vorschau]', publicUrl);
+      if (config.customLink) {
+        shopifyUrl.searchParams.append('properties[Gravur]', config.customLink);
+      }
+      
+      window.location.href = shopifyUrl.toString();
+      
+    } catch (err: any) {
+      console.error("Checkout Fehler:", err);
+      setError(err.message);
     } finally {
       setIsAddingToCart(false);
     }
@@ -136,7 +175,7 @@ const App: React.FC = () => {
       {showGuide && <ShopifyGuide onClose={() => setShowGuide(false)} />}
       
       <aside className="hidden md:flex w-[400px] flex-col bg-white border-r border-navy/5 z-50 shadow-2xl overflow-hidden">
-        <header className="p-10 border-b border-navy/5 bg-white/80 backdrop-blur-md">
+        <header className="p-10 border-b border-navy/5 bg-white/80 backdrop-blur-md relative">
           <div className="flex items-center gap-4 mb-2">
             <div className="bg-petrol p-2.5 rounded-button shadow-lg shadow-petrol/20">
               <Printer size={24} className="text-white" />
@@ -182,7 +221,7 @@ const App: React.FC = () => {
             className="group w-full h-16 bg-petrol hover:bg-action disabled:bg-softgrey disabled:text-navy/20 text-white font-black rounded-button flex items-center justify-center gap-4 transition-all duration-500 hover:scale-[1.02] active:scale-95 glow-action"
           >
             {isAddingToCart ? <Loader2 className="animate-spin" /> : <ShoppingCart size={20} />}
-            <span className="tracking-[0.2em] text-xs">BESTELLEN</span>
+            <span className="tracking-[0.2em] text-xs">IN DEN WARENKORB</span>
             <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
           </button>
         </div>
@@ -199,73 +238,14 @@ const App: React.FC = () => {
           onSelect={setSelectedElementId}
         />
 
-        <div className="md:hidden fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-white/95 backdrop-blur-2xl p-2 rounded-full border border-navy/10 shadow-luxury z-[100] glow-action">
-          <button 
-            onClick={() => handleTabClick('upload')}
-            className={`p-4 rounded-full transition-all duration-300 ${activeTab === 'upload' && isDrawerOpen ? 'bg-petrol text-white shadow-lg' : 'text-navy/30'}`}
-          >
-            <Upload size={20} />
-          </button>
-          <div className="w-[1px] h-6 bg-navy/10 mx-1" />
-          <button 
-            onClick={() => handleTabClick('adjust')}
-            className={`flex items-center gap-2.5 px-6 py-4 rounded-full transition-all duration-300 ${activeTab === 'adjust' && isDrawerOpen ? 'bg-petrol text-white shadow-lg' : 'text-navy/30'}`}
-          >
-            <Sliders size={18} />
-            <span className="text-[9px] font-black uppercase tracking-[0.2em]">Form</span>
-          </button>
-          <button 
-            onClick={() => handleTabClick('style')}
-            className={`flex items-center gap-2.5 px-6 py-4 rounded-full transition-all duration-300 ${activeTab === 'style' && isDrawerOpen ? 'bg-petrol text-white shadow-lg' : 'text-navy/30'}`}
-          >
-            <Palette size={18} />
-            <span className="text-[9px] font-black uppercase tracking-[0.2em]">Farbe</span>
-          </button>
-          <div className="w-[1px] h-6 bg-navy/10 mx-1" />
-          <button 
-            onClick={handleAddToCart}
-            disabled={!svgElements || isAddingToCart}
-            className="p-4 bg-navy rounded-full text-white shadow-xl active:scale-90 transition-all disabled:opacity-20"
-          >
-            {isAddingToCart ? <Loader2 className="animate-spin" size={20} /> : <ShoppingCart size={20} />}
-          </button>
-        </div>
-
-        <div className={`
-          md:hidden fixed inset-x-0 bottom-0 z-[90] bg-white border-t border-navy/5 rounded-t-[32px] shadow-[0_-20px_50px_rgba(17,35,90,0.1)] transition-all duration-700 cubic-bezier(0.16, 1, 0.3, 1)
-          ${isDrawerOpen ? 'h-[75vh] translate-y-0' : 'h-0 translate-y-full'}
-        `}>
-          <div className="w-full h-12 flex items-center justify-center pt-2" onClick={() => setIsDrawerOpen(false)}>
-             <div className="w-14 h-1.5 bg-softgrey rounded-full" />
-          </div>
-          
-          <div className="px-10 pb-36 pt-4 h-full overflow-y-auto custom-scrollbar technical-grid-fine">
-            <div className="flex justify-between items-center mb-10">
-              <h2 className="serif-headline font-black text-2xl uppercase tracking-tight text-navy">
-                {activeTab === 'upload' ? 'Logo laden' : activeTab === 'adjust' ? 'Logo-Editor' : 'Finishing'}
-              </h2>
-              <button onClick={() => setIsDrawerOpen(false)} className="bg-cream p-3 rounded-full text-navy/30 hover:text-navy border border-navy/5"><X size={20} /></button>
-            </div>
-
-            <Controls 
-              activeTab={activeTab}
-              config={config} 
-              setConfig={setConfig} 
-              svgElements={svgElements}
-              selectedElementId={selectedElementId}
-              onSelectElement={setSelectedElementId}
-              onUpdateColor={updateElementColor}
-              logoDimensions={logoDimensions}
-              naturalLogoDimensions={naturalLogoDimensions}
-              onUpload={handleFileUpload}
-            />
-          </div>
-        </div>
-
         {error && (
-          <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[200] bg-white border border-red-100 text-navy px-8 py-5 rounded-button shadow-2xl flex items-center gap-5 animate-in slide-in-from-top-10">
-            <AlertCircle size={24} className="text-red-500" />
-            <span className="text-sm font-bold tracking-wide">{error}</span>
+          <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[200] bg-white border border-red-100 text-navy px-8 py-6 rounded-3xl shadow-2xl flex items-start gap-5 animate-in slide-in-from-top-10 max-w-md">
+            <AlertCircle size={28} className="text-red-500 shrink-0 mt-1" />
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-black uppercase text-red-500 opacity-50 tracking-widest">Speicher-Fehler</span>
+              <span className="text-sm font-bold tracking-tight leading-snug">{error}</span>
+              <p className="text-[10px] text-navy/40 mt-2">Prüfe deinen Supabase Key (muss mit 'eyJ' starten) und ob der Bucket 'previews' existiert.</p>
+            </div>
             <button onClick={() => setError(null)} className="ml-4 opacity-30 hover:opacity-100"><X size={20} /></button>
           </div>
         )}
