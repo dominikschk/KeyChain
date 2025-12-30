@@ -121,38 +121,37 @@ const App: React.FC = () => {
       let publicUrl = "https://nudaim3d.de/preview-placeholder.png";
 
       if (SUPABASE_READY) {
-        // Konvertiere Base64 zu Blob für den Upload
-        const base64Response = await fetch(screenshot);
-        const blob = await base64Response.blob();
-        const fileName = `order_${Date.now()}.png`;
-        
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('previews')
-          .upload(fileName, blob, { 
-            contentType: 'image/png',
-            cacheControl: '3600',
-            upsert: false 
-          });
+        try {
+          const base64Response = await fetch(screenshot);
+          const blob = await base64Response.blob();
+          const fileName = `order_${Date.now()}.png`;
+          
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('previews')
+            .upload(fileName, blob, { 
+              contentType: 'image/png',
+              cacheControl: '3600',
+              upsert: false 
+            });
 
-        if (uploadError) {
-          console.error("Supabase Fehler:", uploadError);
-          // Zeige spezifische Fehler für den User
-          if (uploadError.message.includes("Bucket not found")) {
-            throw new Error("Fehler: Der Storage-Bucket 'previews' wurde in Supabase nicht gefunden.");
-          } else if (uploadError.message.includes("is not authorized") || uploadError.message.includes("JWT")) {
-            throw new Error("Fehler: Der API-Key ist ungültig oder hat keine Schreibrechte (RLS Policies prüfen).");
-          } else {
-            throw new Error(`Upload-Fehler: ${uploadError.message}`);
+          if (uploadError) {
+            console.error("Supabase Fehler:", uploadError);
+            if (uploadError.message.includes("401") || uploadError.message.includes("authorized")) {
+              throw new Error("Fehler: Der API Key ist ungültig (Shopify Key statt Supabase Key verwendet?).");
+            }
+            throw new Error(`Upload fehlgeschlagen: ${uploadError.message}`);
           }
-        }
 
-        const { data: urlData } = supabase.storage.from('previews').getPublicUrl(fileName);
-        publicUrl = urlData.publicUrl;
+          const { data: urlData } = supabase.storage.from('previews').getPublicUrl(fileName);
+          publicUrl = urlData.publicUrl;
+        } catch (storageErr: any) {
+          console.error("Storage Error:", storageErr);
+          throw storageErr;
+        }
       } else {
-        throw new Error("Speichern nicht möglich: Kein gültiger Supabase API-Key konfiguriert.");
+        throw new Error("Bitte konfiguriere einen gültigen Supabase API-Key (beginnt mit 'eyJ').");
       }
 
-      // Weiterleitung zu Shopify
       const shopifyUrl = new URL('https://nudaim3d.de/cart/add');
       shopifyUrl.searchParams.append('id', '56564338262361');
       shopifyUrl.searchParams.append('properties[Vorschau]', publicUrl);
@@ -221,7 +220,7 @@ const App: React.FC = () => {
             className="group w-full h-16 bg-petrol hover:bg-action disabled:bg-softgrey disabled:text-navy/20 text-white font-black rounded-button flex items-center justify-center gap-4 transition-all duration-500 hover:scale-[1.02] active:scale-95 glow-action"
           >
             {isAddingToCart ? <Loader2 className="animate-spin" /> : <ShoppingCart size={20} />}
-            <span className="tracking-[0.2em] text-xs">IN DEN WARENKORB</span>
+            <span className="tracking-[0.2em] text-xs">WARENKORB</span>
             <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" />
           </button>
         </div>
@@ -242,9 +241,9 @@ const App: React.FC = () => {
           <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[200] bg-white border border-red-100 text-navy px-8 py-6 rounded-3xl shadow-2xl flex items-start gap-5 animate-in slide-in-from-top-10 max-w-md">
             <AlertCircle size={28} className="text-red-500 shrink-0 mt-1" />
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-black uppercase text-red-500 opacity-50 tracking-widest">Speicher-Fehler</span>
+              <span className="text-[10px] font-black uppercase text-red-500 opacity-50 tracking-widest">Fehler beim Speichern</span>
               <span className="text-sm font-bold tracking-tight leading-snug">{error}</span>
-              <p className="text-[10px] text-navy/40 mt-2">Prüfe deinen Supabase Key (muss mit 'eyJ' starten) und ob der Bucket 'previews' existiert.</p>
+              <p className="text-[10px] text-navy/40 mt-2">Hinweis: Der Key 'sb_publishable_...' ist für Shopify. Für das Speichern von Bildern benötigst du den Supabase 'anon' Key.</p>
             </div>
             <button onClick={() => setError(null)} className="ml-4 opacity-30 hover:opacity-100"><X size={20} /></button>
           </div>

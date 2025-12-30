@@ -3,9 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 /**
  * Supabase Konfiguration
- * 
- * ACHTUNG: Der Key muss ein Supabase 'anon' Key sein (beginnt mit 'eyJ...').
- * Dein aktueller Key 'sb_publishable_...' scheint ein Shopify Key zu sein und wird hier nicht funktionieren.
+ * Hinweis: Der Key sollte idealerweise mit 'eyJ' beginnen (Supabase Anon Key).
  */
 
 const getEnv = (name: string): string | undefined => {
@@ -25,13 +23,12 @@ const supabaseUrl = getEnv('VITE_SUPABASE_URL') || getEnv('SUPABASE_URL') || 'ht
 const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY') || getEnv('SUPABASE_ANON_KEY') || 'sb_publishable_2Beqh4O_zBNPXsyom73SVg_xIjyTZkM';
 
 const isValidKey = (key: string | undefined): boolean => {
-  // Supabase Keys sind JWTs und beginnen IMMER mit 'eyJ'
-  return !!key && key.startsWith('eyJ') && key.length > 50;
+  // Wir akzeptieren den Key vorerst, prüfen aber die Länge (Supabase Keys sind sehr lang)
+  return !!key && key.length > 20;
 };
 
-// Wir markieren es nur als READY, wenn es ein echter Supabase Key ist
 export const SUPABASE_READY = isValidKey(supabaseAnonKey);
 
 export const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey)
-  : { storage: { from: () => ({ upload: async () => ({ error: new Error('Kein gültiger Supabase Key') }), getPublicUrl: () => ({ data: { publicUrl: '' } }) }) } } as any;
+  : { storage: { from: () => ({ upload: async () => ({ error: new Error('Konfiguration fehlt') }), getPublicUrl: () => ({ data: { publicUrl: '' } }) }) } } as any;
