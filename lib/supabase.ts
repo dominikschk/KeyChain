@@ -13,34 +13,56 @@ const getEnv = (name: string): string | undefined => {
   }
 };
 
-// Falls die UUID am Anfang deiner Nachricht die Projekt-ID ist, nutzen wir diese hier.
-// Ansonsten bleibt die ncx... URL bestehen.
 export const SUPABASE_URL = getEnv('VITE_SUPABASE_URL') || getEnv('SUPABASE_URL') || 'https://ncxeyarhrftcfwkcoqpa.supabase.co';
-
-// Dein bereitgestellter Key
 export const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_ANON_KEY') || getEnv('SUPABASE_ANON_KEY') || 'sb_publishable_2Beqh4O_zBNPXsyom73SVg_xIjyTZkM';
 
-export const getKeyType = (key: string): 'READY' | 'EMPTY' | 'UNKNOWN' => {
+export type KeyStatus = 'READY' | 'EMPTY' | 'INVALID';
+
+export const getKeyStatus = (key: string): KeyStatus => {
   if (!key || key.trim() === '') return 'EMPTY';
-  // Wir akzeptieren den Key jetzt ohne Format-Diskussion
-  return 'READY';
+  if (key.startsWith('sb_publishable_') || key.startsWith('eyJ')) return 'READY';
+  return 'INVALID';
 };
 
-export const SUPABASE_READY = getKeyType(SUPABASE_ANON_KEY) === 'READY';
+export const SUPABASE_READY = getKeyStatus(SUPABASE_ANON_KEY) === 'READY';
 
-export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY) 
+export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY && SUPABASE_READY) 
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
-export const getErrorMessage = (error: any): string => {
+export const getDetailedError = (error: any) => {
   const msg = error?.message || String(error);
-  
-  if (msg.includes('403') || msg.includes('is not authorized')) {
-    return 'Berechtigung verweigert (403): Bitte prüfe im Supabase Dashboard unter "Storage", ob der Bucket "previews" öffentlich ist und die RLS-Policies (Policies) das Hochladen erlauben.';
+  const status = error?.status || error?.statusCode || error?.code;
+
+  // Spezifische Prüfung für fehlende Tabelle im Schema Cache
+  if (msg.includes('public.previews') && (msg.includes('schema cache') || msg.includes('not found'))) {
+    return {
+      title: "Tabelle fehlt",
+      message: "Die Datenbank-Tabelle 'previews' existiert noch nicht in deinem Projekt.",
+      code: "TABLE_404"
+    };
   }
-  if (msg.includes('404') || msg.includes('Bucket not found')) {
-    return 'Bucket nicht gefunden: Bitte erstelle in Supabase einen Storage-Bucket mit dem exakten Namen "previews".';
+
+  // Storage Fehler
+  if (msg.includes('bucket_not_found') || msg.includes('does not exist') || status === '404') {
+    return {
+      title: "Bucket fehlt",
+      message: "Der Storage-Ordner 'previews' existiert nicht.",
+      code: "STORAGE_404"
+    };
   }
   
-  return msg;
+  if (msg.includes('row level security') || status === 403 || status === '42501' || msg.includes('Permission denied')) {
+    return {
+      title: "RLS Sperre",
+      message: "Die Sicherheitsregeln verhindern das Speichern. Du musst RLS für 'anon' erlauben.",
+      code: "POLICY_403"
+    };
+  }
+
+  return {
+    title: "Hinweis",
+    message: msg,
+    code: status || "UNKNOWN"
+  };
 };

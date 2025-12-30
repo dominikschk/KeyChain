@@ -1,7 +1,7 @@
 
 import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Canvas, useFrame, ThreeElements, useThree } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Environment, ContactShadows } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, GizmoHelper, GizmoViewport } from '@react-three/drei';
 import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, SUBTRACTION, Brush, Evaluator } from 'three-bvh-csg';
@@ -111,8 +111,15 @@ const SceneWrapper = forwardRef(( { children }: { children: React.ReactNode }, r
   const { gl, scene, camera } = useThree();
   useImperativeHandle(ref, () => ({
     takeScreenshot: () => {
+      // Wir verstecken UI Elemente kurz für den Screenshot
+      const gizmo = scene.getObjectByName('gizmo-helper');
+      if (gizmo) gizmo.visible = false;
+      
       gl.render(scene, camera);
-      return gl.domElement.toDataURL('image/png');
+      const data = gl.domElement.toDataURL('image/png');
+      
+      if (gizmo) gizmo.visible = true;
+      return data;
     }
   }));
   return <>{children}</>;
@@ -122,11 +129,9 @@ const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig }>(({ config }
   const geometry = useMemo(() => {
     const s = 45;
     const r = 10;
-    // Eyelet position further out (moved from 18.5 to 23.0)
     const EYELET_X = -23.0;
     const EYELET_Y_2D = 23.0;
     
-    // Grundplatte
     const plateShape = new THREE.Shape();
     plateShape.moveTo(-s/2+r, -s/2); 
     plateShape.lineTo(s/2-r, -s/2);
@@ -148,13 +153,11 @@ const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig }>(({ config }
 
     const plateGeo = new THREE.ExtrudeGeometry(plateShape, extrudeSettings);
 
-    // Ösen-Geometrie
     const eyeletShape = new THREE.Shape();
     eyeletShape.absarc(0, 0, 7.5, 0, Math.PI * 2, false);
     const eyeletGeo = new THREE.ExtrudeGeometry(eyeletShape, extrudeSettings);
     eyeletGeo.translate(EYELET_X, EYELET_Y_2D, 0);
 
-    // Das Loch in der Öse
     const holeShape = new THREE.Shape();
     holeShape.absarc(0, 0, 4.0, 0, Math.PI * 2, false);
     const holeGeo = new THREE.ExtrudeGeometry(holeShape, { 
@@ -163,7 +166,6 @@ const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig }>(({ config }
     });
     holeGeo.translate(EYELET_X, EYELET_Y_2D, -5);
 
-    // Kombinieren mit CSG
     const evaluator = new Evaluator();
     const plateBrush = new Brush(plateGeo);
     const eyeletBrush = new Brush(eyeletGeo);
@@ -220,6 +222,18 @@ export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null,
           </group>
 
           <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={150} blur={2.5} far={15} />
+
+          {/* Der interaktive Orientierungs-Gizmo */}
+          <GizmoHelper
+            alignment="bottom-right" 
+            margin={[80, 80]}
+            name="gizmo-helper"
+          >
+            <GizmoViewport 
+              axisColors={['#ff3e3e', '#10b981', '#12A9E0']} 
+              labelColor="white" 
+            />
+          </GizmoHelper>
         </SceneWrapper>
       </Canvas>
     </div>
