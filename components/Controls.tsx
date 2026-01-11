@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType } from '../types';
-import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, UserPlus, Share2, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin } from 'lucide-react';
+import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ControlsProps {
@@ -53,13 +53,24 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
 
   const updateSettings = (s: any) => onUpdate({ settings: { ...block.settings, ...s } });
 
+  const getIcon = () => {
+    if (block.type === 'text') return <Type size={18}/>;
+    if (block.type === 'image') return <ImageIcon size={18}/>;
+    switch (block.buttonType) {
+      case 'review': return <Star size={18} className="text-yellow-500" />;
+      case 'wifi': return <Wifi size={18} className="text-blue-500" />;
+      case 'social_loop': return <Instagram size={18} className="text-pink-500" />;
+      default: return <Zap size={18}/>;
+    }
+  };
+
   return (
     <div className="bg-white border border-navy/5 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <GripVertical size={14} className="text-zinc-200 cursor-grab" />
           <div className="p-2 bg-cream rounded-xl text-petrol">
-            {block.type === 'text' ? <Type size={18}/> : block.type === 'image' ? <ImageIcon size={18}/> : <Zap size={18}/>}
+            {getIcon()}
           </div>
           <div className="flex flex-col">
             <span className="text-[10px] font-black uppercase tracking-widest text-navy">{block.buttonType || block.type}</span>
@@ -135,7 +146,7 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
             </div>
           )}
 
-          {block.type === 'magic_button' && block.buttonType === 'standard' && (
+          {(block.type === 'magic_button' && block.buttonType === 'standard') && (
             <div className="space-y-2">
               <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Ziel-URL</label>
               <input type="text" value={block.link || ''} onChange={e => onUpdate({ link: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-[10px] font-mono bg-white" placeholder="https://..." />
