@@ -30,39 +30,40 @@ export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY && SUPABASE_READY)
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
+// Fixed: Renamed 'message' to 'msg' and ensured 'code' is a string to match App.tsx's errorInfo state type
 export const getDetailedError = (error: any) => {
-  const msg = error?.message || String(error);
+  const msgText = error?.message || String(error);
   const status = error?.status || error?.statusCode || error?.code;
 
   // Spezifische Prüfung für fehlende Tabelle im Schema Cache
-  if (msg.includes('public.previews') && (msg.includes('schema cache') || msg.includes('not found'))) {
+  if (msgText.includes('public.previews') && (msgText.includes('schema cache') || msgText.includes('not found'))) {
     return {
       title: "Tabelle fehlt",
-      message: "Die Datenbank-Tabelle 'previews' existiert noch nicht in deinem Projekt.",
+      msg: "Die Datenbank-Tabelle 'previews' existiert noch nicht in deinem Projekt.",
       code: "TABLE_404"
     };
   }
 
   // Storage Fehler
-  if (msg.includes('bucket_not_found') || msg.includes('does not exist') || status === '404') {
+  if (msgText.includes('bucket_not_found') || msgText.includes('does not exist') || status === '404') {
     return {
       title: "Bucket fehlt",
-      message: "Der Storage-Ordner 'previews' existiert nicht.",
+      msg: "Der Storage-Ordner 'previews' existiert nicht.",
       code: "STORAGE_404"
     };
   }
   
-  if (msg.includes('row level security') || status === 403 || status === '42501' || msg.includes('Permission denied')) {
+  if (msgText.includes('row level security') || status === 403 || status === '42501' || msgText.includes('Permission denied')) {
     return {
       title: "RLS Sperre",
-      message: "Die Sicherheitsregeln verhindern das Speichern. Du musst RLS für 'anon' erlauben.",
+      msg: "Die Sicherheitsregeln verhindern das Speichern. Du musst RLS für 'anon' erlauben.",
       code: "POLICY_403"
     };
   }
 
   return {
     title: "Hinweis",
-    message: msg,
-    code: status || "UNKNOWN"
+    msg: msgText,
+    code: String(status || "UNKNOWN")
   };
 };

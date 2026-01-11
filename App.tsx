@@ -1,280 +1,177 @@
-import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { Download, Upload, AlertCircle, CheckCircle2, Loader2, Printer, ShoppingCart, HelpCircle, Palette, Box, Type, MousePointer2, Settings2, Sliders, X, ChevronUp, ArrowRight, WifiOff, Settings, ShieldAlert, Database, Link, Info, Activity, Key, ExternalLink, AlertTriangle, Search, FolderPlus, Lock, ShieldCheck, Check, Copy, Terminal } from 'lucide-react';
+
+import React, { useState, useRef, useEffect } from 'react';
+import { Printer, Loader2, Check, X, Smartphone, Palette, Box, Type, Settings, ChevronRight } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
 import { DEFAULT_CONFIG } from './constants';
 import { ModelConfig, SVGPathData } from './types';
-import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
-import { supabase, SUPABASE_READY, SUPABASE_ANON_KEY, getKeyStatus, getDetailedError, SUPABASE_URL } from './lib/supabase';
+import { supabase, getDetailedError } from './lib/supabase';
 
-type TabType = 'upload' | 'adjust' | 'style';
-type ProcessStep = 'idle' | 'screenshot' | 'upload_image' | 'save_db' | 'redirecting';
+type Department = '3d' | 'digital';
 
 const App: React.FC = () => {
   const [config, setConfig] = useState<ModelConfig>(DEFAULT_CONFIG);
   const [svgElements, setSvgElements] = useState<SVGPathData[] | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('upload');
-  const [processStep, setProcessStep] = useState<ProcessStep>('idle');
+  const [activeDept, setActiveDept] = useState<Department>('3d');
+  const [isSaving, setIsSaving] = useState(false);
   const [errorInfo, setErrorInfo] = useState<{title: string, msg: string, code: string} | null>(null);
-  const [successInfo, setSuccessInfo] = useState<{url: string, db: boolean} | null>(null);
-  const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
-  const [copiedSql, setCopiedSql] = useState(false);
+  const [successId, setSuccessId] = useState<string | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
   
-  const viewerRef = useRef<{ getExportableGroup: () => THREE.Group | null, takeScreenshot: () => Promise<string> }>(null);
+  const viewerRef = useRef<{ takeScreenshot: () => Promise<string> }>(null);
 
-  const sqlCode = `create table previews (
-  id bigint primary key generated always as identity,
-  created_at timestamptz default now(),
-  file_name text not null,
-  image_url text not null,
-  config jsonb not null
-);
-
--- RLS aktivieren
-alter table previews enable row level security;
-
--- Erlaubt das Einfügen für anonyme Besucher (Wichtig!)
-create policy "Allow anonymous inserts" on previews for insert to anon with check (true);
-create policy "Allow anonymous selects" on previews for select to anon using (true);`;
-
-  const copySqlToClipboard = () => {
-    navigator.clipboard.writeText(sqlCode);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2000);
-  };
+  useEffect(() => {
+    setIsLoaded(true);
+  }, []);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    setErrorInfo(null);
     const reader = new FileReader();
     reader.onload = (e) => {
-      const contents = e.target?.result as string;
-      const loader = new SVGLoader();
       try {
-        const svgData = loader.parse(contents);
-        const elements: SVGPathData[] = svgData.paths.map((path, index) => ({
-          id: `path-${index}-${Math.random().toString(36).substr(2, 9)}`,
+        const loader = new SVGLoader();
+        const svgData = loader.parse(e.target?.result as string);
+        const elements = svgData.paths.map((path, i) => ({
+          id: `path-${i}-${Math.random()}`,
           shapes: SVGLoader.createShapes(path),
           color: path.color.getStyle(),
           currentColor: path.color.getStyle(),
-          name: (path.userData as any)?.node?.id || `Teil ${index + 1}`
+          name: (path.userData as any)?.node?.id || `Logo Part ${i + 1}`
         }));
         setSvgElements(elements);
-        const tempBox = new THREE.Box3();
-        elements.forEach(el => el.shapes.forEach(s => {
-          const g = new THREE.ShapeGeometry(s);
-          g.computeBoundingBox();
-          if (g.boundingBox) tempBox.union(g.boundingBox);
-        }));
-        const size = new THREE.Vector3();
-        tempBox.getSize(size);
-        const maxDim = Math.max(size.x, size.y);
-        const targetDim = 38;
-        const initialScale = targetDim / maxDim;
-        setConfig(prev => ({ ...prev, logoScale: initialScale, logoPosX: 0, logoPosY: 0, logoRotation: 0 }));
-        setActiveTab('adjust');
       } catch (err) {
-        setErrorInfo({ title: "Dateifehler", msg: "Die SVG konnte nicht verarbeitet werden.", code: "SVG_ERR" });
+        setErrorInfo({ title: "SVG Fehler", msg: "Ungültige Datei.", code: "SVG_ERR" });
       }
     };
     reader.readAsText(file);
   };
 
-  const handleAddToCart = async () => {
-    if (!svgElements || processStep !== 'idle') return;
+  const handleSave = async () => {
+    if (!supabase) {
+      setErrorInfo({ title: "Verbindung", msg: "Datenbank nicht bereit.", code: "NO_DB" });
+      return;
+    }
     
-    setErrorInfo(null);
-    setSuccessInfo(null);
-    setProcessStep('screenshot');
-    
+    setIsSaving(true);
     try {
-      if (!supabase) throw new Error("Supabase ist nicht konfiguriert (URL/Key fehlt).");
-
-      // 1. Screenshot
       const screenshot = await viewerRef.current?.takeScreenshot();
-      if (!screenshot || screenshot.length < 100) {
-        throw new Error("Vorschaubild konnte nicht erstellt werden. Bitte versuche es erneut.");
+      let finalImageUrl = '';
+      
+      if (screenshot) {
+        const fileName = `nudaim_${Date.now()}.png`;
+        const blob = await (await fetch(screenshot)).blob();
+        const { error: uploadError } = await supabase.storage.from('nudaim').upload(fileName, blob);
+        if (uploadError) throw uploadError;
+        const { data } = supabase.storage.from('nudaim').getPublicUrl(fileName);
+        finalImageUrl = data.publicUrl;
       }
-      
-      setProcessStep('upload_image');
-      const base64Response = await fetch(screenshot);
-      const blob = await base64Response.blob();
-      const fileName = `order_${Date.now()}.png`;
-      
-      // Upload in den Bucket
-      const { error: uploadError } = await supabase.storage
-        .from('previews')
-        .upload(fileName, blob, { contentType: 'image/png', upsert: true });
-        
-      if (uploadError) throw uploadError;
-      
-      const { data: urlData } = supabase.storage.from('previews').getPublicUrl(fileName);
-      const publicUrl = urlData.publicUrl;
 
-      // 2. Datenbank
-      setProcessStep('save_db');
-      const { error: dbError } = await supabase
-        .from('previews')
-        .insert([{ 
-          file_name: fileName, 
-          image_url: publicUrl, 
-          config: config 
-        }]);
+      // Add website link to the config if not present
+      const finalConfig = { 
+        ...config, 
+        studio_url: window.location.origin + window.location.pathname 
+      };
 
-      if (dbError) throw dbError;
+      const { data, error } = await supabase
+        .from('nfc_configs')
+        .insert([{ config: finalConfig, image_url: finalImageUrl }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      setSuccessId(data.short_id);
       
-      setProcessStep('redirecting');
-      setSuccessInfo({ url: publicUrl, db: true });
-      
+      // Shopify Integration Redirect
       setTimeout(() => {
-        window.location.href = `https://nudaim3d.de/cart/add?id=56564338262361&properties[Vorschau]=${publicUrl}`;
+        const shopifyId = "56564338262361";
+        const redirectUrl = `https://nudaim3d.de/cart/add?id=${shopifyId}&properties[3D_VORSCHAU]=${encodeURIComponent(finalImageUrl)}&properties[NFC_SETUP_ID]=${data.short_id}`;
+        window.location.href = redirectUrl;
       }, 2500);
-
+      
     } catch (err: any) {
-      console.error("Kritischer Fehler beim Speichern:", err);
-      const detailed = getDetailedError(err);
-      setErrorInfo({ 
-        title: detailed.title, 
-        msg: detailed.message, 
-        code: detailed.code 
-      });
-      setProcessStep('idle');
+      setErrorInfo(getDetailedError(err));
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const isProcessing = processStep !== 'idle';
+  if (!isLoaded) return null;
 
   return (
-    <div className="flex h-screen w-screen bg-cream text-navy overflow-hidden font-sans">
-      <aside className="hidden md:flex w-[400px] flex-col bg-white border-r border-navy/5 z-50 shadow-2xl">
-        <header className="p-10 border-b border-navy/5">
-          <div className="flex items-center gap-4">
-            <div className="bg-petrol p-2.5 rounded-button"><Printer size={24} className="text-white" /></div>
-            <h1 className="serif-headline font-black text-2xl tracking-tight text-navy uppercase">NUDAIM3D</h1>
+    <div className="flex h-screen w-screen bg-cream text-navy overflow-hidden">
+      <aside className="w-[450px] bg-white border-r border-navy/5 flex flex-col z-50 shadow-2xl relative">
+        <header className="p-8 border-b border-navy/5 bg-white">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="bg-petrol p-2.5 rounded-xl text-white shadow-lg"><Printer size={22} /></div>
+              <h1 className="serif-headline font-black text-2xl tracking-tight uppercase">NUDAIM3D</h1>
+            </div>
+            
+            <div className="flex bg-cream p-1 rounded-2xl border border-navy/5">
+              <button onClick={() => setActiveDept('3d')} className={`px-4 py-2.5 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest ${activeDept === '3d' ? 'bg-white shadow-md text-petrol' : 'text-zinc-400'}`}>3D Design</button>
+              <button onClick={() => setActiveDept('digital')} className={`px-4 py-2.5 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest ${activeDept === 'digital' ? 'bg-white shadow-md text-petrol' : 'text-zinc-400'}`}>NFC Setup</button>
+            </div>
           </div>
         </header>
 
-        <nav className="flex p-6 gap-2 bg-cream/50">
-          {(['upload', 'adjust', 'style'] as TabType[]).map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-3.5 rounded-button text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-petrol text-white shadow-lg' : 'text-zinc-400 hover:bg-navy/5'}`}>
-              {tab === 'upload' ? 'Upload' : tab === 'adjust' ? 'Design' : 'Farben'}
-            </button>
-          ))}
-        </nav>
-
-        <div className="flex-1 overflow-y-auto p-10 custom-scrollbar space-y-8 technical-grid-fine">
-          <Controls activeTab={activeTab} config={config} setConfig={setConfig} svgElements={svgElements} selectedElementId={selectedElementId} onSelectElement={setSelectedElementId} onUpdateColor={(id, c) => setSvgElements(prev => prev ? prev.map(el => el.id === id ? { ...el, currentColor: c } : el) : null)} logoDimensions={{width:0, height:0}} naturalLogoDimensions={{width:0, height:0}} onUpload={handleFileUpload} />
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 technical-grid-fine space-y-6">
+          <Controls 
+            activeDept={activeDept} config={config} setConfig={setConfig}
+            svgElements={svgElements} onUpload={handleFileUpload}
+            onUpdateColor={(id, c) => setSvgElements(prev => prev?.map(el => el.id === id ? { ...el, currentColor: c } : el) || null)}
+          />
         </div>
 
-        <div className="p-10 border-t border-navy/5">
+        <footer className="p-8 border-t border-navy/5 bg-white space-y-4">
           <button 
-            onClick={handleAddToCart} 
-            disabled={!svgElements || isProcessing} 
-            className={`group w-full h-16 rounded-button flex items-center justify-center gap-4 transition-all relative overflow-hidden font-black text-white ${isProcessing ? 'bg-zinc-400 cursor-wait' : 'bg-petrol hover:bg-action glow-action active:scale-95'}`}
+            onClick={activeDept === '3d' ? () => setActiveDept('digital') : handleSave}
+            disabled={isSaving}
+            className={`w-full h-16 rounded-button font-black text-xs tracking-[0.2em] flex items-center justify-center gap-4 transition-all shadow-xl disabled:opacity-50 ${activeDept === '3d' ? 'bg-navy hover:bg-petrol text-white' : 'bg-petrol hover:bg-action text-white'}`}
           >
-            {isProcessing ? (
-              <div className="flex items-center gap-3">
-                <Loader2 className="animate-spin" size={20} />
-                <span className="tracking-[0.2em] text-[10px]">
-                  {processStep === 'screenshot' && 'ERSTELLE VORSCHAU...'}
-                  {processStep === 'upload_image' && 'LADE BILD HOCH...'}
-                  {processStep === 'save_db' && 'SCHREIBE DATEN...'}
-                  {processStep === 'redirecting' && 'ÜBERTRAGE...'}
-                </span>
-              </div>
-            ) : (
-              <>
-                <ShoppingCart size={20} />
-                <span className="tracking-[0.2em] text-xs">WARENKORB</span>
-              </>
-            )}
+            {isSaving ? <Loader2 className="animate-spin" /> : (activeDept === '3d' ? <>NFC KONFIGURIEREN <ChevronRight size={14}/></> : "KONFIGURATION ABSCHLIESSEN")}
           </button>
-        </div>
+          <p className="text-[8px] text-zinc-400 text-center uppercase tracking-widest font-bold">Produktion & Versand innerhalb von 48h</p>
+        </footer>
+
+        {errorInfo && (
+          <div className="absolute bottom-36 left-8 right-8 animate-in slide-in-from-bottom-4 z-[100]">
+             <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex items-center gap-4 text-red-600 shadow-2xl">
+                <X size={20} className="shrink-0 cursor-pointer" onClick={() => setErrorInfo(null)} />
+                <div className="flex-1">
+                   <p className="text-[10px] font-black uppercase tracking-wider">{errorInfo.title}</p>
+                   <p className="text-[9px] opacity-80">{errorInfo.msg}</p>
+                </div>
+             </div>
+          </div>
+        )}
       </aside>
 
       <main className="flex-1 relative bg-cream">
-        <Viewer ref={viewerRef} config={config} svgElements={svgElements} selectedId={selectedElementId} onSelect={setSelectedElementId} />
+        <Viewer 
+          ref={viewerRef} config={config}
+          svgElements={svgElements} showNFCPreview={activeDept === 'digital'}
+        />
         
-        {successInfo && (
-          <div className="fixed inset-0 z-[400] bg-emerald-500/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300 text-white">
-            <div className="bg-white rounded-[40px] shadow-2xl p-12 max-w-md w-full text-center space-y-8 text-navy">
-              <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                <Check size={48} className="animate-bounce" />
-              </div>
+        {successId && (
+          <div className="absolute inset-0 z-[100] bg-emerald-500/90 backdrop-blur-2xl flex items-center justify-center animate-in zoom-in duration-500 p-8">
+            <div className="bg-white p-12 md:p-16 rounded-[40px] text-center space-y-8 shadow-2xl max-w-sm w-full">
+              <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner"><Check size={40} /></div>
               <div className="space-y-2">
-                <h2 className="serif-headline text-3xl font-black uppercase">Erfolgreich!</h2>
+                <h3 className="serif-headline text-3xl font-black text-navy uppercase">Studio Save</h3>
+                <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">Wird an den Warenkorb übertragen...</p>
               </div>
-              <p className="text-xs font-bold animate-pulse text-emerald-600 uppercase tracking-widest">Weiterleitung...</p>
+              <div className="bg-cream px-6 py-4 rounded-2xl font-mono text-xs text-emerald-600 border border-emerald-100">ID: {successId}</div>
+              <Loader2 className="animate-spin mx-auto text-emerald-500" />
             </div>
           </div>
         )}
 
-        {errorInfo && (
-          <div className="fixed inset-0 z-[300] bg-navy/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-300">
-            <div className="bg-white rounded-[40px] shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col border border-white/20">
-              <div className="bg-red-600 p-10 text-white flex items-center justify-between">
-                <div className="flex items-center gap-6">
-                  <div className="bg-white/20 p-4 rounded-3xl"><ShieldAlert size={32} /></div>
-                  <div>
-                    <h2 className="text-xl font-black uppercase tracking-widest">{errorInfo.title}</h2>
-                    <p className="text-[10px] opacity-70 font-bold uppercase tracking-widest">Code: {errorInfo.code}</p>
-                  </div>
-                </div>
-                <button onClick={() => { setErrorInfo(null); setProcessStep('idle'); }} className="hover:rotate-90 transition-all"><X size={24} /></button>
-              </div>
-              
-              <div className="p-10 space-y-8 overflow-y-auto max-h-[75vh] custom-scrollbar bg-offwhite text-navy">
-                <div className="bg-red-50 p-8 rounded-3xl border border-red-100">
-                   <p className="text-sm font-bold text-red-900 leading-relaxed">{errorInfo.msg}</p>
-                </div>
-
-                {errorInfo.code === 'TABLE_404' && (
-                  <div className="space-y-6">
-                    <h3 className="text-[11px] font-black uppercase tracking-[0.25em] text-navy/30 flex items-center gap-2 px-2">
-                      <Terminal size={14} className="text-petrol" /> Datenbank-Fix:
-                    </h3>
-                    
-                    <div className="bg-zinc-900 p-8 rounded-[32px] space-y-6 shadow-inner border border-white/5 relative group">
-                      <div className="flex justify-between items-center">
-                        <p className="text-[10px] font-mono text-zinc-500">SQL EDITOR COMMAND</p>
-                        <button 
-                          onClick={copySqlToClipboard}
-                          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black transition-all ${copiedSql ? 'bg-emerald-500 text-white' : 'bg-white/10 text-zinc-300 hover:bg-white/20'}`}
-                        >
-                          {copiedSql ? <Check size={14} /> : <Copy size={14} />}
-                          {copiedSql ? 'KOPIERT' : 'CODE KOPIEREN'}
-                        </button>
-                      </div>
-                      <pre className="text-[10px] font-mono text-emerald-400 overflow-x-auto whitespace-pre pb-2 scrollbar-hide">
-                        {sqlCode}
-                      </pre>
-                    </div>
-
-                    <div className="p-6 bg-cream rounded-2xl border border-navy/5 flex items-center gap-6">
-                      <Info className="text-petrol" />
-                      <p className="text-[10px] font-bold text-navy/60 leading-relaxed uppercase tracking-widest">
-                        Öffne den <b>SQL Editor</b> in Supabase, füge den Code ein und klicke auf <b>Run</b>. Danach lade diese Seite neu.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex gap-4 pt-4">
-                  <a 
-                    href="https://supabase.com/dashboard/project/ncxeyarhrftcfwkcoqpa/sql/new" 
-                    target="_blank" 
-                    className="flex-1 h-16 bg-petrol text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-action transition-all shadow-xl"
-                  >
-                    SQL Editor öffnen <ExternalLink size={14} />
-                  </a>
-                  <button onClick={() => { setErrorInfo(null); setProcessStep('idle'); }} className="px-10 h-16 bg-zinc-100 text-navy rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-zinc-200 transition-all">Schließen</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Branding Overlay */}
+        <div className="absolute bottom-8 right-8 pointer-events-none opacity-20">
+           <p className="font-black text-3xl serif-headline text-navy tracking-tighter uppercase">Nudaim3D Studio</p>
+        </div>
       </main>
     </div>
   );

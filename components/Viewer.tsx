@@ -1,241 +1,206 @@
 
-import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { Canvas, useFrame, ThreeElements, useThree } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, GizmoHelper, GizmoViewport } from '@react-three/drei';
+import React, { useRef, useMemo, forwardRef, useImperativeHandle, useEffect } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Text, Float } from '@react-three/drei';
 import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, SUBTRACTION, Brush, Evaluator } from 'three-bvh-csg';
+import { Smartphone } from 'lucide-react';
 
-declare global {
-  namespace JSX {
-    interface IntrinsicElements extends ThreeElements {
-      [tagName: string]: any;
-    }
-  }
-}
-
-export interface ViewerProps {
-  config: ModelConfig;
-  svgElements: SVGPathData[] | null;
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-}
-
-const LogoElement: React.FC<{ element: SVGPathData; config: ModelConfig; isSelected: boolean }> = ({ element, config, isSelected }) => {
-  const geometry = useMemo(() => {
-    const geo = new THREE.ExtrudeGeometry(element.shapes, { 
-      depth: config.logoDepth, 
-      bevelEnabled: true,
-      bevelThickness: 0.3,
-      bevelSize: 0.2,
-      bevelSegments: 5
-    });
-    geo.scale(1, -1, 1);
-    geo.rotateX(-Math.PI / 2);
-    geo.computeBoundingBox();
-    const bbox = geo.boundingBox!;
-    geo.translate(0, -bbox.min.y, 0); 
-    return geo;
-  }, [element.shapes, config.logoDepth]);
+const PhonePreview: React.FC<{ config: ModelConfig }> = ({ config }) => {
+  const blocks = config.nfcBlocks;
+  const t = config.nfcTemplate;
 
   return (
-    <mesh geometry={geometry} castShadow receiveShadow>
-      <meshStandardMaterial 
-        color={element.currentColor} 
-        roughness={0.4} 
-        metalness={0.1} 
-        side={THREE.DoubleSide} 
-        emissive={isSelected ? "#12A9E0" : '#000000'}
-        emissiveIntensity={isSelected ? 0.4 : 0}
-      />
-    </mesh>
+    <div className="absolute inset-0 flex items-center justify-center p-4 md:p-12 z-[100] pointer-events-none animate-in fade-in zoom-in duration-500">
+      <div className="w-full max-w-[320px] aspect-[1/2] max-h-[85vh] bg-navy rounded-[3rem] border-[8px] border-navy shadow-2xl relative pointer-events-auto overflow-hidden flex flex-col">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-navy rounded-b-2xl z-20" />
+        <div className={`flex-1 overflow-y-auto custom-scrollbar pt-10 px-5 pb-10 space-y-6 ${t === 'minimal' ? 'bg-white' : t === 'professional' ? 'bg-slate-100' : 'bg-gradient-to-b from-slate-50 to-white'}`}>
+          <header className="text-center space-y-3">
+            <div className="w-12 h-12 bg-petrol rounded-xl flex items-center justify-center mx-auto text-white shadow-lg">
+              <Smartphone size={24} />
+            </div>
+            <h3 className="font-bold text-navy text-sm uppercase tracking-widest">NFC Preview</h3>
+          </header>
+          
+          <div className="space-y-3">
+            {blocks.map(block => (
+              <div key={block.id} className="bg-white p-4 rounded-xl shadow-sm border border-navy/5 transition-all hover:shadow-md">
+                <div className="flex items-center gap-2 mb-1">
+                   {block.type === 'magic_button' && <div className="w-1.5 h-1.5 rounded-full bg-action animate-pulse" />}
+                   <p className="font-black text-navy text-[10px] uppercase tracking-wider">{block.title || block.buttonType || block.type}</p>
+                </div>
+                <p className="text-[11px] text-zinc-500 leading-relaxed">{block.content}</p>
+                {block.type === 'image' && block.imageUrl && (
+                  <img src={block.imageUrl} className="mt-3 rounded-lg w-full h-32 object-cover border border-navy/5" alt="Preview" />
+                )}
+              </div>
+            ))}
+          </div>
+          
+          <footer className="text-center opacity-20 pt-8">
+            <p className="text-[7px] font-black uppercase tracking-[0.3em]">NUDAIM STUDIO GERMANY</p>
+          </footer>
+        </div>
+      </div>
+    </div>
   );
 };
 
-const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateRef: React.RefObject<THREE.Mesh | null>; selectedId: string | null }> = ({ elements, config, plateRef, selectedId }) => {
-  const groupRef = useRef<THREE.Group>(null);
-  const plateBox = useMemo(() => new THREE.Box3(), []);
-  const logoBox = useMemo(() => new THREE.Box3(), []);
+const BaseModel = forwardRef<THREE.Mesh, { config: ModelConfig, showNFC?: boolean }>(({ config, showNFC }, ref) => {
+  const geometry = useMemo(() => {
+    try {
+      const extrudeSettings = { depth: config.plateDepth, bevelEnabled: true, bevelThickness: 0.5, bevelSize: 0.5, bevelSegments: 3 };
+      let baseGeo: THREE.BufferGeometry;
 
-  const centerOffset = useMemo(() => {
-    const totalBox = new THREE.Box3();
-    elements.forEach(el => {
-      el.shapes.forEach(shape => {
-        const sg = new THREE.ShapeGeometry(shape);
-        sg.computeBoundingBox();
-        if (sg.boundingBox) totalBox.union(sg.boundingBox);
+      if (config.baseType === 'circle') {
+        baseGeo = new THREE.ExtrudeGeometry(new THREE.Shape().absarc(0, 0, 22.5, 0, Math.PI * 2, false), extrudeSettings);
+      } else if (config.baseType === 'rect') {
+        const shape = new THREE.Shape();
+        shape.moveTo(-22.5, -15); shape.lineTo(22.5, -15); shape.lineTo(22.5, 15); shape.lineTo(-22.5, 15);
+        baseGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      } else {
+        const s = 45, r = 10;
+        const shape = new THREE.Shape();
+        shape.moveTo(-s/2+r, -s/2); shape.lineTo(s/2-r, -s/2); shape.absarc(s/2-r, -s/2+r, r, -Math.PI/2, 0, false);
+        shape.lineTo(s/2, s/2-r); shape.absarc(s/2-r, s/2-r, r, 0, Math.PI/2, false);
+        shape.lineTo(-s/2+r, s/2); shape.absarc(-s/2+r, s/2-r, r, Math.PI/2, Math.PI, false);
+        shape.lineTo(-s/2, -s/2+r); shape.absarc(-s/2+r, -s/2+r, r, Math.PI, Math.PI*1.5, false);
+        baseGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      }
+
+      if (!config.hasChain) { baseGeo.rotateX(-Math.PI/2); return baseGeo; }
+
+      const eyeletGeo = new THREE.ExtrudeGeometry(new THREE.Shape().absarc(0, 0, 7.5, 0, Math.PI * 2, false), extrudeSettings);
+      eyeletGeo.translate(config.eyeletPosX, config.eyeletPosY, 0);
+
+      const holeGeo = new THREE.ExtrudeGeometry(new THREE.Shape().absarc(0, 0, 4.0, 0, Math.PI * 2, false), { depth: config.plateDepth + 2, bevelEnabled: false });
+      holeGeo.translate(config.eyeletPosX, config.eyeletPosY, -1);
+
+      const evaluator = new Evaluator();
+      const final = evaluator.evaluate(evaluator.evaluate(new Brush(baseGeo), new Brush(eyeletGeo), ADDITION), new Brush(holeGeo), SUBTRACTION);
+      final.geometry.rotateX(-Math.PI/2);
+      return final.geometry;
+    } catch (e) {
+      return new THREE.BoxGeometry(45, 4, 45);
+    }
+  }, [config.plateDepth, config.baseType, config.hasChain, config.eyeletPosX, config.eyeletPosY]);
+
+  return (
+    <group>
+      <mesh ref={ref} geometry={geometry} castShadow receiveShadow>
+        <meshStandardMaterial color="#ffffff" roughness={0.3} metalness={0.05} />
+      </mesh>
+      {showNFC && (
+        <group position={[0, config.plateDepth + 0.1, 0]}>
+          <mesh rotation={[-Math.PI/2, 0, 0]}>
+            <circleGeometry args={[8, 32]} />
+            <meshStandardMaterial color="#12A9E0" transparent opacity={0.3} emissive="#12A9E0" emissiveIntensity={0.5} />
+          </mesh>
+          <Float speed={5} rotationIntensity={0.5}>
+             <Text position={[0, 10, 0]} fontSize={2.5} color="#12A9E0" font="https://fonts.gstatic.com/s/plusjakartasans/v8/L0xPDF4xlVqn-I7F9mp8968m_E5v.woff2">NFC CHIP</Text>
+          </Float>
+        </group>
+      )}
+    </group>
+  );
+});
+
+const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateRef: React.RefObject<THREE.Mesh | null> }> = ({ elements, config, plateRef }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  
+  // Center logic: Calculate the bounding box of all elements COMBINED to center the logo correctly
+  const logoElements = useMemo(() => {
+    return elements.map(el => {
+      const geo = new THREE.ExtrudeGeometry(el.shapes, { 
+        depth: config.logoDepth, 
+        bevelEnabled: true, 
+        bevelThickness: 0.2, 
+        bevelSize: 0.1 
       });
+      geo.scale(1, -1, 1); // Flip Y because SVG is top-down
+      geo.rotateX(-Math.PI / 2);
+      return { geo, color: el.currentColor };
     });
-    const c = new THREE.Vector3();
-    totalBox.getCenter(c);
-    return { x: c.x, z: -c.y };
-  }, [elements]);
+  }, [elements, config.logoDepth]);
 
   useFrame(() => {
     if (plateRef.current && groupRef.current) {
-      plateRef.current.updateWorldMatrix(true, true);
-      groupRef.current.updateWorldMatrix(true, true);
-      plateBox.setFromObject(plateRef.current);
-      logoBox.setFromObject(groupRef.current);
-      const diffY = (plateBox.max.y - 0.01) - logoBox.min.y; 
-      if (Math.abs(diffY) > 0.0001) {
-        groupRef.current.position.y += diffY;
-      }
+      const plateBox = new THREE.Box3().setFromObject(plateRef.current);
+      const logoBox = new THREE.Box3().setFromObject(groupRef.current);
+      // Ensure the logo sits exactly on top of the plate
+      const targetY = plateBox.max.y - 0.01;
+      const currentY = logoBox.min.y;
+      const diffY = targetY - currentY;
+      if (Math.abs(diffY) > 0.001) groupRef.current.position.y += diffY;
+
+      // Center the logo on XZ plane relative to its own bounds
+      const center = new THREE.Vector3();
+      logoBox.getCenter(center);
+      // We don't want to auto-center every frame if user is moving it, 
+      // but we need an initial centering.
     }
   });
 
-  const scaleFactor = config.logoScale * (config.mirrorX ? -1 : 1);
+  // Calculate the collective center of all shapes once
+  const initialOffset = useMemo(() => {
+    const box = new THREE.Box3();
+    logoElements.forEach(({ geo }) => {
+      geo.computeBoundingBox();
+      if (geo.boundingBox) box.union(geo.boundingBox);
+    });
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    return center;
+  }, [logoElements]);
 
   return (
     <group 
-      ref={groupRef} 
       position={[config.logoPosX, 0, config.logoPosY]} 
-      scale={[scaleFactor, config.logoScale, config.logoScale]}
-      rotation={[0, THREE.MathUtils.degToRad(config.logoRotation), 0]}
+      scale={[config.logoScale, config.logoScale, config.logoScale]} 
+      rotation={[0, THREE.MathUtils.degToRad(config.logoRotation), 0]} 
+      ref={groupRef}
     >
-      <group position={[-centerOffset.x, 0, -centerOffset.z]}>
-        {elements.map(el => (
-          <LogoElement 
-            key={el.id} 
-            element={el} 
-            config={config} 
-            isSelected={selectedId === el.id} 
-          />
+      <group position={[-initialOffset.x, 0, -initialOffset.z]}>
+        {logoElements.map((el, idx) => (
+          <mesh key={idx} geometry={el.geo} castShadow>
+            <meshStandardMaterial color={el.color} />
+          </mesh>
         ))}
       </group>
     </group>
   );
 };
 
-const SceneWrapper = forwardRef(( { children }: { children: React.ReactNode }, ref) => {
-  const { gl, scene, camera } = useThree();
-  useImperativeHandle(ref, () => ({
-    takeScreenshot: () => {
-      // Wir verstecken UI Elemente kurz für den Screenshot
-      const gizmo = scene.getObjectByName('gizmo-helper');
-      if (gizmo) gizmo.visible = false;
-      
-      gl.render(scene, camera);
-      const data = gl.domElement.toDataURL('image/png');
-      
-      if (gizmo) gizmo.visible = true;
-      return data;
-    }
-  }));
-  return <>{children}</>;
-});
-
-const KeychainBase = forwardRef<THREE.Mesh, { config: ModelConfig }>(({ config }, ref) => {
-  const geometry = useMemo(() => {
-    const s = 45;
-    const r = 10;
-    const EYELET_X = -23.0;
-    const EYELET_Y_2D = 23.0;
-    
-    const plateShape = new THREE.Shape();
-    plateShape.moveTo(-s/2+r, -s/2); 
-    plateShape.lineTo(s/2-r, -s/2);
-    plateShape.absarc(s/2-r, -s/2+r, r, -Math.PI/2, 0, false);
-    plateShape.lineTo(s/2, s/2-r);
-    plateShape.absarc(s/2-r, s/2-r, r, 0, Math.PI/2, false);
-    plateShape.lineTo(-s/2+r, s/2);
-    plateShape.absarc(-s/2+r, s/2-r, r, Math.PI/2, Math.PI, false);
-    plateShape.lineTo(-s/2, -s/2+r);
-    plateShape.absarc(-s/2+r, -s/2+r, r, Math.PI, Math.PI*1.5, false);
-
-    const extrudeSettings = { 
-      depth: config.plateDepth, 
-      bevelEnabled: true,
-      bevelThickness: 0.5,
-      bevelSize: 0.5,
-      bevelSegments: 5
-    };
-
-    const plateGeo = new THREE.ExtrudeGeometry(plateShape, extrudeSettings);
-
-    const eyeletShape = new THREE.Shape();
-    eyeletShape.absarc(0, 0, 7.5, 0, Math.PI * 2, false);
-    const eyeletGeo = new THREE.ExtrudeGeometry(eyeletShape, extrudeSettings);
-    eyeletGeo.translate(EYELET_X, EYELET_Y_2D, 0);
-
-    const holeShape = new THREE.Shape();
-    holeShape.absarc(0, 0, 4.0, 0, Math.PI * 2, false);
-    const holeGeo = new THREE.ExtrudeGeometry(holeShape, { 
-      depth: config.plateDepth + 10, 
-      bevelEnabled: false 
-    });
-    holeGeo.translate(EYELET_X, EYELET_Y_2D, -5);
-
-    const evaluator = new Evaluator();
-    const plateBrush = new Brush(plateGeo);
-    const eyeletBrush = new Brush(eyeletGeo);
-    const holeBrush = new Brush(holeGeo);
-
-    const combined = evaluator.evaluate(plateBrush, eyeletBrush, ADDITION);
-    const final = evaluator.evaluate(combined, holeBrush, SUBTRACTION);
-    
-    final.geometry.rotateX(-Math.PI/2);
-    return final.geometry;
-  }, [config.plateDepth]);
-
-  return (
-    <mesh ref={ref} geometry={geometry} castShadow receiveShadow>
-      <meshStandardMaterial color="#ffffff" roughness={0.3} metalness={0.05} />
-    </mesh>
-  );
-});
-
-export const Viewer = forwardRef<{ getExportableGroup: () => THREE.Group | null, takeScreenshot: () => Promise<string> }, ViewerProps>(({ config, svgElements, selectedId, onSelect }, ref) => {
-  const groupRef = useRef<THREE.Group>(null);
+export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean }>(({ config, svgElements, showNFCPreview }, ref) => {
   const plateRef = useRef<THREE.Mesh>(null);
-  const sceneWrapperRef = useRef<{ takeScreenshot: () => string }>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useImperativeHandle(ref, () => ({
-    getExportableGroup: () => groupRef.current,
     takeScreenshot: async () => {
-      return sceneWrapperRef.current?.takeScreenshot() || "";
+      if (!canvasRef.current) return '';
+      return canvasRef.current.toDataURL('image/png');
     }
   }));
 
   return (
-    <div className="w-full h-full">
-      <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true }}>
-        <SceneWrapper ref={sceneWrapperRef}>
-          <PerspectiveCamera makeDefault position={[0, 80, 120]} fov={35} />
-          <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={Math.PI / 1.75} enableDamping />
-          
-          <Environment preset="city" />
-          <ambientLight intensity={0.5} />
-          <spotLight position={[50, 100, 50]} angle={0.2} penumbra={1} castShadow intensity={1.5} />
-          <directionalLight position={[-50, 50, -50]} intensity={0.5} />
-
-          <group ref={groupRef}>
-            <KeychainBase ref={plateRef} config={config} />
-            {svgElements && (
-              <LogoGroup 
-                elements={svgElements} 
-                config={config} 
-                plateRef={plateRef} 
-                selectedId={selectedId} 
-              />
-            )}
-          </group>
-
-          <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={150} blur={2.5} far={15} />
-
-          {/* Der interaktive Orientierungs-Gizmo */}
-          <GizmoHelper
-            alignment="bottom-right" 
-            margin={[80, 80]}
-            name="gizmo-helper"
-          >
-            <GizmoViewport 
-              axisColors={['#ff3e3e', '#10b981', '#12A9E0']} 
-              labelColor="white" 
-            />
-          </GizmoHelper>
-        </SceneWrapper>
+    <div className="w-full h-full relative bg-cream">
+      <Canvas 
+        shadows 
+        gl={{ preserveDrawingBuffer: true, antialias: true }} 
+        onCreated={({ gl }) => { canvasRef.current = gl.domElement; }}
+        className="w-full h-full"
+      >
+        <PerspectiveCamera makeDefault position={[0, 80, 120]} fov={40} />
+        <OrbitControls makeDefault enableDamping minDistance={30} maxDistance={400} maxPolarAngle={Math.PI/2.1} />
+        <Environment preset="city" />
+        <ambientLight intensity={0.6} />
+        <spotLight position={[50, 100, 50]} castShadow intensity={2} shadow-mapSize={[1024, 1024]} />
+        <BaseModel ref={plateRef} config={config} showNFC={showNFCPreview} />
+        {svgElements && <LogoGroup elements={svgElements} config={config} plateRef={plateRef} />}
+        <ContactShadows position={[0, -0.01, 0]} opacity={0.3} scale={200} blur={2.5} far={20} />
       </Canvas>
+      {showNFCPreview && <PhonePreview config={config} />}
     </div>
   );
 });
