@@ -190,8 +190,6 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
 
 export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean }>(({ config, svgElements, showNFCPreview }, ref) => {
   const plateRef = useRef<THREE.Mesh>(null);
-  // FIX: Using any here for the ref assignment because three-fiber onCreated callback 
-  // needs to assign the canvas element which is internally handled by the renderer.
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useImperativeHandle(ref, () => ({
@@ -207,8 +205,8 @@ export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { co
         shadows 
         gl={{ preserveDrawingBuffer: true, antialias: true }} 
         onCreated={(state) => { 
-          // @ts-ignore - fixing the read-only error by bypassing the strict ref type check
-          canvasRef.current = state.gl.domElement; 
+          // Cast to any to avoid "read-only" error in strict TypeScript environments
+          (canvasRef as any).current = state.gl.domElement; 
         }}
         className="w-full h-full"
       >

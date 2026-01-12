@@ -1,14 +1,94 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, Loader2, Check, X, Smartphone, Palette, Box, Type, Settings, ChevronRight } from 'lucide-react';
+import { Printer, Loader2, Check, X, Smartphone, Palette, Box, Type, Settings, ChevronRight, Globe, Star, Wifi, Instagram, Link as LinkIcon } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
 import { DEFAULT_CONFIG } from './constants';
-import { ModelConfig, SVGPathData } from './types';
+import { ModelConfig, SVGPathData, NFCBlock } from './types';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { supabase, getDetailedError } from './lib/supabase';
 
 type Department = '3d' | 'digital';
+
+const MicrositeView: React.FC<{ config: ModelConfig }> = ({ config }) => {
+  const blocks = config.nfcBlocks || [];
+  const t = config.nfcTemplate;
+
+  const getIcon = (type: string, btnType?: string) => {
+    if (type === 'image') return <Globe size={24} />;
+    switch (btnType) {
+      case 'review': return <Star size={24} className="text-yellow-500" />;
+      case 'wifi': return <Wifi size={24} className="text-blue-500" />;
+      case 'social_loop': return <Instagram size={24} className="text-pink-500" />;
+      default: return <LinkIcon size={24} />;
+    }
+  };
+
+  const handleAction = (block: NFCBlock) => {
+    if (block.buttonType === 'standard' && block.link) {
+      window.open(block.link, '_blank');
+    } else if (block.buttonType === 'social_loop' && block.settings?.instagram) {
+      window.open(`https://instagram.com/${block.settings.instagram}`, '_blank');
+    } else if (block.buttonType === 'review' && block.settings?.googleMapsUrl) {
+      window.open(block.settings.googleMapsUrl, '_blank');
+    }
+  };
+
+  return (
+    <div className={`min-h-screen w-full flex flex-col items-center py-12 px-6 ${
+      t === 'minimal' ? 'bg-white' : 
+      t === 'professional' ? 'bg-zinc-100' : 
+      'bg-gradient-to-br from-offwhite to-cream'
+    }`}>
+      <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
+        <header className="text-center space-y-6">
+          <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center mx-auto shadow-xl border border-navy/5">
+             <Smartphone size={48} className="text-petrol" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="serif-headline text-4xl font-black text-navy uppercase tracking-tight">NUDAIM STUDIO</h1>
+            <div className="h-1 w-12 bg-action mx-auto rounded-full" />
+          </div>
+        </header>
+
+        <main className="space-y-5">
+          {blocks.map(block => (
+            <div 
+              key={block.id} 
+              onClick={() => handleAction(block)}
+              className={`bg-white p-6 rounded-3xl shadow-[0_10px_40px_rgba(17,35,90,0.06)] border border-navy/5 transition-all hover:scale-[1.02] cursor-pointer group`}
+            >
+              <div className="flex items-center gap-4 mb-3">
+                 <div className="p-3 bg-cream rounded-2xl text-petrol group-hover:bg-action group-hover:text-white transition-colors">
+                   {getIcon(block.type, block.buttonType)}
+                 </div>
+                 <h2 className="font-black text-navy text-lg uppercase tracking-wide">{block.title || block.buttonType || 'Info'}</h2>
+              </div>
+              <p className="text-sm text-zinc-500 leading-relaxed font-medium">{block.content}</p>
+              {block.type === 'image' && block.imageUrl && (
+                <div className="mt-5 rounded-2xl overflow-hidden border border-navy/5 shadow-lg">
+                  <img src={block.imageUrl} className="w-full h-56 object-cover" alt="NFC Content" />
+                </div>
+              )}
+              {block.type === 'magic_button' && (
+                <div className="mt-5 pt-4 border-t border-navy/5 flex justify-between items-center">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Smart Connection</span>
+                  <div className="flex items-center gap-2 text-action font-black text-[11px] uppercase tracking-widest">
+                    Jetzt Öffnen <ChevronRight size={14} />
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </main>
+
+        <footer className="text-center pt-16 pb-8">
+           <p className="text-[10px] font-black uppercase tracking-[0.5em] text-navy opacity-30">Powered by NUDAIM3D</p>
+        </footer>
+      </div>
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [config, setConfig] = useState<ModelConfig>(DEFAULT_CONFIG);
@@ -18,12 +98,37 @@ const App: React.FC = () => {
   const [errorInfo, setErrorInfo] = useState<{title: string, msg: string, code: string} | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [micrositeId, setMicrositeId] = useState<string | null>(null);
+  const [micrositeData, setMicrositeData] = useState<ModelConfig | null>(null);
   
   const viewerRef = useRef<{ takeScreenshot: () => Promise<string> }>(null);
 
   useEffect(() => {
     setIsLoaded(true);
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if (id) {
+      setMicrositeId(id);
+      fetchMicrosite(id);
+    }
   }, []);
+
+  const fetchMicrosite = async (id: string) => {
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase
+        .from('nfc_configs')
+        .select('config')
+        .eq('short_id', id)
+        .single();
+
+      if (!error && data) {
+        setMicrositeData(data.config);
+      }
+    } catch (e) {
+      console.error("Microsite fetch error", e);
+    }
+  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -59,7 +164,6 @@ const App: React.FC = () => {
       const screenshot = await viewerRef.current?.takeScreenshot();
       let finalImageUrl = '';
       
-      // 1. Screenshot in Storage hochladen
       if (screenshot) {
         const fileName = `nudaim_${Date.now()}.png`;
         const blob = await (await fetch(screenshot)).blob();
@@ -71,8 +175,7 @@ const App: React.FC = () => {
         }
       }
 
-      // 2. Den aktuellen Link dieser Seite in die Config packen
-      const studioUrl = window.location.href;
+      const studioUrl = window.location.origin + window.location.pathname;
       const finalConfig = { 
         ...config, 
         _internal: {
@@ -81,7 +184,6 @@ const App: React.FC = () => {
         }
       };
 
-      // 3. In Tabelle 'nfc_configs' speichern
       const { data, error } = await supabase
         .from('nfc_configs')
         .insert([{ config: finalConfig, image_url: finalImageUrl }])
@@ -93,10 +195,9 @@ const App: React.FC = () => {
       const shortId = data.short_id;
       setSuccessId(shortId);
       
-      // 4. Redirect zu Shopify mit allen Infos
       setTimeout(() => {
         const shopifyId = "56564338262361";
-        const redirectUrl = `https://nudaim3d.de/cart/add?id=${shopifyId}&properties[3D_VORSCHAU]=${encodeURIComponent(finalImageUrl)}&properties[NFC_SETUP_ID]=${shortId}&properties[STUDIO_LINK]=${encodeURIComponent(studioUrl)}`;
+        const redirectUrl = `https://nudaim3d.de/cart/add?id=${shopifyId}&properties[3D_VORSCHAU]=${encodeURIComponent(finalImageUrl)}&properties[NFC_SETUP_ID]=${shortId}&properties[STUDIO_LINK]=${encodeURIComponent(studioUrl + "?id=" + shortId)}`;
         window.location.href = redirectUrl;
       }, 2000);
       
@@ -108,6 +209,10 @@ const App: React.FC = () => {
   };
 
   if (!isLoaded) return null;
+
+  if (micrositeId && micrositeData) {
+    return <MicrositeView config={micrositeData} />;
+  }
 
   return (
     <div className="flex h-screen w-screen bg-cream text-navy overflow-hidden">
