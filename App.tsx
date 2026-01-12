@@ -50,7 +50,7 @@ const App: React.FC = () => {
 
   const handleSave = async () => {
     if (!supabase) {
-      setErrorInfo({ title: "Verbindung", msg: "Datenbank nicht bereit.", code: "NO_DB" });
+      setErrorInfo({ title: "Verbindung", msg: "Supabase Konfiguration fehlt oder ist ungültig.", code: "NO_DB" });
       return;
     }
     
@@ -59,21 +59,29 @@ const App: React.FC = () => {
       const screenshot = await viewerRef.current?.takeScreenshot();
       let finalImageUrl = '';
       
+      // 1. Screenshot in Storage hochladen
       if (screenshot) {
         const fileName = `nudaim_${Date.now()}.png`;
         const blob = await (await fetch(screenshot)).blob();
         const { error: uploadError } = await supabase.storage.from('nudaim').upload(fileName, blob);
-        if (uploadError) throw uploadError;
-        const { data } = supabase.storage.from('nudaim').getPublicUrl(fileName);
-        finalImageUrl = data.publicUrl;
+        
+        if (!uploadError) {
+          const { data } = supabase.storage.from('nudaim').getPublicUrl(fileName);
+          finalImageUrl = data.publicUrl;
+        }
       }
 
-      // Add website link to the config if not present
+      // 2. Den aktuellen Link dieser Seite in die Config packen
+      const studioUrl = window.location.href;
       const finalConfig = { 
         ...config, 
-        studio_url: window.location.origin + window.location.pathname 
+        _internal: {
+          studio_url: studioUrl,
+          timestamp: new Date().toISOString()
+        }
       };
 
+      // 3. In Tabelle 'nfc_configs' speichern
       const { data, error } = await supabase
         .from('nfc_configs')
         .insert([{ config: finalConfig, image_url: finalImageUrl }])
@@ -81,14 +89,16 @@ const App: React.FC = () => {
         .single();
 
       if (error) throw error;
-      setSuccessId(data.short_id);
       
-      // Shopify Integration Redirect
+      const shortId = data.short_id;
+      setSuccessId(shortId);
+      
+      // 4. Redirect zu Shopify mit allen Infos
       setTimeout(() => {
         const shopifyId = "56564338262361";
-        const redirectUrl = `https://nudaim3d.de/cart/add?id=${shopifyId}&properties[3D_VORSCHAU]=${encodeURIComponent(finalImageUrl)}&properties[NFC_SETUP_ID]=${data.short_id}`;
+        const redirectUrl = `https://nudaim3d.de/cart/add?id=${shopifyId}&properties[3D_VORSCHAU]=${encodeURIComponent(finalImageUrl)}&properties[NFC_SETUP_ID]=${shortId}&properties[STUDIO_LINK]=${encodeURIComponent(studioUrl)}`;
         window.location.href = redirectUrl;
-      }, 2500);
+      }, 2000);
       
     } catch (err: any) {
       setErrorInfo(getDetailedError(err));
