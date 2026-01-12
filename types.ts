@@ -44,6 +44,10 @@ export interface ModelConfig {
   // NFC Department
   nfcTemplate: NFCTemplate;
   nfcBlocks: NFCBlock[];
+  // Stamp System (Global for the device)
+  stampCount?: number;
+  maxStamps?: number;
+  secretClaimKey?: string;
 }
 
 export interface SVGPathData {

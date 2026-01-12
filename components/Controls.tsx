@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType } from '../types';
-import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin } from 'lucide-react';
+import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin, Award } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ControlsProps {
@@ -57,6 +57,7 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
     if (block.type === 'text') return <Type size={18}/>;
     if (block.type === 'image') return <ImageIcon size={18}/>;
     switch (block.buttonType) {
+      case 'stamp_card': return <Award size={18} className="text-petrol" />;
       case 'review': return <Star size={18} className="text-yellow-500" />;
       case 'wifi': return <Wifi size={18} className="text-blue-500" />;
       case 'social_loop': return <Instagram size={18} className="text-pink-500" />;
@@ -107,49 +108,6 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
                 <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
                 <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400 z-10">{block.imageUrl ? 'Bild ändern' : 'Datei wählen'}</span>
               </div>
-            </div>
-          )}
-
-          {block.buttonType === 'wifi' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">SSID (Name)</label>
-                <input type="text" value={block.settings?.ssid || ''} onChange={e => updateSettings({ ssid: e.target.value })} className="w-full p-3 rounded-xl border border-navy/5 text-[10px] bg-white" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Passwort</label>
-                <input type="password" value={block.settings?.password || ''} onChange={e => updateSettings({ password: e.target.value })} className="w-full p-3 rounded-xl border border-navy/5 text-[10px] bg-white" />
-              </div>
-            </div>
-          )}
-
-          {block.buttonType === 'social_loop' && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-navy/5">
-                <Instagram size={14} className="text-pink-500" />
-                <input type="text" placeholder="Instagram Username" value={block.settings?.instagram || ''} onChange={e => updateSettings({ instagram: e.target.value })} className="flex-1 text-[10px] outline-none" />
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-navy/5">
-                <Linkedin size={14} className="text-blue-600" />
-                <input type="text" placeholder="LinkedIn Profil" value={block.settings?.linkedin || ''} onChange={e => updateSettings({ linkedin: e.target.value })} className="flex-1 text-[10px] outline-none" />
-              </div>
-            </div>
-          )}
-
-          {block.buttonType === 'review' && (
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Google Maps URL</label>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-navy/5">
-                <MapPin size={14} className="text-red-500" />
-                <input type="text" placeholder="https://maps.google.com/..." value={block.settings?.googleMapsUrl || ''} onChange={e => updateSettings({ googleMapsUrl: e.target.value })} className="flex-1 text-[10px] outline-none font-mono" />
-              </div>
-            </div>
-          )}
-
-          {(block.type === 'magic_button' && block.buttonType === 'standard') && (
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Ziel-URL</label>
-              <input type="text" value={block.link || ''} onChange={e => onUpdate({ link: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-[10px] font-mono bg-white" placeholder="https://..." />
             </div>
           )}
         </div>
@@ -245,16 +203,20 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
       <section className="space-y-5">
         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-300 flex items-center gap-3"><Plus size={14}/> Magic Buttons hinzufügen</label>
         <div className="grid grid-cols-3 gap-3">
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Google Review', content: 'Lass uns eine Bewertung da!' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all">
-            <Star size={20} className="text-yellow-500" />
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Loyalty Rewards', content: 'Sammle Stempel bei jedem Einkauf!' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
+            <Award size={20} className="text-petrol group-hover:scale-110 transition-transform" />
+            <span className="text-[8px] font-black uppercase tracking-tighter">Treuekarte</span>
+          </button>
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Google Review', content: 'Lass uns eine Bewertung da!' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
+            <Star size={20} className="text-yellow-500 group-hover:scale-110 transition-transform" />
             <span className="text-[8px] font-black uppercase tracking-tighter">Review</span>
           </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'social_loop', title: 'Folge uns', content: 'Bleib auf dem Laufenden.' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all">
-            <Instagram size={20} className="text-pink-500" />
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'social_loop', title: 'Folge uns', content: 'Bleib auf dem Laufenden.' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
+            <Instagram size={20} className="text-pink-500 group-hover:scale-110 transition-transform" />
             <span className="text-[8px] font-black uppercase tracking-tighter">Social</span>
           </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'wifi', title: 'Gast WiFi', content: 'Kostenloser Internetzugang.' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all">
-            <Wifi size={20} className="text-action" />
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'wifi', title: 'Gast WiFi', content: 'Kostenloser Internetzugang.' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
+            <Wifi size={20} className="text-action group-hover:scale-110 transition-transform" />
             <span className="text-[8px] font-black uppercase tracking-tighter">WiFi</span>
           </button>
           <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'text', title: 'Infotext', content: 'Schreibe hier etwas wichtiges...' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all">
@@ -264,10 +226,6 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
           <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'image', title: 'Galerie', content: 'Ein schönes Bild.' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all">
             <ImageIcon size={20} className="text-zinc-400" />
             <span className="text-[8px] font-black uppercase tracking-tighter">Bild</span>
-          </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'standard', title: 'Webseite', content: 'Besuche unsere Homepage.', link: 'https://' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all">
-            <LinkIcon size={20} className="text-petrol" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Link</span>
           </button>
         </div>
       </section>
