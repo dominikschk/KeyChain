@@ -1,16 +1,132 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, Loader2, Check, X, Smartphone, Globe, Star, Wifi, Instagram, Link as LinkIcon, ChevronRight, Sparkles, Award, Gift } from 'lucide-react';
+import { Printer, Loader2, Check, X, Smartphone, Globe, Star, Wifi, Instagram, Link as LinkIcon, ChevronRight, Sparkles, Award, Gift, Camera, RefreshCw } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
 import { DEFAULT_CONFIG } from './constants';
 import { ModelConfig, SVGPathData, NFCBlock } from './types';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { supabase, getDetailedError } from './lib/supabase';
+import jsQR from 'jsqr';
 
 type Department = '3d' | 'digital';
 
-const StampCardUI: React.FC<{ count: number, max: number, isClaiming?: boolean }> = ({ count, max, isClaiming }) => {
+const QRScanner: React.FC<{ onScan: (code: string) => void, onClose: () => void, isTest?: boolean }> = ({ onScan, onClose, isTest }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    let animationId: number;
+
+    const startCamera = async () => {
+      try {
+        const constraints = { 
+          video: { 
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          } 
+        };
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.setAttribute("playsinline", "true");
+          await videoRef.current.play();
+          requestAnimationFrame(tick);
+        }
+      } catch (err) {
+        console.error("Scanner Error:", err);
+        setError("Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.");
+      }
+    };
+
+    const tick = () => {
+      if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+        const canvas = canvasRef.current;
+        const video = videoRef.current;
+        if (canvas) {
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            canvas.height = video.videoHeight;
+            canvas.width = video.videoWidth;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "dontInvert",
+            });
+            if (code && code.data) {
+              onScan(code.data);
+              return; 
+            }
+          }
+        }
+      }
+      animationId = requestAnimationFrame(tick);
+    };
+
+    startCamera();
+
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      cancelAnimationFrame(animationId);
+    };
+  }, [onScan]);
+
+  return (
+    <div className="fixed inset-0 z-[600] bg-black/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+      {isTest && (
+        <div className="absolute top-10 bg-action/20 border border-action text-action px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse z-50">
+          Studio Test-Modus
+        </div>
+      )}
+      
+      <div className="w-full max-w-sm aspect-square relative rounded-[3rem] overflow-hidden border-4 border-white/20 shadow-[0_0_100px_rgba(18,169,224,0.3)] bg-zinc-900">
+        <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" />
+        <canvas ref={canvasRef} className="hidden" />
+        <div className="scanner-line z-10" />
+        <div className="absolute inset-0 border-[60px] border-black/40 pointer-events-none z-10" />
+        
+        {/* Corner Markers */}
+        <div className="absolute top-10 left-10 w-10 h-10 border-t-4 border-l-4 border-action rounded-tl-xl z-20" />
+        <div className="absolute top-10 right-10 w-10 h-10 border-t-4 border-r-4 border-action rounded-tr-xl z-20" />
+        <div className="absolute bottom-10 left-10 w-10 h-10 border-b-4 border-l-4 border-action rounded-bl-xl z-20" />
+        <div className="absolute bottom-10 right-10 w-10 h-10 border-b-4 border-r-4 border-action rounded-br-xl z-20" />
+
+        {error && (
+          <div className="absolute inset-0 bg-red-500/95 flex flex-col items-center justify-center p-8 text-center text-white z-30">
+            <X size={48} className="mb-4" />
+            <p className="font-bold text-sm leading-relaxed">{error}</p>
+            <button onClick={onClose} className="mt-8 bg-white text-red-500 px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest">Schließen</button>
+          </div>
+        )}
+      </div>
+      
+      <div className="mt-12 space-y-2 text-center relative z-10">
+        <div className="flex items-center justify-center gap-3 text-action mb-2">
+          <Loader2 className="animate-spin" size={16} />
+          <p className="text-white text-xs font-black uppercase tracking-[0.3em]">Scanner Aktiv</p>
+        </div>
+        <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest max-w-[260px] leading-loose">
+          Richte die Kamera auf den Händler-Code.<br/>
+          {isTest ? "Jeder QR-Code wird im Testmodus erkannt." : "Nur der Sicherheits-Code ist gültig."}
+        </p>
+      </div>
+
+      <button 
+        onClick={onClose}
+        className="mt-16 w-16 h-16 bg-white/10 rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-all border border-white/10 hover:scale-110 active:scale-95"
+      >
+        <X size={24} />
+      </button>
+    </div>
+  );
+};
+
+const StampCardUI: React.FC<{ count: number, max: number, onOpenScanner: () => void, isClaiming?: boolean }> = ({ count, max, onOpenScanner, isClaiming }) => {
   return (
     <div className="bg-white p-8 rounded-[2.5rem] shadow-[0_20px_60px_rgba(17,35,90,0.08)] border border-navy/5 space-y-8 relative overflow-hidden group">
       <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:scale-110 transition-transform duration-1000">
@@ -52,7 +168,7 @@ const StampCardUI: React.FC<{ count: number, max: number, isClaiming?: boolean }
         ))}
       </div>
 
-      <div className="pt-4 relative z-10">
+      <div className="pt-4 relative z-10 space-y-6">
         {count >= max ? (
           <div className="bg-emerald-500 text-white p-6 rounded-3xl text-center animate-in fade-in zoom-in duration-500 shadow-xl flex items-center justify-center gap-4">
              <Gift size={24} className="animate-bounce" />
@@ -62,17 +178,26 @@ const StampCardUI: React.FC<{ count: number, max: number, isClaiming?: boolean }
              </div>
           </div>
         ) : (
-          <div className="flex items-center justify-between text-[10px] text-zinc-400 font-bold uppercase tracking-widest px-1">
-            <span>{max - count} Stempel bis zum Ziel</span>
-            <div className="h-1 flex-1 mx-4 bg-zinc-100 rounded-full overflow-hidden">
-               <div className="h-full bg-petrol transition-all duration-1000" style={{ width: `${(count/max)*100}%` }} />
+          <>
+            <div className="flex items-center justify-between text-[10px] text-zinc-400 font-bold uppercase tracking-widest px-1">
+              <span>{max - count} Stempel bis zum Ziel</span>
+              <div className="h-1 flex-1 mx-4 bg-zinc-100 rounded-full overflow-hidden">
+                 <div className="h-full bg-petrol transition-all duration-1000" style={{ width: `${(count/max)*100}%` }} />
+              </div>
             </div>
-          </div>
+            <button 
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenScanner(); }}
+              disabled={isClaiming}
+              className="w-full h-16 bg-navy text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-4 hover:bg-petrol transition-all shadow-xl active:scale-95 disabled:opacity-50 pointer-events-auto"
+            >
+              {isClaiming ? <RefreshCw className="animate-spin" size={18} /> : <><Camera size={18} /> STEMPEL SAMMELN</>}
+            </button>
+          </>
         )}
       </div>
       
       {isClaiming && (
-        <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="absolute inset-0 bg-white/40 backdrop-blur-sm flex items-center justify-center z-50">
           <Loader2 className="animate-spin text-petrol" size={32} />
         </div>
       )}
@@ -84,6 +209,7 @@ const MicrositeView: React.FC<{ config: ModelConfig, shortId: string }> = ({ con
   const [currentCount, setCurrentCount] = useState(config.stampCount || 0);
   const [isClaiming, setIsClaiming] = useState(false);
   const [claimStatus, setClaimStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [showScanner, setShowScanner] = useState(false);
 
   const blocks = config.nfcBlocks || [];
   const t = config.nfcTemplate;
@@ -99,10 +225,11 @@ const MicrositeView: React.FC<{ config: ModelConfig, shortId: string }> = ({ con
   const handleClaim = async (key: string) => {
     if (!supabase || isClaiming) return;
     setIsClaiming(true);
+    setShowScanner(false);
     try {
       const { data, error } = await supabase.rpc('increment_stamp_secure', {
         target_short_id: shortId,
-        provided_key: key
+        provided_key: key.trim()
       });
 
       if (error) throw error;
@@ -110,13 +237,12 @@ const MicrositeView: React.FC<{ config: ModelConfig, shortId: string }> = ({ con
       if (data === true) {
         setClaimStatus('success');
         setCurrentCount(prev => prev + 1);
-        // Clean URL to prevent double claim on refresh
         window.history.replaceState({}, '', window.location.pathname + `?id=${shortId}`);
       } else {
-        setClaimStatus('error');
+        alert("Ungültiger Code oder bereits maximale Stempel erreicht.");
       }
     } catch (e) {
-      setClaimStatus('error');
+      alert("Ein Fehler ist aufgetreten beim Einlösen.");
     } finally {
       setIsClaiming(false);
     }
@@ -126,8 +252,10 @@ const MicrositeView: React.FC<{ config: ModelConfig, shortId: string }> = ({ con
     <div className={`min-h-screen w-full flex flex-col items-center py-12 px-6 ${
       t === 'minimal' ? 'bg-white' : t === 'professional' ? 'bg-slate-50' : 'bg-gradient-to-br from-offwhite to-cream'
     }`}>
+      {showScanner && <QRScanner onScan={handleClaim} onClose={() => setShowScanner(false)} />}
+
       {claimStatus === 'success' && (
-        <div className="fixed inset-0 z-[200] bg-navy/95 backdrop-blur-2xl flex flex-col items-center justify-center p-8 animate-in fade-in duration-700 text-white text-center">
+        <div className="fixed inset-0 z-[700] bg-navy/95 backdrop-blur-2xl flex flex-col items-center justify-center p-8 animate-in fade-in duration-700 text-white text-center">
           <div className="w-32 h-32 bg-action/20 rounded-full flex items-center justify-center mb-10 animate-bounce shadow-[0_0_80px_rgba(18,169,224,0.4)]">
             <Sparkles size={64} className="text-action" />
           </div>
@@ -156,7 +284,7 @@ const MicrositeView: React.FC<{ config: ModelConfig, shortId: string }> = ({ con
 
         {blocks.map(block => {
           if (block.type === 'magic_button' && block.buttonType === 'stamp_card') {
-            return <StampCardUI key={block.id} count={currentCount} max={config.maxStamps || 10} isClaiming={isClaiming} />;
+            return <StampCardUI key={block.id} count={currentCount} max={config.maxStamps || 10} onOpenScanner={() => setShowScanner(true)} isClaiming={isClaiming} />;
           }
           return (
             <div key={block.id} className="bg-white p-7 rounded-[2.5rem] shadow-[0_10px_40px_rgba(17,35,90,0.04)] border border-navy/5 transition-all hover:translate-y-[-2px]">
@@ -187,6 +315,8 @@ const App: React.FC = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [micrositeId, setMicrositeId] = useState<string | null>(null);
   const [micrositeData, setMicrositeData] = useState<ModelConfig | null>(null);
+  const [showStudioScanner, setShowStudioScanner] = useState(false);
+  const [studioTestSuccess, setStudioTestSuccess] = useState(false);
   
   const viewerRef = useRef<{ takeScreenshot: () => Promise<string> }>(null);
 
@@ -263,14 +393,11 @@ const App: React.FC = () => {
         finalImageUrl = data.publicUrl;
       }
 
-      // 1. Generiere einen ECHTEN geheimen Schlüssel für diese Bestellung
-      const secretKey = Math.random().toString(36).substring(2, 10).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      const secretKey = Math.random().toString(36).substring(2, 10).toUpperCase();
       const shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-      const studioUrl = window.location.origin + window.location.pathname;
       const finalConfig = { ...config };
 
-      // 2. In die Datenbank mit dem Geheimschlüssel speichern
       const { error } = await supabase
         .from('nfc_configs')
         .insert([{ 
@@ -279,7 +406,7 @@ const App: React.FC = () => {
           image_url: finalImageUrl,
           max_stamps: 10,
           stamp_count: 0,
-          secret_claim_key: secretKey // Dieser Schlüssel wird für den Stempel-QR gebraucht
+          secret_claim_key: secretKey
         }]);
 
       if (error) throw error;
@@ -288,10 +415,7 @@ const App: React.FC = () => {
       
       setTimeout(() => {
         const shopifyId = "56564338262361";
-        // 3. Den "Magischen Link" für den Ladenbesitzer bauen
-        const claimLink = `${studioUrl}?id=${shortId}&claim=${secretKey}`;
-        
-        const redirectUrl = `https://nudaim3d.de/cart/add?id=${shopifyId}&properties[3D_VORSCHAU]=${encodeURIComponent(finalImageUrl)}&properties[NFC_SETUP_ID]=${shortId}&properties[STAMP_SECRET_CODE]=${secretKey}&properties[STAMP_QR_LINK]=${encodeURIComponent(claimLink)}`;
+        const redirectUrl = `https://nudaim3d.de/cart/add?id=${shopifyId}&properties[3D_VORSCHAU]=${encodeURIComponent(finalImageUrl)}&properties[NFC_SETUP_ID]=${shortId}&properties[STAMP_SECRET_CODE]=${secretKey}`;
         window.location.href = redirectUrl;
       }, 2000);
       
@@ -310,6 +434,29 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen bg-cream text-navy overflow-hidden">
+      {showStudioScanner && (
+        <QRScanner 
+          isTest
+          onScan={(code) => { 
+            setStudioTestSuccess(true);
+            setShowStudioScanner(false);
+            setTimeout(() => setStudioTestSuccess(false), 3000);
+          }} 
+          onClose={() => setShowStudioScanner(false)} 
+        />
+      )}
+
+      {studioTestSuccess && (
+        <div className="fixed inset-0 z-[1000] bg-petrol/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-white text-center animate-in fade-in duration-500">
+           <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mb-8 shadow-2xl">
+             <Sparkles size={48} className="text-white animate-pulse" />
+           </div>
+           <h2 className="serif-headline text-4xl font-black mb-4">TEST ERFOLGREICH!</h2>
+           <p className="text-sm font-bold uppercase tracking-widest opacity-80">Der Scanner hat den Code erkannt.</p>
+           <p className="mt-8 text-[10px] uppercase tracking-widest bg-white/10 px-6 py-3 rounded-full">Automatischer Close in 3s</p>
+        </div>
+      )}
+
       <aside className="w-[450px] bg-white border-r border-navy/5 flex flex-col z-50 shadow-2xl relative">
         <header className="p-8 border-b border-navy/5 bg-white">
           <div className="flex items-center justify-between mb-8">
@@ -349,6 +496,7 @@ const App: React.FC = () => {
         <Viewer 
           ref={viewerRef} config={config}
           svgElements={svgElements} showNFCPreview={activeDept === 'digital'}
+          onOpenScanner={() => setShowStudioScanner(true)}
         />
         {successId && (
           <div className="absolute inset-0 z-[100] bg-emerald-500/90 backdrop-blur-2xl flex items-center justify-center animate-in zoom-in duration-500 p-8">

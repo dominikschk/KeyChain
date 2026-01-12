@@ -39,6 +39,19 @@
       .custom-scrollbar::-webkit-scrollbar { width: 5px; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: #006699; border-radius: 10px; }
       .serif-headline { font-family: 'Playfair Display', serif; }
+      
+      @keyframes scan {
+        0% { top: 0; }
+        100% { top: 100%; }
+      }
+      .scanner-line {
+        height: 2px;
+        background: #12A9E0;
+        box-shadow: 0 0 15px #12A9E0;
+        position: absolute;
+        width: 100%;
+        animation: scan 2s linear infinite;
+      }
     </style>
     <script type="importmap">
 {
@@ -57,6 +70,7 @@
     "@react-three/drei": "https://esm.sh/@react-three/drei@9.114.0?deps=react@18.3.1,react-dom@18.3.1,three@0.169.0,@react-three/fiber@8.17.10",
     "three-bvh-csg": "https://esm.sh/three-bvh-csg@0.0.16?deps=three@0.169.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.4",
+    "jsqr": "https://esm.sh/jsqr@1.4.0",
     "vite": "https://esm.sh/vite@^7.3.1",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }

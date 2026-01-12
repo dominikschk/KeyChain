@@ -5,9 +5,9 @@ import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Text, Fl
 import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { ADDITION, SUBTRACTION, Brush, Evaluator } from 'three-bvh-csg';
-import { Smartphone, Globe, Wifi, Instagram, Star, Link as LinkIcon } from 'lucide-react';
+import { Smartphone, Globe, Wifi, Instagram, Star, Link as LinkIcon, Camera } from 'lucide-react';
 
-const PhonePreview: React.FC<{ config: ModelConfig }> = ({ config }) => {
+const PhonePreview: React.FC<{ config: ModelConfig, onOpenScanner?: () => void }> = ({ config, onOpenScanner }) => {
   const blocks = config.nfcBlocks;
   const t = config.nfcTemplate;
 
@@ -58,9 +58,12 @@ const PhonePreview: React.FC<{ config: ModelConfig }> = ({ config }) => {
                 )}
                 {block.type === 'magic_button' && (
                   <div className="mt-3 flex justify-end">
-                    <div className="px-4 py-2 bg-petrol text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm">
-                      Aktion starten
-                    </div>
+                    <button 
+                      onClick={() => onOpenScanner?.()}
+                      className="px-4 py-2 bg-petrol text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-sm flex items-center gap-2 hover:bg-action active:scale-95 transition-all pointer-events-auto"
+                    >
+                      <Camera size={10} /> Aktion starten
+                    </button>
                   </div>
                 )}
               </div>
@@ -188,7 +191,7 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
   );
 };
 
-export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean }>(({ config, svgElements, showNFCPreview }, ref) => {
+export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean, onOpenScanner?: () => void }>(({ config, svgElements, showNFCPreview, onOpenScanner }, ref) => {
   const plateRef = useRef<THREE.Mesh>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -205,7 +208,6 @@ export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { co
         shadows 
         gl={{ preserveDrawingBuffer: true, antialias: true }} 
         onCreated={(state) => { 
-          // Cast to any to avoid "read-only" error in strict TypeScript environments
           (canvasRef as any).current = state.gl.domElement; 
         }}
         className="w-full h-full"
@@ -219,7 +221,7 @@ export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { co
         {svgElements && <LogoGroup elements={svgElements} config={config} plateRef={plateRef} />}
         <ContactShadows position={[0, -0.01, 0]} opacity={0.3} scale={200} blur={2.5} far={20} />
       </Canvas>
-      {showNFCPreview && <PhonePreview config={config} />}
+      {showNFCPreview && <PhonePreview config={config} onOpenScanner={onOpenScanner} />}
     </div>
   );
 });
