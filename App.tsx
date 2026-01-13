@@ -1,12 +1,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, Loader2, Check, X, Smartphone, Globe, Star, Wifi, Instagram, Link as LinkIcon, ChevronRight, Sparkles, Award, Gift, Camera, RefreshCw, Copy, ExternalLink, ShoppingCart, Zap, Share2, ShieldCheck, ArrowRight, AlertTriangle, Search } from 'lucide-react';
+import { Printer, Loader2, Check, X, Smartphone, Globe, Star, Wifi, Instagram, Link as LinkIcon, ChevronRight, Sparkles, Award, Gift, Camera, RefreshCw, Copy, ExternalLink, ShoppingCart, Zap, Share2, ShieldCheck, ArrowRight, AlertTriangle, Search, Database } from 'lucide-react';
 import { Viewer } from './components/Viewer';
 import { Controls } from './components/Controls';
 import { DEFAULT_CONFIG } from './constants';
 import { ModelConfig, SVGPathData, Department, SavingStep } from './types';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
-import { supabase, getDetailedError } from './lib/supabase';
+import { supabase, getDetailedError, SUPABASE_URL } from './lib/supabase';
 
 const withTimeout = <T,>(promise: Promise<T> | PromiseLike<T>, ms: number, timeoutError = 'TIMEOUT'): Promise<T> => {
   return Promise.race([
@@ -115,23 +115,17 @@ const App: React.FC = () => {
 
   const handleSave = async () => {
     if (!supabase) return;
-    
     setSavingStep('screenshot');
     setErrorInfo(null);
     setSuccessData(null);
-    
-    console.log("Saving...");
 
     try {
       let finalImageUrl = '';
-      
-      // 1. Screenshot
       const screenshot = await withTimeout<string>(
         viewerRef.current?.takeScreenshot() || Promise.resolve(''),
         2000
       ).catch(() => '');
       
-      // 2. Media Upload (Optional)
       if (screenshot) {
         setSavingStep('upload');
         const blob = dataURLtoBlob(screenshot);
@@ -150,10 +144,8 @@ const App: React.FC = () => {
         }
       }
 
-      // 3. Datenbank
       setSavingStep('db');
       const shortId = Math.random().toString(36).substring(2, 10).toUpperCase();
-      
       const { error: dbError } = (await withTimeout(
         supabase.from('nfc_configs').insert([{ 
           short_id: shortId, 
@@ -165,19 +157,16 @@ const App: React.FC = () => {
 
       if (dbError) throw dbError;
       
-      // ERFOLG!
-      console.log("Success! Redirecting in 2s...");
       setSuccessData({ id: shortId, imageUrl: finalImageUrl });
       setSavingStep('done');
 
-      // DER HARD-REDIRECT: Löst das "Unendlich Laden" Problem garantiert
-      const targetUrl = `${window.location.origin}${window.location.pathname}?id=${shortId}`;
+      // Automatischer Redirect zu Shopify nach 3 Sekunden
+      const shopifyUrl = config.shopifyUrl || 'https://shopify.com';
       setTimeout(() => {
-        window.location.href = targetUrl;
-      }, 2000);
+        window.location.href = shopifyUrl;
+      }, 3500);
       
     } catch (err: any) {
-      console.error("Save failed:", err);
       setErrorInfo(getDetailedError(err));
       setSavingStep('idle');
     }
@@ -208,6 +197,9 @@ const App: React.FC = () => {
   if (micrositeId && micrositeData) return <MicrositeView config={micrositeData} shortId={micrositeId} />;
 
   const isSaving = savingStep !== 'idle' && savingStep !== 'done';
+  const micrositeUrl = successData ? `${window.location.origin}${window.location.pathname}?id=${successData.id}` : '';
+  const projectRef = SUPABASE_URL.split('//')[1].split('.')[0];
+  const supabaseAdminUrl = `https://supabase.com/dashboard/project/${projectRef}/editor/nfc_configs`;
 
   return (
     <div className="flex h-screen w-screen bg-cream text-navy overflow-hidden">
@@ -217,7 +209,7 @@ const App: React.FC = () => {
             <h1 className="serif-headline font-black text-2xl uppercase tracking-tight italic">NUDAIM3D</h1>
             <div className="flex bg-cream p-1 rounded-2xl border border-navy/5">
               <button onClick={() => setActiveDept('3d')} className={`px-4 py-2.5 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest ${activeDept === '3d' ? 'bg-white shadow-md text-petrol' : 'text-zinc-400'}`}>3D Studio</button>
-              <button onClick={() => setActiveDept('digital')} className={`px-4 py-2.5 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest ${activeDept === 'digital' ? 'bg-white shadow-md text-petrol' : 'text-zinc-400'}`}>Microsite</button>
+              <button onClick={() => setActiveDept('digital')} className={`px-4 py-2.5 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest ${activeDept === 'digital' ? 'bg-white shadow-md text-petrol' : 'text-zinc-400'}`}>Digital</button>
             </div>
           </div>
         </header>
@@ -240,7 +232,7 @@ const App: React.FC = () => {
 
         <footer className="p-8 border-t border-navy/5 bg-white">
           <button onClick={activeDept === '3d' ? () => setActiveDept('digital') : handleSave} disabled={isSaving} className={`w-full h-16 rounded-2xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-4 shadow-xl transition-all ${activeDept === '3d' ? 'bg-navy hover:bg-petrol text-white' : 'bg-petrol hover:bg-action text-white'} disabled:opacity-50`}>
-            {isSaving ? <Loader2 className="animate-spin" /> : (activeDept === '3d' ? "WEITER ZUR MICROSITE" : "LIVE-LINK ERSTELLEN")}
+            {isSaving ? <Loader2 className="animate-spin" /> : (activeDept === '3d' ? "WEITER ZUR MICROSITE" : "PRODUKT ERSTELLEN")}
           </button>
         </footer>
       </aside>
@@ -248,35 +240,47 @@ const App: React.FC = () => {
       <main className="flex-1 relative bg-cream">
         <Viewer ref={viewerRef} config={config} svgElements={svgElements} showNFCPreview={activeDept === 'digital'} />
         
-        {/* Ladebildschirm */}
         {isSaving && (
           <div className="absolute inset-0 z-[100] bg-white/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
              <div className="w-20 h-20 border-[6px] border-petrol/10 rounded-full soft-spin border-t-petrol shadow-2xl mb-8" />
              <div className="text-center space-y-3">
                <p className="text-xl font-black uppercase tracking-[0.3em] text-navy italic">Cloud Sync...</p>
-               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Daten werden verarbeitet.</p>
+               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Wird in Supabase gespeichert.</p>
              </div>
           </div>
         )}
 
-        {/* Erfolgs-Redirect-Overlay */}
         {successData && (
-          <div className="absolute inset-0 z-[500] bg-navy/95 backdrop-blur-3xl flex items-center justify-center p-8 animate-in zoom-in duration-500">
-             <div className="text-center space-y-8 max-w-sm">
-                <div className="w-24 h-24 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto shadow-[0_0_50px_rgba(16,185,129,0.4)]"><ShieldCheck size={48} /></div>
-                <div className="space-y-4">
-                  <h3 className="serif-headline text-5xl font-black text-white uppercase italic tracking-tight">ERFOLG!</h3>
-                  <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em]">Deine Microsite ist bereit.</p>
+          <div className="absolute inset-0 z-[500] bg-navy/95 backdrop-blur-3xl flex items-center justify-center p-8 animate-in zoom-in duration-500 overflow-y-auto">
+             <div className="text-center space-y-8 max-w-lg w-full py-12">
+                <div className="w-20 h-20 bg-emerald-500 text-white rounded-full flex items-center justify-center mx-auto shadow-[0_0_50px_rgba(16,185,129,0.4)]"><ShieldCheck size={40} /></div>
+                <div className="space-y-2">
+                  <h3 className="serif-headline text-5xl font-black text-white uppercase italic tracking-tight">GESPEICHERT!</h3>
+                  <p className="text-emerald-400 text-[10px] font-black uppercase tracking-[0.3em]">Weiterleitung zu Shopify in 3 Sek...</p>
                 </div>
-                <div className="flex items-center justify-center gap-3 text-white/40 text-[9px] font-bold uppercase tracking-widest">
-                   <Loader2 size={12} className="animate-spin" />
-                   Wird geladen...
+                
+                <div className="grid gap-4 text-left">
+                  <div className="bg-white/5 border border-white/10 p-5 rounded-3xl space-y-2">
+                     <div className="flex items-center justify-between"><span className="text-[9px] font-black text-white/40 uppercase tracking-widest">Microsite Link</span><LinkIcon size={14} className="text-action"/></div>
+                     <p className="text-[11px] font-mono text-white/80 break-all select-all">{micrositeUrl}</p>
+                  </div>
+                  <div className="bg-white/5 border border-white/10 p-5 rounded-3xl space-y-2">
+                     <div className="flex items-center justify-between"><span className="text-[9px] font-black text-white/40 uppercase tracking-widest">Shopify Ziel</span><ShoppingCart size={14} className="text-emerald-400"/></div>
+                     <p className="text-[11px] font-mono text-white/80 break-all">{config.shopifyUrl}</p>
+                  </div>
+                  <a href={supabaseAdminUrl} target="_blank" className="bg-white/5 border border-white/10 p-5 rounded-3xl space-y-2 hover:bg-white/10 transition-all block">
+                     <div className="flex items-center justify-between"><span className="text-[9px] font-black text-white/40 uppercase tracking-widest">Supabase Admin</span><Database size={14} className="text-orange-400"/></div>
+                     <p className="text-[11px] font-mono text-white/80">Klicken zum Öffnen</p>
+                  </a>
+                </div>
+
+                <div className="pt-4">
+                  <button onClick={() => window.location.href = config.shopifyUrl || '#'} className="w-full h-16 bg-white text-navy rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3">JETZT ZU SHOPIFY <ArrowRight size={16} /></button>
                 </div>
              </div>
           </div>
         )}
 
-        {/* Fehler-Overlay */}
         {errorInfo && (
           <div className="absolute inset-0 z-[300] bg-navy/20 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-300">
             <div className="bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col items-center text-center max-w-sm">

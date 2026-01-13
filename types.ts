@@ -4,7 +4,6 @@ import * as THREE from 'three';
 export type BaseType = 'keychain' | 'circle' | 'rect' | 'custom';
 export type MagicButtonType = 'stamp_card' | 'review' | 'vcard' | 'social_loop' | 'wifi' | 'standard';
 export type NFCTemplate = 'modern' | 'minimal' | 'professional';
-// Added missing types for application state
 export type Department = '3d' | 'digital';
 export type SavingStep = 'idle' | 'screenshot' | 'upload' | 'db' | 'done';
 
@@ -47,6 +46,7 @@ export interface ModelConfig {
   // NFC Department
   nfcTemplate: NFCTemplate;
   nfcBlocks: NFCBlock[];
+  shopifyUrl?: string;
   // Stamp System (Global for the device)
   stampCount?: number;
   maxStamps?: number;

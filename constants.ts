@@ -17,6 +17,7 @@ export const DEFAULT_CONFIG: ModelConfig = {
   eyeletPosX: 0,
   eyeletPosY: 22,
   nfcTemplate: 'modern',
+  shopifyUrl: 'https://dein-shop.myshopify.com',
   nfcBlocks: [
     {
       id: 'welcome',

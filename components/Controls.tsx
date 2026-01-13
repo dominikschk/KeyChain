@@ -1,12 +1,10 @@
 
 import React, { useState } from 'react';
-// Fixed: Imported Department type from central types.ts
 import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType, Department } from '../types';
-import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin, Award } from 'lucide-react';
+import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin, Award, ShoppingCart } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ControlsProps {
-  // Uses imported Department type
   activeDept: Department;
   config: ModelConfig;
   setConfig: React.Dispatch<React.SetStateAction<ModelConfig>>;
@@ -52,8 +50,6 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
       setIsUploading(false);
     }
   };
-
-  const updateSettings = (s: any) => onUpdate({ settings: { ...block.settings, ...s } });
 
   const getIcon = () => {
     if (block.type === 'text') return <Type size={18}/>;
@@ -188,7 +184,21 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
   return (
     <div className="space-y-12 animate-in slide-in-from-right duration-700 pb-12">
       <section className="space-y-5">
-        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-300 flex items-center gap-3"><Sparkles size={14}/> Design Template</label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-3"><ShoppingCart size={14}/> Shopify Verknüpfung</label>
+        <div className="bg-white border border-navy/5 p-6 rounded-3xl space-y-4">
+          <p className="text-[9px] text-zinc-400 uppercase font-black tracking-widest">Produkt-URL</p>
+          <input 
+            type="text" 
+            value={config.shopifyUrl || ''} 
+            onChange={e => updateConfig('shopifyUrl', e.target.value)} 
+            placeholder="https://dein-shop.com/products/logo-plate"
+            className="w-full p-4 rounded-xl border border-navy/5 text-[10px] bg-cream font-mono"
+          />
+        </div>
+      </section>
+
+      <section className="space-y-5">
+        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-3"><Sparkles size={14}/> Design Template</label>
         <div className="grid grid-cols-3 gap-3">
           {[
             { id: 'modern', icon: <Zap size={16}/> },
@@ -203,47 +213,29 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
       </section>
 
       <section className="space-y-5">
-        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-300 flex items-center gap-3"><Plus size={14}/> Magic Buttons hinzufügen</label>
+        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-3"><Plus size={14}/> Magic Buttons</label>
         <div className="grid grid-cols-3 gap-3">
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Loyalty Rewards', content: 'Sammle Stempel bei jedem Einkauf!' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
-            <Award size={20} className="text-petrol group-hover:scale-110 transition-transform" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Treuekarte</span>
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Loyalty Rewards', content: 'Sammle Stempel!' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
+            <Award size={20} className="text-petrol" />
+            <span className="text-[8px] font-black uppercase tracking-tighter">Treue</span>
           </button>
           <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Google Review', content: 'Lass uns eine Bewertung da!' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
-            <Star size={20} className="text-yellow-500 group-hover:scale-110 transition-transform" />
+            <Star size={20} className="text-yellow-500" />
             <span className="text-[8px] font-black uppercase tracking-tighter">Review</span>
           </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'social_loop', title: 'Folge uns', content: 'Bleib auf dem Laufenden.' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
-            <Instagram size={20} className="text-pink-500 group-hover:scale-110 transition-transform" />
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'social_loop', title: 'Folge uns', content: 'Bleib dran!' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
+            <Instagram size={20} className="text-pink-500" />
             <span className="text-[8px] font-black uppercase tracking-tighter">Social</span>
-          </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'wifi', title: 'Gast WiFi', content: 'Kostenloser Internetzugang.' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
-            <Wifi size={20} className="text-action group-hover:scale-110 transition-transform" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">WiFi</span>
-          </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'text', title: 'Infotext', content: 'Schreibe hier etwas wichtiges...' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all">
-            <Type size={20} className="text-navy" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Text</span>
-          </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'image', title: 'Galerie', content: 'Ein schönes Bild.' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all">
-            <ImageIcon size={20} className="text-zinc-400" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Bild</span>
           </button>
         </div>
       </section>
 
       <section className="space-y-5">
         <div className="flex items-center justify-between px-2">
-          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-300">Seiten-Struktur</label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Microsite Blöcke</label>
           <span className="bg-cream px-3 py-1 rounded-full text-[9px] font-mono font-bold text-petrol">{config.nfcBlocks.length} Blöcke</span>
         </div>
         <div className="space-y-4">
-          {config.nfcBlocks.length === 0 && (
-            <div className="p-12 border-2 border-dashed border-navy/5 rounded-[40px] bg-white text-center opacity-40">
-              <Smartphone size={32} className="mx-auto mb-4" />
-              <p className="text-[10px] font-black uppercase tracking-widest">Wähle Blöcke aus</p>
-            </div>
-          )}
           {config.nfcBlocks.map(block => (
             <NFCBlockEditor 
               key={block.id} block={block} 
