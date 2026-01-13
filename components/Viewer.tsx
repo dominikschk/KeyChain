@@ -1,7 +1,7 @@
 
 import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Environment, ContactShadows, Text, Float } from '@react-three/drei';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, PerspectiveCamera, ContactShadows, Text, Float } from '@react-three/drei';
 import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
 import { Smartphone, Globe, Wifi, Instagram, Star, Link as LinkIcon } from 'lucide-react';
@@ -25,7 +25,7 @@ const PhonePreview: React.FC<{ config: ModelConfig }> = ({ config }) => {
         <div className={`flex-1 overflow-y-auto custom-scrollbar pt-12 px-6 pb-12 space-y-6 ${t === 'minimal' ? 'bg-white' : t === 'professional' ? 'bg-slate-50' : 'bg-gradient-to-br from-slate-50 to-offwhite'}`}>
           <header className="text-center space-y-4">
             <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-navy/5"><Smartphone size={28} className="text-petrol" /></div>
-            <h3 className="font-black text-navy text-[10px] uppercase tracking-[0.3em]">NFC LIVE PREVIEW</h3>
+            <h3 className="font-black text-navy text-[10px] uppercase tracking-[0.3em]">Vorschau Microsite</h3>
           </header>
           <div className="space-y-4">
             {blocks.map(block => (
@@ -83,7 +83,7 @@ const BaseModel = forwardRef<THREE.Mesh, { config: ModelConfig, showNFC?: boolea
           </mesh>
           <Float speed={4} rotationIntensity={0.5} floatIntensity={1}>
              <Text position={[0, 15, 0]} fontSize={3} color="#12A9E0" font="https://fonts.gstatic.com/s/plusjakartasans/v8/L0xPDF4xlVqn-I7F9mp8968m_E5v.woff2">
-               NFC CHIP ACTIVE
+               NFC CHIP AKTIV
              </Text>
           </Float>
         </group>
@@ -132,45 +132,43 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
   );
 };
 
-const SceneContent = forwardRef<{ takeScreenshot: () => string }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean }>(({ config, svgElements, showNFCPreview }, ref) => {
-  const { gl, scene, camera } = useThree();
-  const plateRef = useRef<THREE.Mesh>(null);
-  
-  useImperativeHandle(ref, () => ({
-    takeScreenshot: () => {
-      gl.render(scene, camera);
-      return gl.domElement.toDataURL('image/png');
-    }
-  }));
-
-  return (
-    <>
-      <PerspectiveCamera makeDefault position={[0, 100, 140]} fov={35} />
-      <OrbitControls makeDefault enableDamping minDistance={40} maxDistance={300} maxPolarAngle={Math.PI/2.1} />
-      <Environment preset="city" />
-      <ambientLight intensity={0.8} />
-      <spotLight position={[50, 120, 50]} castShadow intensity={1.5} shadow-mapSize={[1024, 1024]} />
-      <BaseModel ref={plateRef} config={config} showNFC={showNFCPreview} />
-      {svgElements && <LogoGroup elements={svgElements} config={config} plateRef={plateRef} />}
-      <ContactShadows position={[0, -0.01, 0]} opacity={0.25} scale={150} blur={2} far={20} />
-    </>
-  );
-});
-
 export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean }>(({ config, svgElements, showNFCPreview }, ref) => {
-  const sceneRef = useRef<{ takeScreenshot: () => string }>(null);
-  
+  const plateRef = useRef<THREE.Mesh>(null);
+  const r3fState = useRef<{ gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera } | null>(null);
+
   useImperativeHandle(ref, () => ({
     takeScreenshot: async () => {
-      if (!sceneRef.current) return '';
-      return sceneRef.current.takeScreenshot();
+      if (!r3fState.current) return '';
+      try {
+        const { gl, scene, camera } = r3fState.current;
+        gl.render(scene, camera);
+        return gl.domElement.toDataURL('image/png');
+      } catch (err) {
+        return '';
+      }
     }
   }));
 
   return (
     <div className="w-full h-full relative bg-cream">
-      <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true }} className="w-full h-full">
-        <SceneContent ref={sceneRef} config={config} svgElements={svgElements} showNFCPreview={showNFCPreview} />
+      <Canvas 
+        shadows 
+        gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }} 
+        onCreated={(state) => { r3fState.current = { gl: state.gl, scene: state.scene, camera: state.camera }; }}
+        className="w-full h-full"
+      >
+        <PerspectiveCamera makeDefault position={[0, 100, 140]} fov={35} />
+        <OrbitControls makeDefault enableDamping minDistance={40} maxDistance={300} maxPolarAngle={Math.PI/2.1} />
+        
+        {/* Blitzschnelles Licht-Setup ohne externe Assets */}
+        <ambientLight intensity={1.5} />
+        <pointLight position={[100, 100, 100]} intensity={2} castShadow />
+        <pointLight position={[-100, 50, -50]} intensity={1} color="#12A9E0" />
+        <directionalLight position={[0, 150, 0]} intensity={1} />
+
+        <BaseModel ref={plateRef} config={config} showNFC={showNFCPreview} />
+        {svgElements && <LogoGroup elements={svgElements} config={config} plateRef={plateRef} />}
+        <ContactShadows position={[0, -0.01, 0]} opacity={0.25} scale={150} blur={2} far={20} />
       </Canvas>
       {showNFCPreview && <PhonePreview config={config} />}
     </div>

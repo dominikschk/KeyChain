@@ -1,11 +1,13 @@
 
 import React, { useState } from 'react';
-import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType } from '../types';
+// Fixed: Imported Department type from central types.ts
+import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType, Department } from '../types';
 import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin, Award } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ControlsProps {
-  activeDept: '3d' | 'digital';
+  // Uses imported Department type
+  activeDept: Department;
   config: ModelConfig;
   setConfig: React.Dispatch<React.SetStateAction<ModelConfig>>;
   svgElements: SVGPathData[] | null;

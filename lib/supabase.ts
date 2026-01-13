@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 const getEnv = (name: string): string | undefined => {
@@ -16,54 +17,35 @@ const getEnv = (name: string): string | undefined => {
 export const SUPABASE_URL = getEnv('VITE_SUPABASE_URL') || getEnv('SUPABASE_URL') || 'https://ncxeyarhrftcfwkcoqpa.supabase.co';
 export const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_ANON_KEY') || getEnv('SUPABASE_ANON_KEY') || 'sb_publishable_2Beqh4O_zBNPXsyom73SVg_xIjyTZkM';
 
-export type KeyStatus = 'READY' | 'EMPTY' | 'INVALID';
-
-export const getKeyStatus = (key: string): KeyStatus => {
-  if (!key || key.trim() === '') return 'EMPTY';
-  if (key.startsWith('sb_publishable_') || key.startsWith('eyJ')) return 'READY';
-  return 'INVALID';
-};
-
-export const SUPABASE_READY = getKeyStatus(SUPABASE_ANON_KEY) === 'READY';
-
-export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY && SUPABASE_READY) 
+export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY) 
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
-// Fixed: Renamed 'message' to 'msg' and ensured 'code' is a string to match App.tsx's errorInfo state type
 export const getDetailedError = (error: any) => {
-  const msgText = error?.message || String(error);
+  const msgText = error?.message || (error && typeof error === 'object' ? JSON.stringify(error) : String(error || "Unbekannter Fehler"));
   const status = error?.status || error?.statusCode || error?.code;
 
-  // Spezifische Prüfung für fehlende Tabelle im Schema Cache
-  if (msgText.includes('public.previews') && (msgText.includes('schema cache') || msgText.includes('not found'))) {
+  console.error("Supabase Error Details:", { msgText, status, error });
+
+  if (msgText.includes('nfc_configs') && (msgText.includes('not found') || msgText.includes('cache'))) {
     return {
       title: "Tabelle fehlt",
-      msg: "Die Datenbank-Tabelle 'previews' existiert noch nicht in deinem Projekt.",
-      code: "TABLE_404"
+      msg: "Die Tabelle 'nfc_configs' wurde in Supabase nicht gefunden.",
+      code: "TABLE_MISSING"
     };
   }
 
-  // Storage Fehler
-  if (msgText.includes('bucket_not_found') || msgText.includes('does not exist') || status === '404') {
-    return {
-      title: "Bucket fehlt",
-      msg: "Der Storage-Ordner 'previews' existiert nicht.",
-      code: "STORAGE_404"
-    };
-  }
-  
-  if (msgText.includes('row level security') || status === 403 || status === '42501' || msgText.includes('Permission denied')) {
+  if (msgText.includes('row level security') || status === '42501' || msgText.includes('Permission denied')) {
     return {
       title: "RLS Sperre",
-      msg: "Die Sicherheitsregeln verhindern das Speichern. Du musst RLS für 'anon' erlauben.",
-      code: "POLICY_403"
+      msg: "Supabase verhindert das Speichern. RLS Policies prüfen.",
+      code: "POLICY_ERROR"
     };
   }
 
   return {
-    title: "Hinweis",
+    title: "System Fehler",
     msg: msgText,
-    code: String(status || "UNKNOWN")
+    code: String(status || "ERR")
   };
 };

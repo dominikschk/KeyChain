@@ -7,6 +7,7 @@
     <title>NUDAIM3D | 3D Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://esm.sh">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -40,18 +41,11 @@
       .custom-scrollbar::-webkit-scrollbar-thumb { background: #006699; border-radius: 10px; }
       .serif-headline { font-family: 'Playfair Display', serif; }
       
-      @keyframes scan {
-        0% { top: 0; }
-        100% { top: 100%; }
+      @keyframes spin-soft {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
       }
-      .scanner-line {
-        height: 2px;
-        background: #12A9E0;
-        box-shadow: 0 0 15px #12A9E0;
-        position: absolute;
-        width: 100%;
-        animation: scan 2s linear infinite;
-      }
+      .soft-spin { animation: spin-soft 2s linear infinite; }
     </style>
     <script type="importmap">
 {
