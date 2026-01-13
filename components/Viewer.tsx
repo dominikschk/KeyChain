@@ -25,7 +25,7 @@ const PhonePreview: React.FC<{ config: ModelConfig }> = ({ config }) => {
         <div className={`flex-1 overflow-y-auto custom-scrollbar pt-12 px-6 pb-12 space-y-6 ${t === 'minimal' ? 'bg-white' : t === 'professional' ? 'bg-slate-50' : 'bg-gradient-to-br from-slate-50 to-offwhite'}`}>
           <header className="text-center space-y-4">
             <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-navy/5"><Smartphone size={28} className="text-petrol" /></div>
-            <h3 className="font-black text-navy text-[10px] uppercase tracking-[0.3em]">Direct Connect</h3>
+            <h3 className="font-black text-navy text-[10px] uppercase tracking-[0.3em]">NFC LIVE PREVIEW</h3>
           </header>
           <div className="space-y-4">
             {blocks.map(block => (
@@ -59,11 +59,8 @@ const BaseModel = forwardRef<THREE.Mesh, { config: ModelConfig, showNFC?: boolea
       shape.lineTo(-s/2, -s/2+r); shape.absarc(-s/2+r, -s/2+r, r, Math.PI, Math.PI*1.5, false);
     }
 
-    // Loch nativ über Shape-Holes hinzufügen (viel performanter & stabiler als CSG)
     if (config.hasChain) {
       const holePath = new THREE.Path();
-      // Kleiner Trick: Wir fügen das Loch als "Hole" zum Haupt-Shape hinzu
-      // Die Position wird über die Config gesteuert
       holePath.absarc(config.eyeletPosX, config.eyeletPosY, 4, 0, Math.PI * 2, true);
       shape.holes.push(holePath);
     }
@@ -81,11 +78,13 @@ const BaseModel = forwardRef<THREE.Mesh, { config: ModelConfig, showNFC?: boolea
       {showNFC && (
         <group position={[0, config.plateDepth + 0.1, 0]}>
           <mesh rotation={[-Math.PI/2, 0, 0]}>
-            <circleGeometry args={[8, 32]} />
-            <meshStandardMaterial color="#12A9E0" transparent opacity={0.3} emissive="#12A9E0" emissiveIntensity={0.5} />
+            <circleGeometry args={[10, 32]} />
+            <meshStandardMaterial color="#12A9E0" transparent opacity={0.4} emissive="#12A9E0" emissiveIntensity={1} />
           </mesh>
-          <Float speed={5} rotationIntensity={0.5}>
-             <Text position={[0, 10, 0]} fontSize={2.5} color="#12A9E0">NFC CHIP</Text>
+          <Float speed={4} rotationIntensity={0.5} floatIntensity={1}>
+             <Text position={[0, 15, 0]} fontSize={3} color="#12A9E0" font="https://fonts.gstatic.com/s/plusjakartasans/v8/L0xPDF4xlVqn-I7F9mp8968m_E5v.woff2">
+               NFC CHIP ACTIVE
+             </Text>
           </Float>
         </group>
       )}
@@ -136,34 +135,38 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
 const SceneContent = forwardRef<{ takeScreenshot: () => string }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean }>(({ config, svgElements, showNFCPreview }, ref) => {
   const { gl, scene, camera } = useThree();
   const plateRef = useRef<THREE.Mesh>(null);
+  
   useImperativeHandle(ref, () => ({
     takeScreenshot: () => {
       gl.render(scene, camera);
       return gl.domElement.toDataURL('image/png');
     }
   }));
+
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0, 80, 120]} fov={40} />
-      <OrbitControls makeDefault enableDamping minDistance={30} maxDistance={400} maxPolarAngle={Math.PI/2.1} />
+      <PerspectiveCamera makeDefault position={[0, 100, 140]} fov={35} />
+      <OrbitControls makeDefault enableDamping minDistance={40} maxDistance={300} maxPolarAngle={Math.PI/2.1} />
       <Environment preset="city" />
-      <ambientLight intensity={0.6} />
-      <spotLight position={[50, 100, 50]} castShadow intensity={2} shadow-mapSize={[1024, 1024]} />
+      <ambientLight intensity={0.8} />
+      <spotLight position={[50, 120, 50]} castShadow intensity={1.5} shadow-mapSize={[1024, 1024]} />
       <BaseModel ref={plateRef} config={config} showNFC={showNFCPreview} />
       {svgElements && <LogoGroup elements={svgElements} config={config} plateRef={plateRef} />}
-      <ContactShadows position={[0, -0.01, 0]} opacity={0.3} scale={200} blur={2.5} far={20} />
+      <ContactShadows position={[0, -0.01, 0]} opacity={0.25} scale={150} blur={2} far={20} />
     </>
   );
 });
 
 export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean }>(({ config, svgElements, showNFCPreview }, ref) => {
   const sceneRef = useRef<{ takeScreenshot: () => string }>(null);
+  
   useImperativeHandle(ref, () => ({
     takeScreenshot: async () => {
       if (!sceneRef.current) return '';
       return sceneRef.current.takeScreenshot();
     }
   }));
+
   return (
     <div className="w-full h-full relative bg-cream">
       <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true }} className="w-full h-full">
