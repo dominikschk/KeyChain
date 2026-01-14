@@ -38,7 +38,7 @@ const QRScanner: React.FC<{ onScan: (code: string) => void, onCancel: () => void
         }
       } catch (err) {
         console.error("Camera error:", err);
-        setError("Kamera-Zugriff verweigert.");
+        setError("Kamera-Zugriff verweigert oder blockiert.");
       }
     };
 
@@ -75,7 +75,7 @@ const QRScanner: React.FC<{ onScan: (code: string) => void, onCancel: () => void
   }, [onScan]);
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center p-6 animate-in fade-in duration-300 pointer-events-auto">
+    <div className="fixed inset-0 z-[300] bg-black flex flex-col items-center justify-center p-6 animate-in fade-in duration-300 pointer-events-auto">
       <div className="relative w-full aspect-square max-w-sm rounded-[3rem] overflow-hidden border-4 border-white/20 shadow-2xl bg-zinc-900">
         <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" />
         <canvas ref={canvasRef} className="hidden" />
@@ -93,8 +93,7 @@ const QRScanner: React.FC<{ onScan: (code: string) => void, onCancel: () => void
 
       <div className="mt-12 text-center space-y-4">
         <div className="flex justify-center mb-2"><Camera className="text-white/20" size={32} /></div>
-        <p className="text-white font-black uppercase tracking-[0.3em] text-xs">QR-Code scannen</p>
-        <p className="text-white/40 text-[10px] uppercase font-bold tracking-tight">Richte dein Handy auf den Code im Laden</p>
+        <p className="text-white font-black uppercase tracking-[0.3em] text-xs text-center">QR-Code scannen</p>
         {error && <p className="text-red-400 text-[10px] font-bold bg-red-400/10 p-4 rounded-xl max-w-xs">{error}</p>}
       </div>
 
@@ -165,7 +164,7 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string }> = ({ block, con
       className="bg-white p-8 rounded-[2.5rem] border border-navy/5 shadow-xl space-y-8 relative overflow-hidden transition-all duration-500 hover:shadow-2xl cursor-pointer active:scale-[0.98] group pointer-events-auto"
     >
       {isFull && (
-        <div className="absolute inset-0 bg-petrol/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-8 text-center animate-in zoom-in duration-300">
+        <div className="absolute inset-0 bg-petrol/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-8 text-center animate-in zoom-in duration-500">
            <Gift size={48} className="text-white mb-6 animate-bounce" />
            <h3 className="serif-headline text-3xl font-black text-white italic uppercase mb-2">Karte Voll!</h3>
            <button 
@@ -185,7 +184,7 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string }> = ({ block, con
           </div>
           <div onMouseDown={handleAdminStart} onTouchStart={handleAdminStart} onMouseUp={handleAdminEnd} onTouchEnd={handleAdminEnd}>
             <h3 className="font-black text-navy text-[12px] uppercase tracking-widest">{block.title || 'Treuekarte'}</h3>
-            <p className="text-[10px] text-zinc-400 font-black uppercase tracking-tight">{stamps} / {slots}</p>
+            <p className="text-[10px] text-zinc-400 font-black uppercase tracking-tight">{stamps} / {slots} gesammelt</p>
           </div>
         </div>
         <QrCode size={24} className="text-zinc-200 group-hover:text-petrol transition-colors" />
@@ -266,7 +265,7 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
 
   if (error) {
     return (
-      <div className="h-screen w-screen bg-cream flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
+      <div className="min-h-screen w-screen bg-cream flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
         <AlertTriangle size={48} className="text-red-500 mb-8" />
         <h2 className="serif-headline text-4xl font-black italic uppercase mb-4 text-navy">Ups!</h2>
         <p className="text-zinc-500 text-sm max-w-xs leading-relaxed mb-10 font-medium">{error.msg}</p>
@@ -275,15 +274,15 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
   }
 
   return (
-    <div className="min-h-screen w-full bg-cream text-navy selection:bg-petrol selection:text-white animate-in fade-in duration-700 overflow-x-hidden pb-40">
-      <header className="pt-24 pb-16 px-8 flex flex-col items-center text-center space-y-8">
+    <div className="min-h-screen w-full bg-cream text-navy selection:bg-petrol selection:text-white animate-in fade-in duration-700 overflow-y-auto overflow-x-hidden pb-40 flex flex-col items-center">
+      <header className="pt-24 pb-16 px-8 flex flex-col items-center text-center space-y-8 w-full">
         <div className="w-28 h-28 bg-white rounded-[2.5rem] shadow-2xl flex items-center justify-center border border-navy/5">
            <ShieldCheck size={48} className="text-petrol" />
         </div>
         <h1 className="serif-headline text-5xl font-black italic uppercase tracking-tight leading-none">NUDAIM NFeC</h1>
       </header>
 
-      <main className="max-w-md mx-auto px-6 space-y-6">
+      <main className="max-w-md w-full px-6 space-y-6 flex-1">
         {config.nfcBlocks.map(block => (
           <BlockRenderer key={block.id} block={block} configId={currentId} />
         ))}

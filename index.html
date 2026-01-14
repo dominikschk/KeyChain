@@ -30,8 +30,18 @@
       }
     </script>
     <style>
-      body { margin: 0; padding: 0; overflow: hidden; background-color: #FDFCF8; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-font-smoothing: antialiased; }
-      #root { height: 100vh; width: 100vw; }
+      body { 
+        margin: 0; 
+        padding: 0; 
+        background-color: #FDFCF8; 
+        font-family: 'Plus Jakarta Sans', sans-serif; 
+        -webkit-font-smoothing: antialiased; 
+        overflow-x: hidden; /* Verhindert horizontales Scrollen, erlaubt vertikales */
+      }
+      #root { 
+        min-height: 100vh; 
+        width: 100vw; 
+      }
       .technical-grid-fine {
         background-image: linear-gradient(rgba(18, 169, 224, 0.02) 1px, transparent 1px),
                           linear-gradient(90deg, rgba(18, 169, 224, 0.02) 1px, transparent 1px);
