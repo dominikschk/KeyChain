@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType, Department } from '../types';
-import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin, Award, ShoppingCart } from 'lucide-react';
+import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin, Award, ShoppingCart, Info, Globe, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ControlsProps {
@@ -123,9 +123,9 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
       <div className="space-y-10 animate-in slide-in-from-left duration-700">
         <nav className="flex gap-2 bg-cream p-1 rounded-2xl border border-navy/5 shadow-inner">
           {[
-            { id: 'shape', label: 'Form', icon: <Box size={14}/> },
+            { id: 'shape', label: 'Basis', icon: <Box size={14}/> },
             { id: 'logo', label: 'Logo', icon: <Type size={14}/> },
-            { id: 'style', label: 'Tweak', icon: <Sliders size={14}/> }
+            { id: 'style', label: 'Anpassung', icon: <Sliders size={14}/> }
           ].map(t => (
             <button key={t.id} onClick={() => setActive3dTab(t.id as any)} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${active3dTab === t.id ? 'bg-white shadow-md text-petrol' : 'text-zinc-400'}`}>
               {t.icon} {t.label}
@@ -142,7 +142,7 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
               </button>
             ))}
             <div className="col-span-2 bg-white p-6 rounded-3xl border border-navy/5 flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-navy/40">Schlüsselanhänger Loch</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-navy/40">Öse für Kette</span>
               <button onClick={() => updateConfig('hasChain', !config.hasChain)} className={`w-14 h-7 rounded-full relative transition-all ${config.hasChain ? 'bg-petrol' : 'bg-zinc-200'}`}>
                 <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${config.hasChain ? 'left-8' : 'left-1'}`} />
               </button>
@@ -157,8 +157,8 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
                <div className="w-20 h-20 bg-cream text-petrol rounded-full flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform relative z-10"><Upload size={40} className="opacity-40" /></div>
                <input type="file" accept=".svg" onChange={onUpload} className="absolute inset-0 opacity-0 cursor-pointer z-20" />
                <div className="text-center relative z-10">
-                  <p className="text-xs font-black uppercase tracking-widest text-navy mb-1">Eigene SVG Datei</p>
-                  <p className="text-[9px] text-zinc-400 font-medium">Vektorformat für 3D Extrusion</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-navy mb-1">Upload SVG Logo</p>
+                  <p className="text-[9px] text-zinc-400 font-medium">SVG für 3D Extrusion</p>
                </div>
             </div>
             {svgElements && (
@@ -172,9 +172,9 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
 
         {active3dTab === 'style' && (
           <div className="space-y-4">
-            <ControlGroup label="X Achse" value={config.logoPosX} min={-30} max={30} onChange={v => updateConfig('logoPosX', v)} icon={<Move size={16}/>}/>
-            <ControlGroup label="Y Achse" value={config.logoPosY} min={-30} max={30} onChange={v => updateConfig('logoPosY', v)} icon={<Move size={16}/>}/>
-            <ControlGroup label="Drehung" value={config.logoRotation} min={0} max={360} step={15} onChange={v => updateConfig('logoRotation', v)} icon={<RotateCw size={16}/>}/>
+            <ControlGroup label="X Position" value={config.logoPosX} min={-30} max={30} onChange={v => updateConfig('logoPosX', v)} icon={<Move size={16}/>}/>
+            <ControlGroup label="Y Position" value={config.logoPosY} min={-30} max={30} onChange={v => updateConfig('logoPosY', v)} icon={<Move size={16}/>}/>
+            <ControlGroup label="Rotation" value={config.logoRotation} min={0} max={360} step={15} onChange={v => updateConfig('logoRotation', v)} icon={<RotateCw size={16}/>}/>
           </div>
         )}
       </div>
@@ -183,30 +183,24 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
 
   return (
     <div className="space-y-12 animate-in slide-in-from-right duration-700 pb-12">
-      <section className="space-y-5">
-        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-3"><ShoppingCart size={14}/> Shopify Verknüpfung</label>
-        <div className="bg-white border border-navy/5 p-6 rounded-3xl space-y-4">
-          <p className="text-[9px] text-zinc-400 uppercase font-black tracking-widest">Produkt-URL</p>
-          <input 
-            type="text" 
-            value={config.shopifyUrl || ''} 
-            onChange={e => updateConfig('shopifyUrl', e.target.value)} 
-            placeholder="https://dein-shop.com/products/logo-plate"
-            className="w-full p-4 rounded-xl border border-navy/5 text-[10px] bg-cream font-mono"
-          />
+      <section className="bg-navy p-7 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
+        <div className="absolute -right-4 -top-4 w-32 h-32 bg-action/20 blur-3xl group-hover:bg-action/30 transition-all" />
+        <div className="flex items-center gap-3 mb-4 relative z-10">
+          <div className="p-2 bg-white/10 rounded-xl"><ShieldCheck size={18} className="text-action" /></div>
+          <span className="text-[11px] font-black uppercase tracking-[0.2em] italic">NFeC Ecosystem</span>
+        </div>
+        <div className="space-y-3 relative z-10">
+          <p className="text-[12px] font-bold text-white leading-relaxed">Physischer 3D-Druck trifft Cloud-Profil.</p>
+          <p className="text-[10px] text-white/50 leading-relaxed">Die Daten werden via 3D.DE direkt mit deinem NFC-Chip verknüpft.</p>
         </div>
       </section>
 
       <section className="space-y-5">
         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-3"><Sparkles size={14}/> Design Template</label>
         <div className="grid grid-cols-3 gap-3">
-          {[
-            { id: 'modern', icon: <Zap size={16}/> },
-            { id: 'minimal', icon: <Box size={16}/> },
-            { id: 'professional', icon: <Briefcase size={16}/> }
-          ].map((t: any) => (
-            <button key={t.id} onClick={() => updateConfig('nfcTemplate', t.id)} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-3 transition-all ${config.nfcTemplate === t.id ? 'bg-petrol text-white border-petrol shadow-xl scale-105' : 'bg-white border-navy/5 text-zinc-300 hover:text-navy'}`}>
-              {t.icon} <span className="text-[9px] font-black uppercase tracking-widest">{t.id}</span>
+          {['modern', 'minimal', 'professional'].map((t) => (
+            <button key={t} onClick={() => updateConfig('nfcTemplate', t)} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-3 transition-all ${config.nfcTemplate === t ? 'bg-petrol text-white border-petrol shadow-xl scale-105' : 'bg-white border-navy/5 text-zinc-300 hover:text-navy'}`}>
+              <span className="text-[9px] font-black uppercase tracking-widest">{t}</span>
             </button>
           ))}
         </div>
@@ -215,15 +209,15 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
       <section className="space-y-5">
         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-3"><Plus size={14}/> Magic Buttons</label>
         <div className="grid grid-cols-3 gap-3">
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Loyalty Rewards', content: 'Sammle Stempel!' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Treue-Punkte', content: 'Scannen & Sammeln' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
             <Award size={20} className="text-petrol" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Treue</span>
+            <span className="text-[8px] font-black uppercase tracking-tighter">Loyalty</span>
           </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Google Review', content: 'Lass uns eine Bewertung da!' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Google Review', content: 'Bewertung abgeben' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
             <Star size={20} className="text-yellow-500" />
             <span className="text-[8px] font-black uppercase tracking-tighter">Review</span>
           </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'social_loop', title: 'Folge uns', content: 'Bleib dran!' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'social_loop', title: 'Folge uns', content: '@Instagram' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
             <Instagram size={20} className="text-pink-500" />
             <span className="text-[8px] font-black uppercase tracking-tighter">Social</span>
           </button>
@@ -232,8 +226,8 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
 
       <section className="space-y-5">
         <div className="flex items-center justify-between px-2">
-          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Microsite Blöcke</label>
-          <span className="bg-cream px-3 py-1 rounded-full text-[9px] font-mono font-bold text-petrol">{config.nfcBlocks.length} Blöcke</span>
+          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Content Blöcke</label>
+          <span className="bg-cream px-3 py-1 rounded-full text-[9px] font-mono font-bold text-petrol">{config.nfcBlocks.length} Aktiv</span>
         </div>
         <div className="space-y-4">
           {config.nfcBlocks.map(block => (
@@ -245,6 +239,11 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
           ))}
         </div>
       </section>
+      
+      <div className="bg-cream p-8 rounded-[3rem] border border-navy/5 space-y-4">
+         <div className="flex items-center gap-3"><Info size={16} className="text-zinc-400"/><span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Bestellprozess</span></div>
+         <p className="text-[10px] text-zinc-400 leading-relaxed font-medium">Beim Speichern wird dein NFeC Profil in der Cloud registriert. Der Checkout erfolgt danach verschlüsselt auf 3D.DE.</p>
+      </div>
     </div>
   );
 };

@@ -22,30 +22,42 @@ export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
   : null;
 
 export const getDetailedError = (error: any) => {
-  const msgText = error?.message || (error && typeof error === 'object' ? JSON.stringify(error) : String(error || "Unbekannter Fehler"));
+  const msgText = error?.message || (error && typeof error === 'object' ? JSON.stringify(error) : String(error || "Unknown Error"));
   const status = error?.status || error?.statusCode || error?.code;
 
-  console.error("Supabase Error Details:", { msgText, status, error });
+  console.group("NFeC Sync Diagnostic");
+  console.error("Error Message:", msgText);
+  console.error("Status/Code:", status);
+  console.groupEnd();
 
-  if (msgText.includes('nfc_configs') && (msgText.includes('not found') || msgText.includes('cache'))) {
+  if (msgText === 'TIMEOUT') {
     return {
-      title: "Tabelle fehlt",
-      msg: "Die Tabelle 'nfc_configs' wurde in Supabase nicht gefunden.",
-      code: "TABLE_MISSING"
+      title: "Zeitüberschreitung",
+      msg: "Die Cloud-Antwort dauert zu lange. Wir versuchen die Konfiguration trotzdem zu sichern.",
+      code: "SYNC_TIMEOUT"
     };
   }
 
-  if (msgText.includes('row level security') || status === '42501' || msgText.includes('Permission denied')) {
+  // Spezifischer RLS Fehler (403) - Hier geben wir jetzt die SQL Lösung direkt an
+  if (msgText.includes('new row violates row-level security policy') || status === '403') {
     return {
-      title: "RLS Sperre",
-      msg: "Supabase verhindert das Speichern. RLS Policies prüfen.",
-      code: "POLICY_ERROR"
+      title: "Storage Policy Fehler (403)",
+      msg: "Der Bucket existiert, aber du musst in Supabase noch eine 'INSERT' Policy für anonyme Nutzer erstellen. Nutze den SQL Editor für: CREATE POLICY \"Allow Upload\" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'nudaim');",
+      code: "STORAGE_RLS_MISSING"
+    };
+  }
+
+  if (msgText.includes('Failed to fetch')) {
+    return {
+      title: "Netzwerkfehler",
+      msg: "Verbindung zur Cloud unterbrochen. Bitte prüfe deine Internetverbindung.",
+      code: "NETWORK_DISCONNECT"
     };
   }
 
   return {
-    title: "System Fehler",
+    title: "Sync-Problem",
     msg: msgText,
-    code: String(status || "ERR")
+    code: String(status || "INTERNAL_ERR")
   };
 };

@@ -1,6 +1,9 @@
 
 import { ModelConfig } from './types';
 
+// GLOBAL BUSINESS CONFIG
+export const SHOPIFY_BASE_URL = 'https://nudaim3d.de';
+
 export const DEFAULT_CONFIG: ModelConfig = {
   baseType: 'keychain',
   plateWidth: 45,
@@ -17,20 +20,19 @@ export const DEFAULT_CONFIG: ModelConfig = {
   eyeletPosX: 0,
   eyeletPosY: 22,
   nfcTemplate: 'modern',
-  shopifyUrl: 'https://dein-shop.myshopify.com',
   nfcBlocks: [
     {
       id: 'welcome',
       type: 'text',
-      title: 'Willkommen!',
-      content: 'Scanne diesen Chip für exklusive Vorteile.'
+      title: 'NUDAIM NFeC SMART CHIP',
+      content: 'Willkommen in der Zukunft des 3D-Drucks. Dein physisches Produkt ist nun mit diesem digitalen Profil verknüpft.'
     },
     {
-      id: 'stamps',
+      id: 'social',
       type: 'magic_button',
-      buttonType: 'stamp_card',
-      content: 'Deine Treuepunkte',
-      settings: { currentStamps: 3, slots: 10 }
+      buttonType: 'social_loop',
+      title: 'COMMUNITY',
+      content: 'Folge uns auf Instagram für Updates zu neuen Drops.'
     }
   ]
 };
