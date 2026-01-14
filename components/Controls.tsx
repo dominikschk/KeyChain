@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType, Department } from '../types';
-import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin, Award, ShoppingCart, Info, Globe, ShieldCheck } from 'lucide-react';
+import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType, Department, StampValidation } from '../types';
+import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin, Award, ShoppingCart, Info, Globe, ShieldCheck, Key, Fingerprint, Clock, QrCode } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ControlsProps {
@@ -72,8 +72,8 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
             {getIcon()}
           </div>
           <div className="flex flex-col">
-            <span className="text-[10px] font-black uppercase tracking-widest text-navy">{block.buttonType || block.type}</span>
-            <span className="text-[9px] text-zinc-400 truncate max-w-[150px]">{block.title || block.content || 'Inhalt bearbeiten'}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-navy">{block.buttonType === 'stamp_card' ? 'Treuekarte' : (block.buttonType || block.type)}</span>
+            <span className="text-[9px] text-zinc-400 truncate max-w-[150px] font-bold">{block.title || block.content || 'Einstellen...'}</span>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -86,25 +86,51 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
         <div className="p-6 border-t border-navy/5 bg-cream/20 space-y-5 animate-in slide-in-from-top-2">
           <div className="space-y-2">
             <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Titel</label>
-            <input type="text" value={block.title || ''} onChange={e => onUpdate({ title: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white" placeholder="Überschrift..." />
+            <input type="text" value={block.title || ''} onChange={e => onUpdate({ title: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" placeholder="z.B. Treuekarte" />
           </div>
+
+          {block.buttonType === 'stamp_card' && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Anzahl Stempel</label>
+                  <input type="number" min="1" max="15" value={block.settings?.slots || 10} onChange={e => onUpdate({ settings: { ...block.settings, slots: parseInt(e.target.value) } })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">QR Secret Key</label>
+                  <input type="text" value={block.settings?.secretKey || 'NUDAIM-STAMP-123'} onChange={e => onUpdate({ settings: { ...block.settings, secretKey: e.target.value } })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-mono" placeholder="Z.B. MEINLADEN" />
+                </div>
+              </div>
+
+              <div className="p-4 bg-petrol/5 rounded-2xl border border-petrol/10 space-y-2">
+                <div className="flex items-center gap-2 text-petrol"><QrCode size={14}/><span className="text-[9px] font-black uppercase tracking-widest">Setup Info</span></div>
+                <p className="text-[9px] text-petrol/80 leading-relaxed font-medium">Kunden erhalten einen Stempel, wenn sie einen QR-Code scannen, der exakt den Text <strong>"{block.settings?.secretKey || 'NUDAIM-STAMP-123'}"</strong> enthält.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Belohnungstext</label>
+                <textarea value={block.settings?.rewardText || ''} onChange={e => onUpdate({ settings: { ...block.settings, rewardText: e.target.value } })} className="w-full p-4 rounded-xl border border-navy/5 text-xs h-16 bg-white resize-none font-medium" placeholder="z.B. Ein Gratis-Kaffee!" />
+              </div>
+            </>
+          )}
           
-          <div className="space-y-2">
-            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Beschreibung</label>
-            <textarea value={block.content} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs h-20 bg-white resize-none" placeholder="Details..." />
-          </div>
+          {block.type !== 'magic_button' && (
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Inhalt / Text</label>
+              <textarea value={block.content} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs h-24 bg-white resize-none font-medium leading-relaxed" placeholder="Beschreibe dein Angebot..." />
+            </div>
+          )}
 
           {block.type === 'image' && (
             <div className="space-y-3">
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Bild</label>
-              <div className="relative h-32 rounded-2xl border-2 border-dashed border-navy/5 bg-white flex flex-col items-center justify-center gap-2 group cursor-pointer hover:border-petrol/30 transition-all overflow-hidden">
+              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Bild Upload</label>
+              <div className="relative h-40 rounded-3xl border-2 border-dashed border-navy/5 bg-white flex flex-col items-center justify-center gap-2 group cursor-pointer hover:border-petrol/30 transition-all overflow-hidden">
                 {block.imageUrl ? (
-                  <img src={block.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                  <img src={block.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:scale-110 transition-transform" />
                 ) : (
-                  isUploading ? <Loader2 size={24} className="animate-spin text-petrol" /> : <Upload size={24} className="text-zinc-200" />
+                  isUploading ? <Loader2 size={28} className="animate-spin text-petrol" /> : <div className="flex flex-col items-center gap-2 text-zinc-300"><ImageIcon size={32} strokeWidth={1} /><span className="text-[8px] font-black tracking-widest uppercase">Bild hierher ziehen</span></div>
                 )}
                 <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                <span className="text-[8px] font-black uppercase tracking-widest text-zinc-400 z-10">{block.imageUrl ? 'Bild ändern' : 'Datei wählen'}</span>
               </div>
             </div>
           )}
@@ -141,8 +167,8 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
                 <span className="text-[10px] font-black uppercase tracking-widest">{t}</span>
               </button>
             ))}
-            <div className="col-span-2 bg-white p-6 rounded-3xl border border-navy/5 flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-widest text-navy/40">Öse für Kette</span>
+            <div className="col-span-2 bg-white p-6 rounded-3xl border border-navy/5 flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-3"><div className="p-2 bg-cream rounded-xl text-petrol"><Layers size={16}/></div><span className="text-[10px] font-black uppercase tracking-widest text-navy">Öse für Kette</span></div>
               <button onClick={() => updateConfig('hasChain', !config.hasChain)} className={`w-14 h-7 rounded-full relative transition-all ${config.hasChain ? 'bg-petrol' : 'bg-zinc-200'}`}>
                 <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${config.hasChain ? 'left-8' : 'left-1'}`} />
               </button>
@@ -191,43 +217,38 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
         </div>
         <div className="space-y-3 relative z-10">
           <p className="text-[12px] font-bold text-white leading-relaxed">Physischer 3D-Druck trifft Cloud-Profil.</p>
-          <p className="text-[10px] text-white/50 leading-relaxed">Die Daten werden via 3D.DE direkt mit deinem NFC-Chip verknüpft.</p>
+          <p className="text-[10px] text-white/50 leading-relaxed font-medium">Die Daten werden via 3D.DE direkt mit deinem NFC-Chip verknüpft.</p>
         </div>
       </section>
 
-      <section className="space-y-5">
-        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-3"><Sparkles size={14}/> Design Template</label>
-        <div className="grid grid-cols-3 gap-3">
-          {['modern', 'minimal', 'professional'].map((t) => (
-            <button key={t} onClick={() => updateConfig('nfcTemplate', t)} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-3 transition-all ${config.nfcTemplate === t ? 'bg-petrol text-white border-petrol shadow-xl scale-105' : 'bg-white border-navy/5 text-zinc-300 hover:text-navy'}`}>
-              <span className="text-[9px] font-black uppercase tracking-widest">{t}</span>
-            </button>
-          ))}
+      <section className="space-y-6">
+        <div className="flex items-center justify-between px-2">
+           <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 flex items-center gap-3"><Plus size={14} className="text-petrol"/> Magic Buttons</label>
+           <span className="text-[8px] font-black text-petrol uppercase tracking-widest bg-petrol/5 px-2 py-1 rounded-full">Interactive</span>
         </div>
-      </section>
-
-      <section className="space-y-5">
-        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-3"><Plus size={14}/> Magic Buttons</label>
         <div className="grid grid-cols-3 gap-3">
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Treue-Punkte', content: 'Scannen & Sammeln' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
-            <Award size={20} className="text-petrol" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Loyalty</span>
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Treuekarte', content: '', settings: { slots: 10, validationType: 'qr_code', secretKey: 'NUDAIM-STAMP-123', rewardText: 'Ein Gratis-Kaffee!' } }])} className="p-6 bg-white border border-navy/5 rounded-3xl flex flex-col items-center gap-3 hover:border-petrol/20 hover:shadow-xl transition-all group active:scale-95 shadow-sm">
+            <div className="w-12 h-12 bg-cream rounded-2xl flex items-center justify-center text-petrol group-hover:bg-petrol group-hover:text-white transition-all"><Award size={24} /></div>
+            <span className="text-[9px] font-black uppercase tracking-tighter">Loyalty</span>
           </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Google Review', content: 'Bewertung abgeben' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
-            <Star size={20} className="text-yellow-500" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Review</span>
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Google Rezension', content: 'https://search.google.com/local/writereview?placeid=' }])} className="p-6 bg-white border border-navy/5 rounded-3xl flex flex-col items-center gap-3 hover:border-petrol/20 hover:shadow-xl transition-all group active:scale-95 shadow-sm">
+            <div className="w-12 h-12 bg-cream rounded-2xl flex items-center justify-center text-yellow-500 group-hover:bg-yellow-500 group-hover:text-white transition-all"><Star size={24} /></div>
+            <span className="text-[9px] font-black uppercase tracking-tighter">Review</span>
           </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'social_loop', title: 'Folge uns', content: '@Instagram' }])} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-center gap-2 hover:border-petrol/20 hover:shadow-lg transition-all group">
-            <Instagram size={20} className="text-pink-500" />
-            <span className="text-[8px] font-black uppercase tracking-tighter">Social</span>
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'social_loop', title: 'Instagram', content: 'https://instagram.com/' }])} className="p-6 bg-white border border-navy/5 rounded-3xl flex flex-col items-center gap-3 hover:border-petrol/20 hover:shadow-xl transition-all group active:scale-95 shadow-sm">
+            <div className="w-12 h-12 bg-cream rounded-2xl flex items-center justify-center text-pink-500 group-hover:bg-pink-500 group-hover:text-white transition-all"><Instagram size={24} /></div>
+            <span className="text-[9px] font-black uppercase tracking-tighter">Social</span>
           </button>
         </div>
       </section>
 
       <section className="space-y-5">
         <div className="flex items-center justify-between px-2">
-          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Content Blöcke</label>
-          <span className="bg-cream px-3 py-1 rounded-full text-[9px] font-mono font-bold text-petrol">{config.nfcBlocks.length} Aktiv</span>
+          <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">Profil Inhalt</label>
+          <div className="flex gap-2">
+             <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'text', title: 'Neu', content: 'Hier Text einfügen...' }])} className="p-2 bg-white border border-navy/5 rounded-xl hover:text-petrol transition-colors"><Type size={14}/></button>
+             <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'image', title: 'Foto', content: '', imageUrl: '' }])} className="p-2 bg-white border border-navy/5 rounded-xl hover:text-petrol transition-colors"><ImageIcon size={14}/></button>
+          </div>
         </div>
         <div className="space-y-4">
           {config.nfcBlocks.map(block => (
@@ -240,9 +261,11 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
         </div>
       </section>
       
-      <div className="bg-cream p-8 rounded-[3rem] border border-navy/5 space-y-4">
-         <div className="flex items-center gap-3"><Info size={16} className="text-zinc-400"/><span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Bestellprozess</span></div>
-         <p className="text-[10px] text-zinc-400 leading-relaxed font-medium">Beim Speichern wird dein NFeC Profil in der Cloud registriert. Der Checkout erfolgt danach verschlüsselt auf 3D.DE.</p>
+      <div className="bg-cream p-10 rounded-[4rem] border border-navy/5 space-y-6 relative overflow-hidden group">
+         <div className="absolute top-0 right-0 w-20 h-20 bg-petrol/5 blur-3xl" />
+         <div className="flex items-center gap-3"><Info size={20} className="text-petrol"/><span className="text-[11px] font-black uppercase tracking-widest text-navy">Checkout & Sync</span></div>
+         <p className="text-[11px] text-zinc-500 leading-relaxed font-medium">Deine Profildaten werden nach dem Checkout automatisch mit deinem physischen NFeC Key verknüpft.</p>
+         <div className="h-0.5 w-12 bg-petrol/20 rounded-full" />
       </div>
     </div>
   );

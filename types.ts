@@ -7,6 +7,8 @@ export type NFCTemplate = 'modern' | 'minimal' | 'professional';
 export type Department = '3d' | 'digital';
 export type SavingStep = 'idle' | 'screenshot' | 'upload' | 'db' | 'done';
 
+export type StampValidation = 'pattern' | 'long_press' | 'daily_limit' | 'qr_code';
+
 export interface NFCBlock {
   id: string;
   type: 'text' | 'image' | 'magic_button' | 'spacer';
@@ -16,8 +18,11 @@ export interface NFCBlock {
   imageUrl?: string;
   link?: string;
   settings?: {
-    currentStamps?: number;
     slots?: number;
+    validationType?: StampValidation;
+    secretPattern?: string;
+    secretKey?: string; // For QR Code validation
+    rewardText?: string;
     ssid?: string;
     password?: string;
     googleMapsUrl?: string;
@@ -47,10 +52,6 @@ export interface ModelConfig {
   nfcTemplate: NFCTemplate;
   nfcBlocks: NFCBlock[];
   shopifyUrl?: string;
-  // Stamp System (Global for the device)
-  stampCount?: number;
-  maxStamps?: number;
-  secretClaimKey?: string;
 }
 
 export interface SVGPathData {
