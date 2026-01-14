@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType, Department, StampValidation } from '../types';
-import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin, Award, ShoppingCart, Info, Globe, ShieldCheck, Key, Fingerprint, Clock, QrCode } from 'lucide-react';
+import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin, Award, ShoppingCart, Info, Globe, ShieldCheck, Key, Fingerprint, Clock, QrCode, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ControlsProps {
@@ -58,6 +58,7 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
       case 'stamp_card': return <Award size={18} className="text-petrol" />;
       case 'review': return <Star size={18} className="text-yellow-500" />;
       case 'wifi': return <Wifi size={18} className="text-blue-500" />;
+      case 'whatsapp': return <MessageCircle size={18} className="text-emerald-500" />;
       case 'social_loop': return <Instagram size={18} className="text-pink-500" />;
       default: return <Zap size={18}/>;
     }
@@ -72,7 +73,9 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
             {getIcon()}
           </div>
           <div className="flex flex-col">
-            <span className="text-[10px] font-black uppercase tracking-widest text-navy">{block.buttonType === 'stamp_card' ? 'Treuekarte' : (block.buttonType || block.type)}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-navy">
+              {block.buttonType === 'stamp_card' ? 'Treuekarte' : block.buttonType === 'whatsapp' ? 'WhatsApp' : (block.buttonType || block.type)}
+            </span>
             <span className="text-[9px] text-zinc-400 truncate max-w-[150px] font-bold">{block.title || block.content || 'Einstellen...'}</span>
           </div>
         </div>
@@ -85,9 +88,22 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
       {expanded && (
         <div className="p-6 border-t border-navy/5 bg-cream/20 space-y-5 animate-in slide-in-from-top-2">
           <div className="space-y-2">
-            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Titel</label>
-            <input type="text" value={block.title || ''} onChange={e => onUpdate({ title: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" placeholder="z.B. Treuekarte" />
+            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Titel / Name</label>
+            <input type="text" value={block.title || ''} onChange={e => onUpdate({ title: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" placeholder="z.B. Schreib mir" />
           </div>
+
+          {block.buttonType === 'whatsapp' && (
+            <>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Telefonnummer</label>
+                <input type="text" value={block.content} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" placeholder="z.B. +491701234567" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Vorausgefüllter Text (optional)</label>
+                <textarea value={block.settings?.message || ''} onChange={e => onUpdate({ settings: { ...block.settings, message: e.target.value } })} className="w-full p-4 rounded-xl border border-navy/5 text-xs h-16 bg-white resize-none font-medium" placeholder="Hallo! Ich habe eine Frage zu..." />
+              </div>
+            </>
+          )}
 
           {block.buttonType === 'stamp_card' && (
             <>
@@ -101,15 +117,9 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
                   <input type="text" value={block.settings?.secretKey || 'NUDAIM-STAMP-123'} onChange={e => onUpdate({ settings: { ...block.settings, secretKey: e.target.value } })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-mono" placeholder="Z.B. MEINLADEN" />
                 </div>
               </div>
-
               <div className="p-4 bg-petrol/5 rounded-2xl border border-petrol/10 space-y-2">
                 <div className="flex items-center gap-2 text-petrol"><QrCode size={14}/><span className="text-[9px] font-black uppercase tracking-widest">Setup Info</span></div>
                 <p className="text-[9px] text-petrol/80 leading-relaxed font-medium">Kunden erhalten einen Stempel, wenn sie einen QR-Code scannen, der exakt den Text <strong>"{block.settings?.secretKey || 'NUDAIM-STAMP-123'}"</strong> enthält.</p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Belohnungstext</label>
-                <textarea value={block.settings?.rewardText || ''} onChange={e => onUpdate({ settings: { ...block.settings, rewardText: e.target.value } })} className="w-full p-4 rounded-xl border border-navy/5 text-xs h-16 bg-white resize-none font-medium" placeholder="z.B. Ein Gratis-Kaffee!" />
               </div>
             </>
           )}
@@ -217,27 +227,25 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
         </div>
         <div className="space-y-3 relative z-10">
           <p className="text-[12px] font-bold text-white leading-relaxed">Physischer 3D-Druck trifft Cloud-Profil.</p>
-          <p className="text-[10px] text-white/50 leading-relaxed font-medium">Die Daten werden via 3D.DE direkt mit deinem NFC-Chip verknüpft.</p>
         </div>
       </section>
 
       <section className="space-y-6">
         <div className="flex items-center justify-between px-2">
            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 flex items-center gap-3"><Plus size={14} className="text-petrol"/> Magic Buttons</label>
-           <span className="text-[8px] font-black text-petrol uppercase tracking-widest bg-petrol/5 px-2 py-1 rounded-full">Interactive</span>
         </div>
         <div className="grid grid-cols-3 gap-3">
           <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Treuekarte', content: '', settings: { slots: 10, validationType: 'qr_code', secretKey: 'NUDAIM-STAMP-123', rewardText: 'Ein Gratis-Kaffee!' } }])} className="p-6 bg-white border border-navy/5 rounded-3xl flex flex-col items-center gap-3 hover:border-petrol/20 hover:shadow-xl transition-all group active:scale-95 shadow-sm">
             <div className="w-12 h-12 bg-cream rounded-2xl flex items-center justify-center text-petrol group-hover:bg-petrol group-hover:text-white transition-all"><Award size={24} /></div>
             <span className="text-[9px] font-black uppercase tracking-tighter">Loyalty</span>
           </button>
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'whatsapp', title: 'Schreib mir', content: '+49', settings: { message: 'Hallo!' } }])} className="p-6 bg-white border border-navy/5 rounded-3xl flex flex-col items-center gap-3 hover:border-petrol/20 hover:shadow-xl transition-all group active:scale-95 shadow-sm">
+            <div className="w-12 h-12 bg-cream rounded-2xl flex items-center justify-center text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white transition-all"><MessageCircle size={24} /></div>
+            <span className="text-[9px] font-black uppercase tracking-tighter">WhatsApp</span>
+          </button>
           <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Google Rezension', content: 'https://search.google.com/local/writereview?placeid=' }])} className="p-6 bg-white border border-navy/5 rounded-3xl flex flex-col items-center gap-3 hover:border-petrol/20 hover:shadow-xl transition-all group active:scale-95 shadow-sm">
             <div className="w-12 h-12 bg-cream rounded-2xl flex items-center justify-center text-yellow-500 group-hover:bg-yellow-500 group-hover:text-white transition-all"><Star size={24} /></div>
             <span className="text-[9px] font-black uppercase tracking-tighter">Review</span>
-          </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'social_loop', title: 'Instagram', content: 'https://instagram.com/' }])} className="p-6 bg-white border border-navy/5 rounded-3xl flex flex-col items-center gap-3 hover:border-petrol/20 hover:shadow-xl transition-all group active:scale-95 shadow-sm">
-            <div className="w-12 h-12 bg-cream rounded-2xl flex items-center justify-center text-pink-500 group-hover:bg-pink-500 group-hover:text-white transition-all"><Instagram size={24} /></div>
-            <span className="text-[9px] font-black uppercase tracking-tighter">Social</span>
           </button>
         </div>
       </section>
@@ -260,13 +268,6 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
           ))}
         </div>
       </section>
-      
-      <div className="bg-cream p-10 rounded-[4rem] border border-navy/5 space-y-6 relative overflow-hidden group">
-         <div className="absolute top-0 right-0 w-20 h-20 bg-petrol/5 blur-3xl" />
-         <div className="flex items-center gap-3"><Info size={20} className="text-petrol"/><span className="text-[11px] font-black uppercase tracking-widest text-navy">Checkout & Sync</span></div>
-         <p className="text-[11px] text-zinc-500 leading-relaxed font-medium">Deine Profildaten werden nach dem Checkout automatisch mit deinem physischen NFeC Key verknüpft.</p>
-         <div className="h-0.5 w-12 bg-petrol/20 rounded-full" />
-      </div>
     </div>
   );
 };

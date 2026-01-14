@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Smartphone, Wifi, Star, Instagram, Globe, Link as LinkIcon, AlertTriangle, ShieldCheck, Award, ArrowLeft, Check, Lock, Gift, Fingerprint, RefreshCcw, QrCode, Camera, X, Sparkles } from 'lucide-react';
+import { Smartphone, Wifi, Star, Instagram, Globe, Link as LinkIcon, AlertTriangle, ShieldCheck, Award, ArrowLeft, Check, Lock, Gift, Fingerprint, RefreshCcw, QrCode, Camera, X, Sparkles, MessageCircle } from 'lucide-react';
 import { ModelConfig, NFCBlock } from '../types';
 import jsQR from 'jsqr';
 
@@ -238,20 +238,38 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string }> = ({
     }
 
     const handleAction = () => {
-      if (block.buttonType === 'wifi') alert("WLAN Info...");
-      else if (block.content.startsWith('http')) window.open(block.content, '_blank');
+      if (block.buttonType === 'whatsapp') {
+        const cleanPhone = block.content.replace(/\s+/g, '').replace('+', '');
+        const message = encodeURIComponent(block.settings?.message || '');
+        window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
+      } else if (block.buttonType === 'wifi') {
+        alert("WLAN Info...");
+      } else if (block.content.startsWith('http')) {
+        window.open(block.content, '_blank');
+      }
+    };
+
+    const getButtonStyles = () => {
+      if (block.buttonType === 'whatsapp') return "border-emerald-500/10 hover:border-emerald-500/30";
+      return "border-navy/5";
+    };
+
+    const getIcon = () => {
+      if (block.buttonType === 'whatsapp') return <MessageCircle className="text-emerald-500" />;
+      return <LinkIcon className="text-zinc-400" />;
     };
 
     return (
       <button 
         onClick={(e) => { e.stopPropagation(); handleAction(); }}
-        className="w-full bg-white p-6 rounded-[2rem] border border-navy/5 shadow-sm flex items-center gap-6 hover:scale-[1.02] active:scale-[0.98] transition-all group pointer-events-auto"
+        className={`w-full bg-white p-6 rounded-[2rem] border shadow-sm flex items-center gap-6 hover:scale-[1.02] active:scale-[0.98] transition-all group pointer-events-auto ${getButtonStyles()}`}
       >
         <div className="w-16 h-16 bg-cream rounded-2xl flex items-center justify-center group-hover:bg-navy/5 transition-colors border border-navy/5">
-           <LinkIcon className="text-zinc-400" />
+           {getIcon()}
         </div>
         <div className="text-left">
           <p className="font-black text-navy text-[12px] uppercase tracking-widest">{block.title || block.buttonType}</p>
+          <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-tight mt-1 opacity-60">Antippen zum Öffnen</p>
         </div>
       </button>
     );
