@@ -20,15 +20,26 @@ const QRScanner: React.FC<{ onScan: (code: string) => void, onCancel: () => void
 
     const startCamera = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        const constraints = { 
+          video: { 
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          } 
+        };
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.setAttribute("playsinline", "true");
-          videoRef.current.play();
-          requestAnimationFrame(tick);
+          // Warten bis Video bereit ist
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current?.play();
+            requestAnimationFrame(tick);
+          };
         }
       } catch (err) {
-        setError("Kamera-Zugriff verweigert oder nicht verfügbar.");
+        console.error("Camera error:", err);
+        setError("Kamera-Zugriff verweigert oder wird von einer anderen App blockiert.");
       }
     };
 
@@ -62,11 +73,11 @@ const QRScanner: React.FC<{ onScan: (code: string) => void, onCancel: () => void
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [onScan]);
 
   return (
     <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
-      <div className="relative w-full aspect-square max-w-sm rounded-[3rem] overflow-hidden border-4 border-white/20 shadow-2xl">
+      <div className="relative w-full aspect-square max-w-sm rounded-[3rem] overflow-hidden border-4 border-white/20 shadow-2xl bg-zinc-900">
         <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" />
         <canvas ref={canvasRef} className="hidden" />
         
@@ -85,10 +96,10 @@ const QRScanner: React.FC<{ onScan: (code: string) => void, onCancel: () => void
         <div className="flex justify-center mb-2"><Camera className="text-white/20" size={32} /></div>
         <p className="text-white font-black uppercase tracking-[0.3em] text-xs">QR-Code scannen</p>
         <p className="text-white/40 text-[10px] uppercase font-bold tracking-tight">Richte dein Handy auf den Code im Laden</p>
-        {error && <p className="text-red-400 text-[10px] font-bold bg-red-400/10 p-2 rounded-lg">{error}</p>}
+        {error && <p className="text-red-400 text-[10px] font-bold bg-red-400/10 p-4 rounded-xl max-w-xs">{error}</p>}
       </div>
 
-      <button onClick={onCancel} className="absolute bottom-12 w-16 h-16 bg-white/10 text-white rounded-full flex items-center justify-center backdrop-blur-xl border border-white/20 hover:scale-110 transition-transform">
+      <button onClick={onCancel} className="absolute bottom-12 w-16 h-16 bg-white/10 text-white rounded-full flex items-center justify-center backdrop-blur-xl border border-white/20 hover:scale-110 active:scale-95 transition-all">
         <X size={28} />
       </button>
     </div>
@@ -144,11 +155,17 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string }> = ({ block, con
 
   // Notfall-Option für Personal: Titel lange gedrückt halten
   const [holdTimer, setHoldTimer] = useState<any>(null);
-  const handleAdminStart = () => setHoldTimer(setTimeout(() => { if(confirm("Admin-Modus: Manuellen Stempel hinzufügen?")) addStamp(); }, 5000));
+  const handleAdminStart = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation(); // Verhindert das Öffnen der Kamera beim Admin-Longpress
+    setHoldTimer(setTimeout(() => { if(confirm("Admin-Modus: Manuellen Stempel hinzufügen?")) addStamp(); }, 5000));
+  };
   const handleAdminEnd = () => clearTimeout(holdTimer);
 
   return (
-    <div className="bg-white p-8 rounded-[2.5rem] border border-navy/5 shadow-xl space-y-8 relative overflow-hidden transition-all duration-500 hover:shadow-2xl">
+    <div 
+      onClick={() => !isFull && setShowScanner(true)}
+      className="bg-white p-8 rounded-[2.5rem] border border-navy/5 shadow-xl space-y-8 relative overflow-hidden transition-all duration-500 hover:shadow-2xl cursor-pointer active:scale-[0.98] group"
+    >
       {isFull && (
         <div className="absolute inset-0 bg-petrol/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-8 text-center animate-in zoom-in duration-500">
            <div className="w-24 h-24 bg-white text-petrol rounded-full flex items-center justify-center mb-6 shadow-2xl animate-bounce">
@@ -156,18 +173,29 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string }> = ({ block, con
            </div>
            <h3 className="serif-headline text-3xl font-black text-white italic uppercase mb-2">Karte Voll!</h3>
            <p className="text-white/80 text-sm mb-8 leading-relaxed font-medium">{block.settings?.rewardText || 'Zeige diese Ansicht beim Personal vor, um dein Geschenk zu erhalten.'}</p>
-           <button onClick={resetCard} className="w-full py-5 bg-white text-petrol rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl hover:scale-105 transition-transform">Belohnung Einlösen</button>
+           <button 
+             onClick={(e) => { e.stopPropagation(); resetCard(); }} 
+             className="w-full py-5 bg-white text-petrol rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl hover:scale-105 transition-transform"
+           >
+             Belohnung Einlösen
+           </button>
         </div>
       )}
 
       {/* Header Bereich */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pointer-events-none">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-cream rounded-2xl flex items-center justify-center text-petrol shadow-inner relative group">
+          <div className="w-14 h-14 bg-cream rounded-2xl flex items-center justify-center text-petrol shadow-inner relative group-hover:bg-petrol group-hover:text-white transition-all">
             <Award size={28} />
             {lastAction === 'success' && <Sparkles size={20} className="absolute -top-2 -right-2 text-action animate-bounce" />}
           </div>
-          <div onMouseDown={handleAdminStart} onTouchStart={handleAdminStart} onMouseUp={handleAdminEnd} onTouchEnd={handleAdminEnd}>
+          <div 
+            onMouseDown={handleAdminStart} 
+            onTouchStart={handleAdminStart} 
+            onMouseUp={handleAdminEnd} 
+            onTouchEnd={handleAdminEnd}
+            className="pointer-events-auto"
+          >
             <h3 className="font-black text-navy text-[12px] uppercase tracking-widest">{block.title || 'Treuekarte'}</h3>
             <div className="flex items-center gap-2 mt-1">
               <p className="text-[10px] text-zinc-400 font-black uppercase tracking-tight">{stamps} von {slots} gesammelt</p>
@@ -176,20 +204,20 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string }> = ({ block, con
             </div>
           </div>
         </div>
+        <div className="text-zinc-200 group-hover:text-petrol transition-colors">
+          <QrCode size={24} />
+        </div>
       </div>
 
-      {/* Interaktiver Stempel-Bereich: Ganze Grid ist anklickbar */}
-      <div 
-        onClick={() => !isFull && setShowScanner(true)}
-        className="grid grid-cols-5 gap-4 p-2 relative group cursor-pointer active:scale-95 transition-all"
-      >
-        <div className="absolute inset-0 bg-petrol/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity border-2 border-dashed border-petrol/10" />
+      {/* Grid Bereich */}
+      <div className="grid grid-cols-5 gap-4 p-2 relative">
+        <div className="absolute inset-0 bg-petrol/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity border-2 border-dashed border-petrol/10 -m-2" />
         
         {Array.from({ length: slots }).map((_, i) => (
           <div key={i} className={`aspect-square rounded-2xl flex items-center justify-center border-2 transition-all duration-700 relative ${
             i < stamps 
             ? 'bg-petrol border-petrol shadow-lg shadow-petrol/20 scale-100' 
-            : 'bg-cream border-navy/5 scale-90 opacity-40 group-hover:opacity-100 group-hover:scale-95'
+            : 'bg-cream border-navy/5 scale-90 opacity-40 group-hover:opacity-100 group-hover:scale-100 group-hover:border-petrol/20'
           }`}>
             {i < stamps ? (
               <Check className="text-white animate-in zoom-in duration-500" size={18} strokeWidth={4} />
@@ -206,18 +234,15 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string }> = ({ block, con
       </div>
 
       {/* Hilfe-Text / CTA */}
-      <div className="text-center space-y-4">
-        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-300">Tippe auf die Karte zum Scannen</p>
-        <button 
-          onClick={() => setShowScanner(true)}
-          className="w-full py-5 bg-navy text-white rounded-[2rem] flex items-center justify-center gap-4 hover:bg-petrol transition-all shadow-xl active:scale-95 group overflow-hidden relative"
-        >
+      <div className="text-center space-y-4 pt-2">
+        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-300 group-hover:text-petrol/60 transition-colors">Tippe auf die Karte zum Scannen</p>
+        <div className="w-full py-5 bg-navy text-white rounded-[2rem] flex items-center justify-center gap-4 group-hover:bg-petrol transition-all shadow-xl relative overflow-hidden">
           <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
             <QrCode size={20} />
           </div>
           <span className="text-[11px] font-black uppercase tracking-[0.2em]">Punkte sammeln</span>
-        </button>
+        </div>
       </div>
 
       {showScanner && <QRScanner onScan={handleQRScan} onCancel={() => setShowScanner(false)} />}

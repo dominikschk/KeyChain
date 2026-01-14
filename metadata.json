@@ -1,6 +1,6 @@
 {
-  "name": "3D Logo Customizer",
-  "description": "A professional tool to personalize 3D printable plates by uploading and extruding SVG logos with real-time 3D preview and STL export.",
+  "name": "NUDAIM NFeC Studio",
+  "description": "Erstelle personalisierte 3D-Drucke mit integriertem NFC-Profil und Treuesystem.",
   "requestFramePermissions": [
     "camera"
   ]
