@@ -31,7 +31,6 @@ const QRScanner: React.FC<{ onScan: (code: string) => void, onCancel: () => void
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.setAttribute("playsinline", "true");
-          // Warten bis Video bereit ist
           videoRef.current.onloadedmetadata = () => {
             videoRef.current?.play();
             requestAnimationFrame(tick);
@@ -39,7 +38,7 @@ const QRScanner: React.FC<{ onScan: (code: string) => void, onCancel: () => void
         }
       } catch (err) {
         console.error("Camera error:", err);
-        setError("Kamera-Zugriff verweigert oder wird von einer anderen App blockiert.");
+        setError("Kamera-Zugriff verweigert.");
       }
     };
 
@@ -76,7 +75,7 @@ const QRScanner: React.FC<{ onScan: (code: string) => void, onCancel: () => void
   }, [onScan]);
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center p-6 animate-in fade-in duration-300 pointer-events-auto">
       <div className="relative w-full aspect-square max-w-sm rounded-[3rem] overflow-hidden border-4 border-white/20 shadow-2xl bg-zinc-900">
         <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" />
         <canvas ref={canvasRef} className="hidden" />
@@ -99,7 +98,7 @@ const QRScanner: React.FC<{ onScan: (code: string) => void, onCancel: () => void
         {error && <p className="text-red-400 text-[10px] font-bold bg-red-400/10 p-4 rounded-xl max-w-xs">{error}</p>}
       </div>
 
-      <button onClick={onCancel} className="absolute bottom-12 w-16 h-16 bg-white/10 text-white rounded-full flex items-center justify-center backdrop-blur-xl border border-white/20 hover:scale-110 active:scale-95 transition-all">
+      <button onClick={(e) => { e.stopPropagation(); onCancel(); }} className="absolute bottom-12 w-16 h-16 bg-white/10 text-white rounded-full flex items-center justify-center backdrop-blur-xl border border-white/20 hover:scale-110 active:scale-95 transition-all">
         <X size={28} />
       </button>
     </div>
@@ -140,108 +139,74 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string }> = ({ block, con
     if (scannedValue === secret) {
       addStamp();
     } else {
-      alert("Falscher QR-Code! Bitte scanne das Original im Laden.");
+      alert("Falscher QR-Code!");
       setShowScanner(false);
     }
   };
 
   const resetCard = () => {
-    if (confirm("Möchtest du deine volle Karte einlösen?")) {
+    if (confirm("Einlösen?")) {
       setStamps(0);
       setIsFull(false);
       localStorage.setItem(storageKey, '0');
     }
   };
 
-  // Notfall-Option für Personal: Titel lange gedrückt halten
   const [holdTimer, setHoldTimer] = useState<any>(null);
   const handleAdminStart = (e: React.MouseEvent | React.TouchEvent) => {
-    e.stopPropagation(); // Verhindert das Öffnen der Kamera beim Admin-Longpress
-    setHoldTimer(setTimeout(() => { if(confirm("Admin-Modus: Manuellen Stempel hinzufügen?")) addStamp(); }, 5000));
+    e.stopPropagation();
+    setHoldTimer(setTimeout(() => { if(confirm("Stempel hinzufügen?")) addStamp(); }, 5000));
   };
   const handleAdminEnd = () => clearTimeout(holdTimer);
 
   return (
     <div 
-      onClick={() => !isFull && setShowScanner(true)}
-      className="bg-white p-8 rounded-[2.5rem] border border-navy/5 shadow-xl space-y-8 relative overflow-hidden transition-all duration-500 hover:shadow-2xl cursor-pointer active:scale-[0.98] group"
+      onClick={(e) => { e.stopPropagation(); if(!isFull) setShowScanner(true); }}
+      className="bg-white p-8 rounded-[2.5rem] border border-navy/5 shadow-xl space-y-8 relative overflow-hidden transition-all duration-500 hover:shadow-2xl cursor-pointer active:scale-[0.98] group pointer-events-auto"
     >
       {isFull && (
-        <div className="absolute inset-0 bg-petrol/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-8 text-center animate-in zoom-in duration-500">
-           <div className="w-24 h-24 bg-white text-petrol rounded-full flex items-center justify-center mb-6 shadow-2xl animate-bounce">
-              <Gift size={48} />
-           </div>
+        <div className="absolute inset-0 bg-petrol/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-8 text-center animate-in zoom-in duration-300">
+           <Gift size={48} className="text-white mb-6 animate-bounce" />
            <h3 className="serif-headline text-3xl font-black text-white italic uppercase mb-2">Karte Voll!</h3>
-           <p className="text-white/80 text-sm mb-8 leading-relaxed font-medium">{block.settings?.rewardText || 'Zeige diese Ansicht beim Personal vor, um dein Geschenk zu erhalten.'}</p>
            <button 
              onClick={(e) => { e.stopPropagation(); resetCard(); }} 
              className="w-full py-5 bg-white text-petrol rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl hover:scale-105 transition-transform"
            >
-             Belohnung Einlösen
+             Einlösen
            </button>
         </div>
       )}
 
-      {/* Header Bereich */}
-      <div className="flex items-center justify-between pointer-events-none">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 bg-cream rounded-2xl flex items-center justify-center text-petrol shadow-inner relative group-hover:bg-petrol group-hover:text-white transition-all">
             <Award size={28} />
             {lastAction === 'success' && <Sparkles size={20} className="absolute -top-2 -right-2 text-action animate-bounce" />}
           </div>
-          <div 
-            onMouseDown={handleAdminStart} 
-            onTouchStart={handleAdminStart} 
-            onMouseUp={handleAdminEnd} 
-            onTouchEnd={handleAdminEnd}
-            className="pointer-events-auto"
-          >
+          <div onMouseDown={handleAdminStart} onTouchStart={handleAdminStart} onMouseUp={handleAdminEnd} onTouchEnd={handleAdminEnd}>
             <h3 className="font-black text-navy text-[12px] uppercase tracking-widest">{block.title || 'Treuekarte'}</h3>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-[10px] text-zinc-400 font-black uppercase tracking-tight">{stamps} von {slots} gesammelt</p>
-              <div className="w-1 h-1 rounded-full bg-petrol/20" />
-              <div className="text-[10px] text-petrol font-black animate-pulse">AKTIV</div>
-            </div>
+            <p className="text-[10px] text-zinc-400 font-black uppercase tracking-tight">{stamps} / {slots}</p>
           </div>
         </div>
-        <div className="text-zinc-200 group-hover:text-petrol transition-colors">
-          <QrCode size={24} />
-        </div>
+        <QrCode size={24} className="text-zinc-200 group-hover:text-petrol transition-colors" />
       </div>
 
-      {/* Grid Bereich */}
-      <div className="grid grid-cols-5 gap-4 p-2 relative">
-        <div className="absolute inset-0 bg-petrol/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity border-2 border-dashed border-petrol/10 -m-2" />
-        
+      <div className="grid grid-cols-5 gap-4 p-2">
         {Array.from({ length: slots }).map((_, i) => (
-          <div key={i} className={`aspect-square rounded-2xl flex items-center justify-center border-2 transition-all duration-700 relative ${
+          <div key={i} className={`aspect-square rounded-2xl flex items-center justify-center border-2 transition-all duration-700 ${
             i < stamps 
-            ? 'bg-petrol border-petrol shadow-lg shadow-petrol/20 scale-100' 
-            : 'bg-cream border-navy/5 scale-90 opacity-40 group-hover:opacity-100 group-hover:scale-100 group-hover:border-petrol/20'
+            ? 'bg-petrol border-petrol shadow-lg scale-100' 
+            : 'bg-cream border-navy/5 scale-90 opacity-40 group-hover:opacity-100'
           }`}>
-            {i < stamps ? (
-              <Check className="text-white animate-in zoom-in duration-500" size={18} strokeWidth={4} />
-            ) : (
-              <div className="w-1.5 h-1.5 rounded-full bg-navy/20 group-hover:bg-petrol/30" />
-            )}
-            
-            {/* Puls-Effekt für den nächsten Slot */}
-            {i === stamps && !isFull && (
-              <div className="absolute inset-0 border-2 border-petrol/50 rounded-2xl animate-ping opacity-20" />
-            )}
+            {i < stamps ? <Check className="text-white" size={18} strokeWidth={4} /> : <div className="w-1.5 h-1.5 rounded-full bg-navy/20" />}
           </div>
         ))}
       </div>
 
-      {/* Hilfe-Text / CTA */}
       <div className="text-center space-y-4 pt-2">
-        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-300 group-hover:text-petrol/60 transition-colors">Tippe auf die Karte zum Scannen</p>
-        <div className="w-full py-5 bg-navy text-white rounded-[2rem] flex items-center justify-center gap-4 group-hover:bg-petrol transition-all shadow-xl relative overflow-hidden">
-          <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-            <QrCode size={20} />
-          </div>
-          <span className="text-[11px] font-black uppercase tracking-[0.2em]">Punkte sammeln</span>
+        <div className="w-full py-5 bg-navy text-white rounded-[2rem] flex items-center justify-center gap-4 group-hover:bg-petrol transition-all shadow-xl">
+          <QrCode size={20} />
+          <span className="text-[11px] font-black uppercase tracking-[0.2em]">Punkte scannen</span>
         </div>
       </div>
 
@@ -250,10 +215,10 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string }> = ({ block, con
   );
 };
 
-const BlockRenderer: React.FC<{ block: NFCBlock, configId: string }> = ({ block, configId }) => {
+export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string }> = ({ block, configId }) => {
   if (block.type === 'text') {
     return (
-      <div className="bg-white p-6 rounded-[2rem] border border-navy/5 shadow-sm space-y-2">
+      <div className="bg-white p-6 rounded-[2rem] border border-navy/5 shadow-sm space-y-2 pointer-events-auto">
         {block.title && <h3 className="font-black text-navy text-[11px] uppercase tracking-widest">{block.title}</h3>}
         <p className="text-sm text-zinc-500 leading-relaxed font-medium">{block.content}</p>
       </div>
@@ -262,9 +227,8 @@ const BlockRenderer: React.FC<{ block: NFCBlock, configId: string }> = ({ block,
 
   if (block.type === 'image' && block.imageUrl) {
     return (
-      <div className="rounded-[2.5rem] overflow-hidden border border-navy/5 shadow-lg group">
+      <div className="rounded-[2.5rem] overflow-hidden border border-navy/5 shadow-lg group pointer-events-auto">
         <img src={block.imageUrl} alt={block.title} className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105" />
-        {block.title && <div className="p-4 bg-white text-center font-bold text-[10px] uppercase tracking-widest border-t">{block.title}</div>}
       </div>
     );
   }
@@ -274,41 +238,25 @@ const BlockRenderer: React.FC<{ block: NFCBlock, configId: string }> = ({ block,
       return <StampCard block={block} configId={configId} />;
     }
 
-    const getIcon = () => {
-      switch (block.buttonType) {
-        case 'wifi': return <Wifi className="text-blue-500" />;
-        case 'review': return <Star className="text-yellow-500" />;
-        case 'social_loop': return <Instagram className="text-pink-500" />;
-        default: return <LinkIcon className="text-zinc-400" />;
-      }
-    };
-
     const handleAction = () => {
-      if (block.buttonType === 'wifi') {
-        alert(`WLAN Login:\nSSID: ${block.content}\nPasswort: ${block.settings?.password || 'Siehe Vorort'}`);
-      } else if (block.content.startsWith('http')) {
-        window.open(block.content, '_blank');
-      } else {
-        alert(`${block.title}\nInfo: ${block.content}`);
-      }
+      if (block.buttonType === 'wifi') alert("WLAN Info...");
+      else if (block.content.startsWith('http')) window.open(block.content, '_blank');
     };
 
     return (
       <button 
-        onClick={handleAction}
-        className="w-full bg-white p-6 rounded-[2rem] border border-navy/5 shadow-sm flex items-center gap-6 hover:scale-[1.02] active:scale-[0.98] transition-all group"
+        onClick={(e) => { e.stopPropagation(); handleAction(); }}
+        className="w-full bg-white p-6 rounded-[2rem] border border-navy/5 shadow-sm flex items-center gap-6 hover:scale-[1.02] active:scale-[0.98] transition-all group pointer-events-auto"
       >
         <div className="w-16 h-16 bg-cream rounded-2xl flex items-center justify-center group-hover:bg-navy/5 transition-colors border border-navy/5">
-          {getIcon()}
+           <LinkIcon className="text-zinc-400" />
         </div>
         <div className="text-left">
           <p className="font-black text-navy text-[12px] uppercase tracking-widest">{block.title || block.buttonType}</p>
-          <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-tight mt-1 opacity-60">Antippen zum Öffnen</p>
         </div>
       </button>
     );
   }
-
   return null;
 };
 
@@ -319,64 +267,37 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
   if (error) {
     return (
       <div className="h-screen w-screen bg-cream flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
-        <div className="w-24 h-24 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-8 shadow-xl">
-          <AlertTriangle size={48} />
-        </div>
+        <AlertTriangle size={48} className="text-red-500 mb-8" />
         <h2 className="serif-headline text-4xl font-black italic uppercase mb-4 text-navy">Ups!</h2>
         <p className="text-zinc-500 text-sm max-w-xs leading-relaxed mb-10 font-medium">{error.msg}</p>
-        <button 
-          onClick={() => window.location.href = window.location.origin + window.location.pathname} 
-          className="flex items-center gap-4 px-10 py-5 bg-navy text-white rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-petrol transition-all shadow-2xl"
-        >
-          <ArrowLeft size={18} /> Zurück zum Studio
-        </button>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen w-full bg-cream text-navy selection:bg-petrol selection:text-white animate-in fade-in duration-700 overflow-x-hidden pb-40">
-      {/* Header Profile */}
       <header className="pt-24 pb-16 px-8 flex flex-col items-center text-center space-y-8">
-        <div className="w-28 h-28 bg-white rounded-[2.5rem] shadow-2xl flex items-center justify-center border border-navy/5 relative group overflow-hidden ring-8 ring-white/50">
-           <div className="absolute inset-0 bg-petrol/5 rounded-[2.5rem] animate-pulse group-hover:opacity-0 transition-opacity" />
-           <ShieldCheck size={48} className="text-petrol relative z-10" />
+        <div className="w-28 h-28 bg-white rounded-[2.5rem] shadow-2xl flex items-center justify-center border border-navy/5">
+           <ShieldCheck size={48} className="text-petrol" />
         </div>
-        <div className="space-y-3">
-          <h1 className="serif-headline text-5xl font-black italic uppercase tracking-tight leading-none">NUDAIM NFeC</h1>
-          <div className="flex items-center justify-center gap-3">
-            <div className="h-px w-8 bg-petrol/20" />
-            <p className="text-[11px] font-black uppercase tracking-[0.4em] text-petrol/60">Authentic Digital ID</p>
-            <div className="h-px w-8 bg-petrol/20" />
-          </div>
-        </div>
+        <h1 className="serif-headline text-5xl font-black italic uppercase tracking-tight leading-none">NUDAIM NFeC</h1>
       </header>
 
-      {/* Content Feed */}
       <main className="max-w-md mx-auto px-6 space-y-6">
-        {config.nfcBlocks.length > 0 ? (
-          config.nfcBlocks.map(block => (
-            <BlockRenderer key={block.id} block={block} configId={currentId} />
-          ))
-        ) : (
-          <div className="text-center py-24 opacity-20 italic font-black uppercase tracking-widest text-xs">Profil wird geladen...</div>
-        )}
+        {config.nfcBlocks.map(block => (
+          <BlockRenderer key={block.id} block={block} configId={currentId} />
+        ))}
       </main>
 
-      {/* Footer Branding */}
       <footer className="fixed bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-cream via-cream to-transparent pointer-events-none z-50">
         <div className="max-w-md mx-auto flex flex-col items-center pointer-events-auto">
           <button 
             onClick={() => window.location.href = window.location.origin + window.location.pathname}
-            className="bg-navy text-white px-10 py-5 rounded-full shadow-2xl flex items-center gap-4 hover:scale-105 transition-transform hover:bg-petrol ring-4 ring-white/20"
+            className="bg-navy text-white px-10 py-5 rounded-full shadow-2xl flex items-center gap-4 hover:scale-105 transition-transform hover:bg-petrol"
           >
             <Smartphone size={18} />
             <span className="text-[11px] font-black uppercase tracking-[0.2em]">Eigene NFeC erstellen</span>
           </button>
-          <div className="mt-6 flex flex-col items-center gap-1 opacity-30">
-             <p className="text-[9px] font-black uppercase tracking-[0.5em] text-navy">NUDAIM3D STUDIO</p>
-             <div className="h-0.5 w-10 bg-petrol rounded-full" />
-          </div>
         </div>
       </footer>
     </div>

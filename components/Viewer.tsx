@@ -4,25 +4,48 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, ContactShadows, Text, Float } from '@react-three/drei';
 import * as THREE from 'three';
 import { ModelConfig, SVGPathData } from '../types';
-import { Smartphone } from 'lucide-react';
+import { BlockRenderer } from './Microsite';
 
 const PhonePreview: React.FC<{ config: ModelConfig }> = ({ config }) => {
   const blocks = config.nfcBlocks || [];
+  const params = new URLSearchParams(window.location.search);
+  const currentId = params.get('id') || 'preview';
+
   return (
     <div className="absolute inset-0 flex items-center justify-center p-6 z-[100] pointer-events-none animate-in fade-in zoom-in duration-500">
-      <div className="w-[min(280px,80vw)] aspect-[9/19] bg-zinc-950 rounded-[2.5rem] border-[6px] border-zinc-900 shadow-2xl relative pointer-events-auto overflow-hidden flex flex-col">
-        <div className="h-10 flex items-center justify-center pt-1">
-          <div className="w-8 h-1 bg-white/10 rounded-full" />
+      <div className="w-[min(320px,85vw)] aspect-[9/19] bg-zinc-950 rounded-[3rem] border-[8px] border-zinc-900 shadow-2xl relative pointer-events-auto overflow-hidden flex flex-col ring-1 ring-white/10">
+        {/* Notch */}
+        <div className="h-10 flex items-center justify-center pt-1 shrink-0">
+          <div className="w-16 h-5 bg-zinc-900 rounded-2xl flex items-center justify-center">
+             <div className="w-1 h-1 rounded-full bg-white/5 mr-2" />
+             <div className="w-6 h-1 rounded-full bg-white/10" />
+          </div>
         </div>
-        <div className="flex-1 bg-white px-5 pt-6 overflow-y-auto space-y-4">
-          <div className="w-12 h-12 bg-cream rounded-xl flex items-center justify-center mx-auto shadow-sm"><Smartphone size={24} className="text-petrol" /></div>
-          <div className="h-0.5 w-8 bg-action/20 mx-auto rounded-full" />
-          {blocks.map(block => (
-            <div key={block.id} className="bg-slate-50 p-4 rounded-xl border border-navy/5">
-              <p className="font-black text-navy text-[8px] uppercase tracking-widest mb-1">{block.title || 'Inhalt'}</p>
-              <p className="text-[9px] text-zinc-500 leading-tight">{block.content}</p>
-            </div>
-          ))}
+        
+        {/* Real Content Preview */}
+        <div className="flex-1 bg-cream overflow-y-auto space-y-4 px-4 pt-4 pb-12 custom-scrollbar">
+           <header className="flex flex-col items-center text-center space-y-3 mb-6">
+              <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center border border-navy/5">
+                <div className="w-8 h-8 bg-petrol/10 rounded-lg flex items-center justify-center text-petrol">
+                   <div className="w-4 h-4 border-2 border-petrol rounded-sm" />
+                </div>
+              </div>
+              <h1 className="serif-headline text-xl font-black italic uppercase text-navy">NUDAIM NFeC</h1>
+              <p className="text-[7px] font-black uppercase tracking-[0.3em] text-petrol/60">Preview Mode</p>
+           </header>
+
+           <div className="space-y-4">
+              {blocks.map(block => (
+                <div key={block.id} className="scale-90 origin-top -mb-4">
+                   <BlockRenderer block={block} configId={currentId} />
+                </div>
+              ))}
+           </div>
+        </div>
+
+        {/* Home Indicator */}
+        <div className="h-6 flex items-center justify-center shrink-0 bg-cream">
+           <div className="w-20 h-1 bg-navy/10 rounded-full" />
         </div>
       </div>
     </div>
