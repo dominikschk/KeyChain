@@ -15,7 +15,7 @@ const ConfirmationModal: React.FC<{
   onConfirm: () => void, 
   onCancel: () => void 
 }> = ({ config, onConfirm, onCancel }) => {
-  const [qrCodes, setQrCodes] = useState<{label: string, dataUrl: string}[]>([]);
+  const [qrCodes, setQrCodes] = useState<{label: string, secret: string, dataUrl: string}[]>([]);
   
   const stampBlocks = config.nfcBlocks.filter(b => b.buttonType === 'stamp_card');
 
@@ -24,7 +24,7 @@ const ConfirmationModal: React.FC<{
       const codes = await Promise.all(stampBlocks.map(async (block) => {
         const secret = block.settings?.secretKey || 'SECRET';
         const url = await QRCode.toDataURL(secret, { width: 1024, margin: 2 });
-        return { label: block.title || 'Stempelkarte', dataUrl: url };
+        return { label: block.title || 'Stempelkarte', secret: secret, dataUrl: url };
       }));
       setQrCodes(codes);
     };
@@ -64,7 +64,7 @@ const ConfirmationModal: React.FC<{
               <div className="flex flex-col items-center gap-2">
                 <QrIcon size={32} className="text-petrol" />
                 <h3 className="text-[10px] font-black uppercase tracking-widest">Deine Stempelkarten QR-Codes</h3>
-                <p className="text-[9px] text-zinc-400 font-bold max-w-[200px]">Lade diese Codes jetzt herunter. Du benötigst sie in deinem Geschäft zum Stempeln.</p>
+                <p className="text-[9px] text-zinc-400 font-bold max-w-[200px]">Lade diese Codes jetzt herunter. Jeder Code ist einzigartig für die jeweilige Karte.</p>
               </div>
               
               <div className="flex flex-wrap justify-center gap-6">
@@ -73,12 +73,16 @@ const ConfirmationModal: React.FC<{
                     <div className="bg-white p-4 rounded-3xl shadow-lg border border-navy/5">
                       <img src={qr.dataUrl} className="w-32 h-32" alt="QR Code" />
                     </div>
+                    <div className="text-center">
+                      <p className="text-[8px] font-black text-navy uppercase tracking-widest">{qr.label}</p>
+                      <p className="text-[7px] text-zinc-400 font-mono mt-1">Code: {qr.secret}</p>
+                    </div>
                     <button 
                       onClick={() => downloadQR(qr.dataUrl, qr.label)}
                       className="flex items-center gap-2 px-4 py-2 bg-navy text-white rounded-xl text-[9px] font-black uppercase hover:bg-petrol transition-colors"
                     >
                       <Download size={14} />
-                      Download {qr.label}
+                      Download
                     </button>
                   </div>
                 ))}

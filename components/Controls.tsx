@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType, Department, ActionIcon, FontStyle, ProfileTheme } from '../types';
-import { Box, Type, Plus, Minus, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Sliders, Award, MessageCircle, MapPin, Globe, ShoppingCart, Info, User, Mail, Phone, Loader2, ChevronUp, Instagram, Utensils, Sparkles, Shield, Layout, Camera, Dumbbell, Heart, Activity, Palette, Sun, Moon, Scissors, Coffee, Stethoscope, Hammer, ArrowLeft, MoveVertical, Map as MapIcon, Calendar, Clock } from 'lucide-react';
+import { Box, Type, Plus, Minus, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Sliders, Award, MessageCircle, MapPin, Globe, ShoppingCart, Info, User, Mail, Phone, Loader2, ChevronUp, Instagram, Utensils, Sparkles, Shield, Layout, Camera, Dumbbell, Heart, Activity, Palette, Sun, Moon, Scissors, Coffee, Stethoscope, Hammer, ArrowLeft, MoveVertical, Map as MapIcon, Calendar, Clock, Hash, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ControlsProps {
@@ -109,11 +109,34 @@ const PropertyPanel: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock>
 
         {block.type === 'magic_button' && (
           <div className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Inhalt / URL / Telefon</label>
-              <input type="text" value={block.content} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" />
-            </div>
+            {block.buttonType !== 'stamp_card' && (
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Inhalt / URL / Telefon</label>
+                <input type="text" value={block.content} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" />
+              </div>
+            )}
             
+            {block.buttonType === 'stamp_card' && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                    <Hash size={12}/> Stempel Slots (5-15)
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input type="range" min="5" max="15" step="1" value={block.settings?.slots || 10} onChange={e => onUpdate({ settings: { ...block.settings, slots: parseInt(e.target.value) } })} className="flex-1 accent-petrol" />
+                    <span className="text-xs font-black text-navy">{block.settings?.slots || 10}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                    <Lock size={12}/> Geheimer Schlüssel (QR-Inhalt)
+                  </label>
+                  <input type="text" value={block.settings?.secretKey || ''} onChange={e => onUpdate({ settings: { ...block.settings, secretKey: e.target.value } })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" placeholder="z.B. CAFE_REWARD_2024" />
+                  <p className="text-[8px] text-zinc-400 italic">Diesen Text musst du in deinen QR-Code Generator eingeben.</p>
+                </div>
+              </>
+            )}
+
             {block.buttonType === 'custom_link' && (
               <div className="space-y-3">
                 <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Button Icon</label>
@@ -224,7 +247,10 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
     { id: 'whatsapp', label: 'WhatsApp Chat', icon: <MessageCircle size={24}/>, colorClass: 'text-emerald-500 bg-emerald-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'whatsapp', title: 'WhatsApp', content: '' }]) },
     { id: 'instagram', label: 'Instagram', icon: <Instagram size={24}/>, colorClass: 'text-pink-500 bg-pink-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'instagram', title: 'Instagram', content: '@name' }]) },
     { id: 'wifi', label: 'WLAN Login', icon: <Wifi size={24}/>, colorClass: 'text-blue-500 bg-blue-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'wifi', title: 'Gäste-WLAN', content: '', settings: { ssid: '', password: '' } }]) },
-    { id: 'stamps', label: 'Stempelkarte', icon: <Award size={24}/>, colorClass: 'text-petrol bg-cream', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Treuekarte', content: '', settings: { slots: 10, secretKey: 'SECRET' } }]) },
+    { id: 'stamps', label: 'Stempelkarte', icon: <Award size={24}/>, colorClass: 'text-petrol bg-cream', action: () => {
+      const uniqueKey = `STAMP_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+      updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Treuekarte', content: '', settings: { slots: 10, secretKey: uniqueKey } }]);
+    }},
     { id: 'google', label: 'Maps Standort', icon: <MapPin size={24}/>, colorClass: 'text-red-500 bg-red-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'google_profile', title: 'Anfahrt', content: 'https://goo.gl/maps' }]) },
     { id: 'link', label: 'Smart Button', icon: <LinkIcon size={24}/>, colorClass: 'text-navy bg-zinc-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'custom_link', title: 'Webseite', content: 'https://', settings: { icon: 'link' } }]) }
   ];
@@ -374,7 +400,7 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
         <section className="space-y-5 px-4">
             <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 px-3">Interaktive Magic Buttons</label>
             <div className="grid grid-cols-2 gap-3">
-            {visibleMagicButtons.map(btn => (
+            {magicButtons.map(btn => (
                 <button key={btn.id} onClick={btn.action} className={`p-6 bg-white border border-navy/5 rounded-[2.5rem] flex flex-col items-center gap-4 transition-all group shadow-sm hover:shadow-xl hover:scale-[1.02] active:scale-95`}>
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${btn.colorClass} shadow-inner`}>
                     {btn.icon}
