@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType, Department, ActionIcon, FontStyle, ProfileTheme } from '../types';
-import { Box, Type, Plus, Minus, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Sliders, Award, MessageCircle, MapPin, Globe, ShoppingCart, Info, User, Mail, Phone, Loader2, ChevronUp, Instagram, Utensils, Sparkles, Shield, Layout, Camera, Dumbbell, Heart, Activity, Palette, Sun, Moon, Scissors, Coffee, Stethoscope, Hammer, ArrowLeft, MoveVertical, Map as MapIcon, Calendar, Clock, Hash, Lock } from 'lucide-react';
+import { Box, Type, Plus, Minus, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Sliders, Award, MessageCircle, MapPin, Globe, ShoppingCart, Info, User, Mail, Phone, Loader2, ChevronUp, Instagram, Utensils, Sparkles, Shield, Layout, Camera, Dumbbell, Heart, Activity, Palette, Sun, Moon, Scissors, Coffee, Stethoscope, Hammer, ArrowLeft, MoveVertical, Map as MapIcon, Calendar, Clock, Hash, Lock, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ControlsProps {
@@ -12,6 +12,15 @@ interface ControlsProps {
   onUpload: (e: any) => void;
   onUpdateColor: (id: string, color: string) => void;
 }
+
+const generateSecureKey = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Eindeutige Zeichen ohne Verwechslungsgefahr
+  let result = 'ND-';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
 
 const IconSelector: React.FC<{ selected: ActionIcon, onSelect: (i: ActionIcon) => void }> = ({ selected, onSelect }) => {
   const icons: { id: ActionIcon, icon: any }[] = [
@@ -129,10 +138,19 @@ const PropertyPanel: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-                    <Lock size={12}/> Geheimer Schlüssel (QR-Inhalt)
+                    <Lock size={12}/> Geheimer Schlüssel
                   </label>
-                  <input type="text" value={block.settings?.secretKey || ''} onChange={e => onUpdate({ settings: { ...block.settings, secretKey: e.target.value } })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" placeholder="z.B. CAFE_REWARD_2024" />
-                  <p className="text-[8px] text-zinc-400 italic">Diesen Text musst du in deinen QR-Code Generator eingeben.</p>
+                  <div className="flex gap-2">
+                    <input type="text" value={block.settings?.secretKey || ''} onChange={e => onUpdate({ settings: { ...block.settings, secretKey: e.target.value } })} className="flex-1 p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" placeholder="z.B. ND-XJ29A..." />
+                    <button 
+                      onClick={() => onUpdate({ settings: { ...block.settings, secretKey: generateSecureKey() } })}
+                      className="p-4 bg-navy text-white rounded-xl hover:bg-petrol transition-colors shadow-lg"
+                      title="Neu generieren"
+                    >
+                      <RefreshCw size={16} />
+                    </button>
+                  </div>
+                  <p className="text-[8px] text-zinc-400 italic leading-tight">Dieser Schlüssel ist einzigartig für jeden QR-Code. Klicke auf den Button rechts, um einen neuen zufälligen Schlüssel zu erzeugen.</p>
                 </div>
               </>
             )}
@@ -248,8 +266,7 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
     { id: 'instagram', label: 'Instagram', icon: <Instagram size={24}/>, colorClass: 'text-pink-500 bg-pink-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'instagram', title: 'Instagram', content: '@name' }]) },
     { id: 'wifi', label: 'WLAN Login', icon: <Wifi size={24}/>, colorClass: 'text-blue-500 bg-blue-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'wifi', title: 'Gäste-WLAN', content: '', settings: { ssid: '', password: '' } }]) },
     { id: 'stamps', label: 'Stempelkarte', icon: <Award size={24}/>, colorClass: 'text-petrol bg-cream', action: () => {
-      const uniqueKey = `STAMP_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-      updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Treuekarte', content: '', settings: { slots: 10, secretKey: uniqueKey } }]);
+      updateConfig('nfcBlocks', [...config.nfcBlocks, { id: `block_${Date.now()}_${Math.random()}`, type: 'magic_button', buttonType: 'stamp_card', title: 'Treuekarte', content: '', settings: { slots: 10, secretKey: generateSecureKey() } }]);
     }},
     { id: 'google', label: 'Maps Standort', icon: <MapPin size={24}/>, colorClass: 'text-red-500 bg-red-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'google_profile', title: 'Anfahrt', content: 'https://goo.gl/maps' }]) },
     { id: 'link', label: 'Smart Button', icon: <LinkIcon size={24}/>, colorClass: 'text-navy bg-zinc-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'custom_link', title: 'Webseite', content: 'https://', settings: { icon: 'link' } }]) }
