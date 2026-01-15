@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Smartphone, Wifi, Star, Globe, Link as LinkIcon, AlertTriangle, ShieldCheck, Award, Check, Gift, QrCode, X, MessageCircle, ShoppingCart, Info, User, Mail, Phone, Briefcase, MapPin, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Zap } from 'lucide-react';
+import { Smartphone, Wifi, Star, Globe, Link as LinkIcon, AlertTriangle, ShieldCheck, Award, Check, Gift, QrCode, X, MessageCircle, ShoppingCart, Info, User, Mail, Phone, Briefcase, MapPin, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Zap, Map as MapIcon, Clock, Calendar } from 'lucide-react';
 import { ModelConfig, NFCBlock, ActionIcon } from '../types';
 import jsQR from 'jsqr';
 
@@ -26,6 +26,9 @@ const getLucideIcon = (name?: ActionIcon, size = 20) => {
     case 'dumbbell': return <Dumbbell size={size} />;
     case 'heart': return <Heart size={size} />;
     case 'zap': return <Zap size={size} />;
+    case 'map': return <MapIcon size={size} />;
+    case 'clock': return <Clock size={size} />;
+    case 'calendar': return <Calendar size={size} />;
     default: return <LinkIcon size={size} />;
   }
 };
@@ -127,6 +130,35 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string, accentColor: stri
 export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accentColor: string, theme: string }> = ({ block, configId, accentColor, theme }) => {
   const isDark = theme === 'dark';
   
+  if (block.type === 'headline') {
+    return (
+      <div className="py-4 text-center">
+        <h2 className={`serif-headline text-3xl font-black italic uppercase tracking-tight`} style={{ color: isDark ? '#fff' : accentColor }}>
+          {block.content}
+        </h2>
+        {block.title && <p className="text-[10px] font-black uppercase text-zinc-400 mt-2 tracking-widest">{block.title}</p>}
+      </div>
+    );
+  }
+
+  if (block.type === 'spacer') {
+    return <div style={{ height: `${block.settings?.height || 20}px` }} />;
+  }
+
+  if (block.type === 'map' && block.settings?.address) {
+    const mapUrl = `https://www.google.com/maps/embed/v1/place?key=YOUR_API_KEY&q=${encodeURIComponent(block.settings.address)}`;
+    // Note: In real app, you'd need an API key. Using a placeholder or static image logic for now.
+    return (
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-4 rounded-[2.5rem] border shadow-sm pointer-events-auto`}>
+        {block.title && <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest mb-4 px-2`}>{block.title}</h3>}
+        <div className="w-full h-48 bg-cream rounded-2xl flex flex-col items-center justify-center text-zinc-300 gap-2 border border-navy/5 overflow-hidden">
+           <MapIcon size={32} />
+           <span className="text-[9px] font-black uppercase text-center px-6 leading-tight">{block.settings.address}</span>
+        </div>
+      </div>
+    );
+  }
+
   if (block.type === 'text') {
     return (
       <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-7 rounded-[2rem] border shadow-sm space-y-2 pointer-events-auto text-center`}>
@@ -138,8 +170,9 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
 
   if (block.type === 'image' && block.imageUrl) {
     return (
-      <div className="rounded-[2.5rem] overflow-hidden border border-navy/5 shadow-lg pointer-events-auto">
+      <div className="rounded-[2.5rem] overflow-hidden border border-navy/5 shadow-lg pointer-events-auto relative group">
         <img src={block.imageUrl} alt={block.title} className="w-full h-auto" />
+        {block.title && <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-6"><p className="text-white text-xs font-black uppercase tracking-widest">{block.title}</p></div>}
       </div>
     );
   }

@@ -8,14 +8,14 @@ export type Department = '3d' | 'digital';
 export type SavingStep = 'idle' | 'screenshot' | 'upload' | 'db' | 'done';
 
 export type StampValidation = 'pattern' | 'long_press' | 'daily_limit' | 'qr_code';
-export type ActionIcon = 'link' | 'globe' | 'shopping-cart' | 'info' | 'briefcase' | 'user' | 'star' | 'mail' | 'phone' | 'instagram' | 'utensils' | 'shield' | 'camera' | 'dumbbell' | 'heart' | 'cross' | 'zap';
+export type ActionIcon = 'link' | 'globe' | 'shopping-cart' | 'info' | 'briefcase' | 'user' | 'star' | 'mail' | 'phone' | 'instagram' | 'utensils' | 'shield' | 'camera' | 'dumbbell' | 'heart' | 'cross' | 'zap' | 'map' | 'clock' | 'calendar';
 
 export type FontStyle = 'luxury' | 'modern' | 'elegant';
 export type ProfileTheme = 'light' | 'dark';
 
 export interface NFCBlock {
   id: string;
-  type: 'text' | 'image' | 'magic_button' | 'spacer';
+  type: 'text' | 'image' | 'magic_button' | 'spacer' | 'headline' | 'map';
   content: string;
   title?: string;
   buttonType?: MagicButtonType;
@@ -38,6 +38,8 @@ export interface NFCBlock {
     icon?: ActionIcon;
     buttonLabel?: string;
     description?: string;
+    height?: number; // for spacer
+    address?: string; // for map
   };
 }
 
