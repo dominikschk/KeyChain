@@ -1,13 +1,17 @@
 
 import * as THREE from 'three';
 
-export type BaseType = 'keychain' | 'circle' | 'rect' | 'custom';
-export type MagicButtonType = 'stamp_card' | 'review' | 'vcard' | 'social_loop' | 'wifi' | 'whatsapp' | 'standard';
+export type BaseType = 'nfec_standard';
+export type MagicButtonType = 'stamp_card' | 'review' | 'wifi' | 'whatsapp' | 'custom_link' | 'action_card' | 'google_profile' | 'standard' | 'instagram';
 export type NFCTemplate = 'modern' | 'minimal' | 'professional';
 export type Department = '3d' | 'digital';
 export type SavingStep = 'idle' | 'screenshot' | 'upload' | 'db' | 'done';
 
 export type StampValidation = 'pattern' | 'long_press' | 'daily_limit' | 'qr_code';
+export type ActionIcon = 'link' | 'globe' | 'shopping-cart' | 'info' | 'briefcase' | 'user' | 'star' | 'mail' | 'phone' | 'instagram' | 'utensils' | 'shield' | 'camera' | 'dumbbell' | 'heart' | 'cross' | 'zap';
+
+export type FontStyle = 'luxury' | 'modern' | 'elegant';
+export type ProfileTheme = 'light' | 'dark';
 
 export interface NFCBlock {
   id: string;
@@ -21,7 +25,7 @@ export interface NFCBlock {
     slots?: number;
     validationType?: StampValidation;
     secretPattern?: string;
-    secretKey?: string; // For QR Code validation
+    secretKey?: string;
     rewardText?: string;
     ssid?: string;
     password?: string;
@@ -30,7 +34,10 @@ export interface NFCBlock {
     linkedin?: string;
     name?: string;
     phone?: string;
-    message?: string; // WhatsApp default message
+    message?: string;
+    icon?: ActionIcon;
+    buttonLabel?: string;
+    description?: string;
   };
 }
 
@@ -49,10 +56,16 @@ export interface ModelConfig {
   hasChain: boolean;
   eyeletPosX: number;
   eyeletPosY: number;
-  // NFC Department
   nfcTemplate: NFCTemplate;
   nfcBlocks: NFCBlock[];
   shopifyUrl?: string;
+  // Digital Profile Customization
+  profileTitle: string;
+  profileIcon: ActionIcon;
+  headerImageUrl?: string;
+  accentColor: string;
+  fontStyle: FontStyle;
+  theme: ProfileTheme;
 }
 
 export interface SVGPathData {

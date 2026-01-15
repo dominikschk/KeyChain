@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType, Department, StampValidation } from '../types';
-import { Maximize2, Move, RotateCw, Box, Type, Layers, Plus, Minus, Upload, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Loader2, Sparkles, Sliders, Instagram, Linkedin, MapPin, Award, ShoppingCart, Info, Globe, ShieldCheck, Key, Fingerprint, Clock, QrCode, MessageCircle } from 'lucide-react';
+import { ModelConfig, SVGPathData, BaseType, NFCBlock, MagicButtonType, Department, ActionIcon, FontStyle, ProfileTheme } from '../types';
+import { Box, Type, Plus, Minus, Trash2, Smartphone, Wifi, Star, GripVertical, ChevronDown, Link as LinkIcon, Image as ImageIcon, Briefcase, Zap, Sliders, Award, MessageCircle, MapPin, Globe, ShoppingCart, Info, User, Mail, Phone, Loader2, ChevronUp, Instagram, Utensils, Sparkles, Shield, Layout, Camera, Dumbbell, Heart, Activity, Palette, Sun, Moon, Scissors, Coffee, Stethoscope, Hammer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ControlsProps {
@@ -13,43 +13,29 @@ interface ControlsProps {
   onUpdateColor: (id: string, color: string) => void;
 }
 
-const ControlGroup: React.FC<{ label: string, value: number, min: number, max: number, step?: number, onChange: (v: number) => void, icon: React.ReactNode }> = ({ label, value, min, max, step = 1, onChange, icon }) => (
-  <div className="bg-white border border-navy/5 p-6 rounded-2xl space-y-5 shadow-sm hover:border-petrol/20 transition-all">
-    <div className="flex justify-between items-center">
-      <div className="flex items-center gap-3 text-petrol">
-        <div className="p-2 bg-cream rounded-xl">{icon}</div>
-        <span className="text-[10px] font-black uppercase tracking-widest text-navy/40">{label}</span>
-      </div>
-      <span className="text-[11px] font-mono font-black bg-cream px-3 py-1 rounded-full text-petrol">{value.toFixed(step < 1 ? 1 : 0)}</span>
+const IconSelector: React.FC<{ selected: ActionIcon, onSelect: (i: ActionIcon) => void }> = ({ selected, onSelect }) => {
+  const icons: { id: ActionIcon, icon: any }[] = [
+    { id: 'briefcase', icon: Briefcase }, { id: 'utensils', icon: Utensils }, { id: 'camera', icon: Camera },
+    { id: 'dumbbell', icon: Dumbbell }, { id: 'link', icon: LinkIcon }, { id: 'globe', icon: Globe }, 
+    { id: 'shopping-cart', icon: ShoppingCart }, { id: 'info', icon: Info }, { id: 'user', icon: User }, 
+    { id: 'star', icon: Star }, { id: 'mail', icon: Mail }, { id: 'phone', icon: Phone }, 
+    { id: 'instagram', icon: Instagram }, { id: 'shield', icon: Shield }, { id: 'heart', icon: Heart },
+    { id: 'zap', icon: Zap }
+  ];
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {icons.map(i => (
+        <button key={i.id} onClick={() => onSelect(i.id)} className={`p-2.5 rounded-xl flex items-center justify-center border transition-all ${selected === i.id ? 'bg-petrol text-white border-petrol shadow-lg scale-105' : 'bg-white border-navy/5 text-zinc-400 hover:border-petrol/30'}`}>
+          <i.icon size={16} />
+        </button>
+      ))}
     </div>
-    <div className="flex items-center gap-5 px-1">
-      <button onClick={() => onChange(Math.max(min, value - step))} className="w-10 h-10 flex items-center justify-center bg-cream rounded-xl hover:bg-navy/5 transition-colors"><Minus size={16}/></button>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="flex-1 h-1.5 accent-petrol bg-zinc-100 rounded-full appearance-none cursor-pointer" />
-      <button onClick={() => onChange(Math.min(max, value + step))} className="w-10 h-10 flex items-center justify-center bg-cream rounded-xl hover:bg-navy/5 transition-colors"><Plus size={16}/></button>
-    </div>
-  </div>
-);
+  );
+};
 
 const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock>) => void, onDelete: () => void }> = ({ block, onUpdate, onDelete }) => {
   const [expanded, setExpanded] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !supabase) return;
-    setIsUploading(true);
-    try {
-      const fileName = `microsite_${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-      const { error } = await supabase.storage.from('nudaim').upload(fileName, file);
-      if (error) throw error;
-      const { data } = supabase.storage.from('nudaim').getPublicUrl(fileName);
-      onUpdate({ imageUrl: data.publicUrl });
-    } catch (err) {
-      console.error("Upload failed", err);
-    } finally {
-      setIsUploading(false);
-    }
-  };
 
   const getIcon = () => {
     if (block.type === 'text') return <Type size={18}/>;
@@ -58,92 +44,91 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
       case 'stamp_card': return <Award size={18} className="text-petrol" />;
       case 'review': return <Star size={18} className="text-yellow-500" />;
       case 'wifi': return <Wifi size={18} className="text-blue-500" />;
+      case 'google_profile': return <MapPin size={18} className="text-red-500" />;
       case 'whatsapp': return <MessageCircle size={18} className="text-emerald-500" />;
-      case 'social_loop': return <Instagram size={18} className="text-pink-500" />;
-      default: return <Zap size={18}/>;
+      case 'instagram': return <Instagram size={18} className="text-pink-500" />;
+      default: return <LinkIcon size={18} className="text-petrol" />;
     }
   };
 
   return (
-    <div className="bg-white border border-navy/5 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
-      <div className="p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <GripVertical size={14} className="text-zinc-200 cursor-grab" />
-          <div className="p-2 bg-cream rounded-xl text-petrol">
+    <div className={`transition-all duration-300 ${expanded ? 'bg-white ring-2 ring-petrol shadow-2xl scale-[1.02] z-10' : 'bg-white/50 border border-navy/5 shadow-sm'} rounded-[2rem] overflow-hidden`}>
+      <div onClick={() => setExpanded(!expanded)} className="p-5 flex items-center justify-between cursor-pointer group">
+        <div className="flex items-center gap-4">
+          <GripVertical size={14} className="text-zinc-200 group-hover:text-petrol transition-colors" />
+          <div className="p-3 bg-cream rounded-2xl text-petrol">
             {getIcon()}
           </div>
           <div className="flex flex-col">
             <span className="text-[10px] font-black uppercase tracking-widest text-navy">
-              {block.buttonType === 'stamp_card' ? 'Treuekarte' : block.buttonType === 'whatsapp' ? 'WhatsApp' : (block.buttonType || block.type)}
+              {block.type === 'text' ? 'Fließtext' : block.type === 'image' ? 'Bild / Foto' : (block.buttonType === 'custom_link' ? 'Button' : block.buttonType)}
             </span>
-            <span className="text-[9px] text-zinc-400 truncate max-w-[150px] font-bold">{block.title || block.content || 'Einstellen...'}</span>
+            <span className="text-[9px] text-zinc-400 font-bold truncate max-w-[160px]">{block.title || block.content || 'Inhalt bearbeiten...'}</span>
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => setExpanded(!expanded)} className={`p-2 transition-transform ${expanded ? 'rotate-180' : ''}`}><ChevronDown size={18}/></button>
-          <button onClick={onDelete} className="p-2 text-red-200 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
+          <button className={`p-2 transition-transform duration-300 ${expanded ? 'rotate-180 text-petrol' : 'text-zinc-300'}`}><ChevronDown size={20}/></button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 text-zinc-200 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
         </div>
       </div>
       
       {expanded && (
-        <div className="p-6 border-t border-navy/5 bg-cream/20 space-y-5 animate-in slide-in-from-top-2">
-          <div className="space-y-2">
-            <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Titel / Name</label>
-            <input type="text" value={block.title || ''} onChange={e => onUpdate({ title: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" placeholder="z.B. Schreib mir" />
-          </div>
-
-          {block.buttonType === 'whatsapp' && (
-            <>
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Telefonnummer</label>
-                <input type="text" value={block.content} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" placeholder="z.B. +491701234567" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Vorausgefüllter Text (optional)</label>
-                <textarea value={block.settings?.message || ''} onChange={e => onUpdate({ settings: { ...block.settings, message: e.target.value } })} className="w-full p-4 rounded-xl border border-navy/5 text-xs h-16 bg-white resize-none font-medium" placeholder="Hallo! Ich habe eine Frage zu..." />
-              </div>
-            </>
-          )}
-
-          {block.buttonType === 'stamp_card' && (
-            <>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Anzahl Stempel</label>
-                  <input type="number" min="1" max="15" value={block.settings?.slots || 10} onChange={e => onUpdate({ settings: { ...block.settings, slots: parseInt(e.target.value) } })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">QR Secret Key</label>
-                  <input type="text" value={block.settings?.secretKey || 'NUDAIM-STAMP-123'} onChange={e => onUpdate({ settings: { ...block.settings, secretKey: e.target.value } })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-mono" placeholder="Z.B. MEINLADEN" />
-                </div>
-              </div>
-              <div className="p-4 bg-petrol/5 rounded-2xl border border-petrol/10 space-y-2">
-                <div className="flex items-center gap-2 text-petrol"><QrCode size={14}/><span className="text-[9px] font-black uppercase tracking-widest">Setup Info</span></div>
-                <p className="text-[9px] text-petrol/80 leading-relaxed font-medium">Kunden erhalten einen Stempel, wenn sie einen QR-Code scannen, der exakt den Text <strong>"{block.settings?.secretKey || 'NUDAIM-STAMP-123'}"</strong> enthält.</p>
-              </div>
-            </>
-          )}
-          
-          {block.type !== 'magic_button' && (
+        <div className="p-8 border-t border-navy/5 bg-cream/30 space-y-6 animate-in slide-in-from-top-4 duration-300">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Inhalt / Text</label>
-              <textarea value={block.content} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs h-24 bg-white resize-none font-medium leading-relaxed" placeholder="Beschreibe dein Angebot..." />
+              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Überschrift</label>
+              <input type="text" value={block.title || ''} onChange={e => onUpdate({ title: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-black" placeholder="Titel des Elements" />
             </div>
-          )}
 
-          {block.type === 'image' && (
-            <div className="space-y-3">
-              <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Bild Upload</label>
-              <div className="relative h-40 rounded-3xl border-2 border-dashed border-navy/5 bg-white flex flex-col items-center justify-center gap-2 group cursor-pointer hover:border-petrol/30 transition-all overflow-hidden">
-                {block.imageUrl ? (
-                  <img src={block.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:scale-110 transition-transform" />
-                ) : (
-                  isUploading ? <Loader2 size={28} className="animate-spin text-petrol" /> : <div className="flex flex-col items-center gap-2 text-zinc-300"><ImageIcon size={32} strokeWidth={1} /><span className="text-[8px] font-black tracking-widest uppercase">Bild hierher ziehen</span></div>
-                )}
-                <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+            {block.type === 'text' && (
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Inhalt / Nachricht</label>
+                <textarea value={block.content} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs h-32 bg-white resize-none font-medium leading-relaxed" placeholder="Dein Text hier..." />
               </div>
-            </div>
-          )}
+            )}
+
+            {block.type === 'image' && (
+              <div className="space-y-4">
+                <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Medien-Datei</label>
+                <div className="relative h-48 rounded-[2rem] border-2 border-dashed border-navy/10 bg-white flex flex-col items-center justify-center gap-2 group cursor-pointer hover:border-petrol/30 transition-all overflow-hidden shadow-inner">
+                  {block.imageUrl ? (
+                    <img src={block.imageUrl} className="absolute inset-0 w-full h-full object-cover" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-zinc-300">
+                      {isUploading ? <Loader2 className="animate-spin text-petrol" /> : <Plus size={32} strokeWidth={1.5} />}
+                      <span className="text-[8px] font-black uppercase">Foto auswählen</span>
+                    </div>
+                  )}
+                  <input type="file" accept="image/*" onChange={async (e) => {
+                     const file = e.target.files?.[0]; if(!file) return;
+                     setIsUploading(true);
+                     const { data } = await supabase.storage.from('nudaim').upload(`img_${Date.now()}_${file.name}`, file);
+                     if(data) {
+                       const { data: { publicUrl } } = supabase.storage.from('nudaim').getPublicUrl(data.path);
+                       onUpdate({ imageUrl: publicUrl });
+                     }
+                     setIsUploading(false);
+                  }} className="absolute inset-0 opacity-0 cursor-pointer" />
+                </div>
+              </div>
+            )}
+
+            {(block.type === 'magic_button' || block.buttonType) && (
+              <div className="space-y-6 pt-2">
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Ziel / URL / Wert</label>
+                  <input type="text" value={block.content} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-white font-bold" placeholder="z.B. https://..." />
+                </div>
+                
+                {block.buttonType === 'custom_link' && (
+                  <div className="space-y-3">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Button Icon</label>
+                    <IconSelector selected={block.settings?.icon || 'link'} onSelect={i => onUpdate({ settings: { ...block.settings, icon: i } })} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -151,115 +136,282 @@ const NFCBlockEditor: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock
 };
 
 export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfig, svgElements, onUpload, onUpdateColor }) => {
-  const [active3dTab, setActive3dTab] = useState<'shape' | 'logo' | 'style'>('shape');
+  const [showAllTemplates, setShowAllTemplates] = useState(false);
+  const [showAllMagicButtons, setShowAllMagicButtons] = useState(false);
+  const [showAllBlocks, setShowAllBlocks] = useState(false);
+
   const updateConfig = (key: keyof ModelConfig, val: any) => setConfig(prev => ({ ...prev, [key]: val }));
+
+  const templates = [
+    {
+      id: 're', label: 'Immobilien', icon: <Globe size={20} />, company: 'RE/MAX Agent',
+      action: () => {
+        const blocks: NFCBlock[] = [
+          { id: 're-text', type: 'text', title: 'EXPOSÉ VORSCHAU', content: 'Scannen Sie für alle Details und den 360° Rundgang dieser Immobilie.' },
+          { id: 're-btn-tour', type: 'magic_button', buttonType: 'custom_link', title: 'Virtuelle Tour', content: 'https://matterport.com/demo', settings: { icon: 'globe' } },
+          { id: 're-btn-wa', type: 'magic_button', buttonType: 'whatsapp', title: 'Besichtigung anfragen', content: '+49123456789' }
+        ];
+        setConfig(prev => ({ ...prev, profileTitle: 'IMMOBILIEN AGENT', profileIcon: 'briefcase', headerImageUrl: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&q=80&w=1200', nfcBlocks: blocks, accentColor: '#11235A' }));
+      }
+    },
+    {
+      id: 'res', label: 'Gastronomie', icon: <Utensils size={20} />, company: 'Ristorante Hub',
+      action: () => {
+        const blocks: NFCBlock[] = [
+          { id: 'res-text', type: 'text', title: 'BENVENUTI', content: 'Genießen Sie unsere hausgemachte Pasta und Weine.' },
+          { id: 'res-btn-menu', type: 'magic_button', buttonType: 'custom_link', title: 'Speisekarte (PDF)', content: 'https://example.com/menu.pdf', settings: { icon: 'utensils' } },
+          { id: 'res-btn-wifi', type: 'magic_button', buttonType: 'wifi', title: 'Gäste-WLAN', content: '', settings: { ssid: 'Guest_WLAN', password: 'Pasta' } }
+        ];
+        setConfig(prev => ({ ...prev, profileTitle: 'RISTORANTE BELLA', profileIcon: 'utensils', headerImageUrl: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&q=80&w=1200', nfcBlocks: blocks, accentColor: '#006699' }));
+      }
+    },
+    {
+        id: 'cafe', label: 'Café & Bäckerei', icon: <Utensils size={20} />, company: 'The Morning Brew',
+        action: () => {
+          const blocks: NFCBlock[] = [
+            { id: 'c-img', type: 'image', title: 'Morning Specials', content: '', imageUrl: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=800' },
+            { id: 'c-btn-stamps', type: 'magic_button', buttonType: 'stamp_card', title: '10. Kaffee gratis', content: '', settings: { slots: 10, secretKey: 'BREW' } },
+            { id: 'c-btn-wifi', type: 'magic_button', buttonType: 'wifi', title: 'Coworking WLAN', content: '', settings: { ssid: 'MorningBrew_WiFi', password: 'Coffee' } }
+          ];
+          setConfig(prev => ({ ...prev, profileTitle: 'MORNING BREW', profileIcon: 'utensils', headerImageUrl: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&q=80&w=1200', nfcBlocks: blocks, accentColor: '#6F4E37' }));
+        }
+    },
+    {
+      id: 'hw', label: 'Handwerk', icon: <Shield size={20} />, company: 'Elektro Schmidt',
+      action: () => {
+        const blocks: NFCBlock[] = [
+          { id: 'hw-text', type: 'text', title: 'MEISTERBETRIEB', content: 'Qualität seit 1990. Ihr Partner für moderne Installationen.' },
+          { id: 'hw-btn-wa', type: 'magic_button', buttonType: 'whatsapp', title: 'Direkt-Anfrage', content: '+49123456789' },
+          { id: 'hw-btn-rev', type: 'magic_button', buttonType: 'review', title: 'Bewertungen', content: 'https://google.com' }
+        ];
+        setConfig(prev => ({ ...prev, profileTitle: 'ELEKTRO SCHMIDT', profileIcon: 'shield', headerImageUrl: 'https://images.unsplash.com/photo-1581092921461-7d65697c4a24?auto=format&fit=crop&q=80&w=1200', nfcBlocks: blocks, accentColor: '#12A9E0' }));
+      }
+    },
+    {
+        id: 'medical', label: 'Medizin/Health', icon: <Heart size={20} />, company: 'Praxis Dr. Vital',
+        action: () => {
+          const blocks: NFCBlock[] = [
+            { id: 'm-text', type: 'text', title: 'HERZLICH WILLKOMMEN', content: 'Ihre Gesundheit ist unser Anliegen. Termine online buchen.' },
+            { id: 'm-btn-book', type: 'magic_button', buttonType: 'custom_link', title: 'Termin buchen', content: 'https://doctolib.de', settings: { icon: 'user' } },
+            { id: 'm-btn-call', type: 'magic_button', buttonType: 'custom_link', title: 'Notfall-Kontakt', content: 'tel:+4912345678', settings: { icon: 'phone' } }
+          ];
+          setConfig(prev => ({ ...prev, profileTitle: 'DR. VITAL PRAXIS', profileIcon: 'heart', headerImageUrl: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=1200', nfcBlocks: blocks, accentColor: '#0D9488' }));
+        }
+    },
+    {
+        id: 'barber', label: 'Barber & Cut', icon: <Camera size={20} />, company: 'Gentleman\'s Club',
+        action: () => {
+          const blocks: NFCBlock[] = [
+            { id: 'b-img', type: 'image', title: 'Latest Styles', content: '', imageUrl: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&q=80&w=800' },
+            { id: 'b-btn-book', type: 'magic_button', buttonType: 'custom_link', title: 'Nächster Schnitt', content: 'https://shore.com', settings: { icon: 'camera' } },
+            { id: 'b-btn-insta', type: 'magic_button', buttonType: 'instagram', title: '@gentlemans_barber', content: '@gentlemans_barber' }
+          ];
+          setConfig(prev => ({ ...prev, profileTitle: 'BARBER CLUB', profileIcon: 'camera', headerImageUrl: 'https://images.unsplash.com/photo-1516733725897-1aa73b87c8e8?auto=format&fit=crop&q=80&w=1200', nfcBlocks: blocks, accentColor: '#1C1C1C' }));
+        }
+    },
+    {
+        id: 'artisan', label: 'Manufaktur', icon: <Zap size={20} />, company: 'Holzkunst Müller',
+        action: () => {
+          const blocks: NFCBlock[] = [
+            { id: 'a-text', type: 'text', title: 'ECHTES HANDWERK', content: 'Jedes Stück ein Unikat. Handgefertigt im Schwarzwald.' },
+            { id: 'a-btn-shop', type: 'magic_button', buttonType: 'custom_link', title: 'Etsy Shop', content: 'https://etsy.com', settings: { icon: 'shopping-cart' } },
+            { id: 'a-btn-insta', type: 'magic_button', buttonType: 'instagram', title: 'Arbeitsschritte', content: '@holzkunst_muller' }
+          ];
+          setConfig(prev => ({ ...prev, profileTitle: 'MÜLLER KUNST', profileIcon: 'zap', headerImageUrl: 'https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&q=80&w=1200', nfcBlocks: blocks, accentColor: '#78350F' }));
+        }
+    },
+    {
+      id: 'beauty', label: 'Beauty Salon', icon: <Heart size={20} />, company: 'Skin & Glow Spa',
+      action: () => {
+        const blocks: NFCBlock[] = [
+          { id: 'b-img', type: 'image', title: 'Wellness', content: '', imageUrl: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&q=80&w=800' },
+          { id: 'b-btn-book', type: 'magic_button', buttonType: 'custom_link', title: 'Termin buchen', content: 'https://treatwell.de', settings: { icon: 'heart' } },
+          { id: 'b-btn-insta', type: 'magic_button', buttonType: 'instagram', title: '@skin_glow_spa', content: '@skin_glow' }
+        ];
+        setConfig(prev => ({ ...prev, profileTitle: 'SKIN & GLOW SPA', profileIcon: 'heart', headerImageUrl: 'https://images.unsplash.com/photo-1522335789183-b11407384377?auto=format&fit=crop&q=80&w=1200', nfcBlocks: blocks, accentColor: '#D4AF37' }));
+      }
+    },
+    {
+        id: 'fitness', label: 'Fitness Hub', icon: <Dumbbell size={20} />, company: 'Peak Performance',
+        action: () => {
+          const blocks: NFCBlock[] = [
+            { id: 'gym-text', type: 'text', title: 'BE THE BEST', content: 'Dein Training auf dem nächsten Level. Starte heute.' },
+            { id: 'gym-btn-wa', type: 'magic_button', buttonType: 'whatsapp', title: 'Probetraining', content: '+49123456789' },
+            { id: 'gym-btn-insta', type: 'magic_button', buttonType: 'instagram', title: '@peak_gym', content: '@peak_performance' }
+          ];
+          setConfig(prev => ({ ...prev, profileTitle: 'PEAK FITNESS', profileIcon: 'dumbbell', headerImageUrl: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&q=80&w=1200', nfcBlocks: blocks, accentColor: '#ff4d4d' }));
+        }
+    }
+  ];
+
+  const magicButtons = [
+    { id: 'review', label: 'Google Rezension', icon: <Star size={24} fill="currentColor" />, colorClass: 'text-yellow-500 bg-yellow-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Bewerten', content: 'https://google.com' }]) },
+    { id: 'whatsapp', label: 'WhatsApp Chat', icon: <MessageCircle size={24}/>, colorClass: 'text-emerald-500 bg-emerald-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'whatsapp', title: 'WhatsApp', content: '' }]) },
+    { id: 'instagram', label: 'Instagram', icon: <Instagram size={24}/>, colorClass: 'text-pink-500 bg-pink-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'instagram', title: 'Instagram', content: '@name' }]) },
+    { id: 'wifi', label: 'WLAN Login', icon: <Wifi size={24}/>, colorClass: 'text-blue-500 bg-blue-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'wifi', title: 'Gäste-WLAN', content: '', settings: { ssid: '', password: '' } }]) },
+    { id: 'stamps', label: 'Stempelkarte', icon: <Award size={24}/>, colorClass: 'text-petrol bg-cream', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Treuekarte', content: '', settings: { slots: 10, secretKey: 'SECRET' } }]) },
+    { id: 'google', label: 'Maps Standort', icon: <MapPin size={24}/>, colorClass: 'text-red-500 bg-red-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'google_profile', title: 'Anfahrt', content: 'https://goo.gl/maps' }]) },
+    { id: 'link', label: 'Smart Button', icon: <LinkIcon size={24}/>, colorClass: 'text-navy bg-zinc-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'custom_link', title: 'Webseite', content: 'https://', settings: { icon: 'link' } }]) }
+  ];
+
+  const designColors = ['#006699', '#12A9E0', '#11235A', '#ff4d4d', '#2ecc71', '#d4af37', '#000000', '#0D9488', '#78350F'];
+  const fontOptions: { id: FontStyle, label: string }[] = [
+    { id: 'luxury', label: 'Luxury (Serif + Sans)' },
+    { id: 'modern', label: 'Modern (Full Sans)' },
+    { id: 'elegant', label: 'Elegant (Classic Serif)' }
+  ];
 
   if (activeDept === '3d') {
     return (
-      <div className="space-y-10 animate-in slide-in-from-left duration-700">
-        <nav className="flex gap-2 bg-cream p-1 rounded-2xl border border-navy/5 shadow-inner">
-          {[
-            { id: 'shape', label: 'Basis', icon: <Box size={14}/> },
-            { id: 'logo', label: 'Logo', icon: <Type size={14}/> },
-            { id: 'style', label: 'Anpassung', icon: <Sliders size={14}/> }
-          ].map(t => (
-            <button key={t.id} onClick={() => setActive3dTab(t.id as any)} className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${active3dTab === t.id ? 'bg-white shadow-md text-petrol' : 'text-zinc-400'}`}>
-              {t.icon} {t.label}
-            </button>
-          ))}
-        </nav>
-
-        {active3dTab === 'shape' && (
-          <div className="grid grid-cols-2 gap-4">
-            {(['keychain', 'circle', 'rect'] as BaseType[]).map((t) => (
-              <button key={t} onClick={() => updateConfig('baseType', t)} className={`p-8 rounded-[30px] border-2 transition-all flex flex-col items-center gap-4 ${config.baseType === t ? 'border-petrol bg-white shadow-2xl scale-105' : 'border-transparent bg-white opacity-60 hover:opacity-100'}`}>
-                <div className={`p-4 rounded-2xl ${config.baseType === t ? 'bg-petrol text-white' : 'bg-cream text-zinc-300'}`}><Box size={28} /></div>
-                <span className="text-[10px] font-black uppercase tracking-widest">{t}</span>
-              </button>
-            ))}
-            <div className="col-span-2 bg-white p-6 rounded-3xl border border-navy/5 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-3"><div className="p-2 bg-cream rounded-xl text-petrol"><Layers size={16}/></div><span className="text-[10px] font-black uppercase tracking-widest text-navy">Öse für Kette</span></div>
-              <button onClick={() => updateConfig('hasChain', !config.hasChain)} className={`w-14 h-7 rounded-full relative transition-all ${config.hasChain ? 'bg-petrol' : 'bg-zinc-200'}`}>
-                <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${config.hasChain ? 'left-8' : 'left-1'}`} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {active3dTab === 'logo' && (
+      <div className="space-y-10 animate-in slide-in-from-left h-full overflow-y-auto pb-12 custom-scrollbar">
+        <div className="bg-navy p-6 rounded-[2.5rem] text-white">
+          <p className="text-[10px] font-black uppercase tracking-widest text-action mb-2">Technical Preview</p>
+          <p className="text-xs font-medium leading-relaxed">Massives 40x40mm Design mit verstärktem Eyelet für maximale Haltbarkeit im 3D-Druck.</p>
+        </div>
+        <div className="space-y-6">
+           <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 px-2">Logo Upload (SVG)</label>
+           <div className="relative h-32 rounded-3xl border-2 border-dashed border-navy/5 bg-white flex flex-col items-center justify-center gap-2 group cursor-pointer hover:border-petrol/30 transition-all overflow-hidden shadow-sm">
+              <ImageIcon size={32} className="text-zinc-200" />
+              <input type="file" accept=".svg" onChange={onUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+           </div>
+        </div>
+        {svgElements && (
           <div className="space-y-6">
-            <div className="relative h-64 border-2 border-dashed border-navy/10 rounded-[40px] flex flex-col items-center justify-center gap-8 bg-white shadow-inner group cursor-pointer hover:border-petrol/40 transition-all overflow-hidden">
-               <div className="absolute inset-0 bg-gradient-to-br from-petrol/5 to-action/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-               <div className="w-20 h-20 bg-cream text-petrol rounded-full flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform relative z-10"><Upload size={40} className="opacity-40" /></div>
-               <input type="file" accept=".svg" onChange={onUpload} className="absolute inset-0 opacity-0 cursor-pointer z-20" />
-               <div className="text-center relative z-10">
-                  <p className="text-xs font-black uppercase tracking-widest text-navy mb-1">Upload SVG Logo</p>
-                  <p className="text-[9px] text-zinc-400 font-medium">SVG für 3D Extrusion</p>
-               </div>
+            <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 px-2">Logo Farbe</label>
+            <div className="flex flex-wrap gap-3">
+              {designColors.map(c => (
+                <button key={c} onClick={() => updateConfig('logoColor', c)} className={`w-10 h-10 rounded-full border-4 transition-all ${config.logoColor === c ? 'border-navy scale-110 shadow-lg' : 'border-white'}`} style={{ backgroundColor: c }} />
+              ))}
             </div>
-            {svgElements && (
-              <div className="grid grid-cols-1 gap-4">
-                <ControlGroup label="Skalierung" value={config.logoScale} min={0.1} max={2.5} step={0.05} onChange={v => updateConfig('logoScale', v)} icon={<Maximize2 size={16}/>}/>
-                <ControlGroup label="Dicke (3D)" value={config.logoDepth} min={0.5} max={10} step={0.5} onChange={v => updateConfig('logoDepth', v)} icon={<Layers size={16}/>}/>
-              </div>
-            )}
-          </div>
-        )}
-
-        {active3dTab === 'style' && (
-          <div className="space-y-4">
-            <ControlGroup label="X Position" value={config.logoPosX} min={-30} max={30} onChange={v => updateConfig('logoPosX', v)} icon={<Move size={16}/>}/>
-            <ControlGroup label="Y Position" value={config.logoPosY} min={-30} max={30} onChange={v => updateConfig('logoPosY', v)} icon={<Move size={16}/>}/>
-            <ControlGroup label="Rotation" value={config.logoRotation} min={0} max={360} step={15} onChange={v => updateConfig('logoRotation', v)} icon={<RotateCw size={16}/>}/>
           </div>
         )}
       </div>
     );
   }
 
+  const visibleTemplates = showAllTemplates ? templates : templates.slice(0, 4);
+  const visibleMagicButtons = showAllMagicButtons ? magicButtons : magicButtons.slice(0, 4);
+  const visibleBlocks = showAllBlocks ? config.nfcBlocks : config.nfcBlocks.slice(0, 4);
+
   return (
-    <div className="space-y-12 animate-in slide-in-from-right duration-700 pb-12">
+    <div className="space-y-12 animate-in slide-in-from-right h-full overflow-y-auto pb-24 custom-scrollbar">
       <section className="bg-navy p-7 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
-        <div className="absolute -right-4 -top-4 w-32 h-32 bg-action/20 blur-3xl group-hover:bg-action/30 transition-all" />
-        <div className="flex items-center gap-3 mb-4 relative z-10">
-          <div className="p-2 bg-white/10 rounded-xl"><ShieldCheck size={18} className="text-action" /></div>
-          <span className="text-[11px] font-black uppercase tracking-[0.2em] italic">NFeC Ecosystem</span>
-        </div>
-        <div className="space-y-3 relative z-10">
-          <p className="text-[12px] font-bold text-white leading-relaxed">Physischer 3D-Druck trifft Cloud-Profil.</p>
-        </div>
+        <span className="text-[11px] font-black uppercase tracking-[0.2em] italic text-action">Digital Studio</span>
+        <p className="text-[12px] font-bold mt-2 leading-relaxed">Personalisiere dein interaktives Business-Erlebnis.</p>
       </section>
 
-      <section className="space-y-6">
-        <div className="flex items-center justify-between px-2">
-           <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 flex items-center gap-3"><Plus size={14} className="text-petrol"/> Magic Buttons</label>
+      {/* 1. DESIGN & TYPO */}
+      <section className="bg-white border border-navy/5 p-7 rounded-[2.5rem] space-y-8 shadow-sm">
+        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-zinc-400">
+            <Palette size={14} className="text-petrol" /> Design & Typografie
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'stamp_card', title: 'Treuekarte', content: '', settings: { slots: 10, validationType: 'qr_code', secretKey: 'NUDAIM-STAMP-123', rewardText: 'Ein Gratis-Kaffee!' } }])} className="p-6 bg-white border border-navy/5 rounded-3xl flex flex-col items-center gap-3 hover:border-petrol/20 hover:shadow-xl transition-all group active:scale-95 shadow-sm">
-            <div className="w-12 h-12 bg-cream rounded-2xl flex items-center justify-center text-petrol group-hover:bg-petrol group-hover:text-white transition-all"><Award size={24} /></div>
-            <span className="text-[9px] font-black uppercase tracking-tighter">Loyalty</span>
-          </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'whatsapp', title: 'Schreib mir', content: '+49', settings: { message: 'Hallo!' } }])} className="p-6 bg-white border border-navy/5 rounded-3xl flex flex-col items-center gap-3 hover:border-petrol/20 hover:shadow-xl transition-all group active:scale-95 shadow-sm">
-            <div className="w-12 h-12 bg-cream rounded-2xl flex items-center justify-center text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white transition-all"><MessageCircle size={24} /></div>
-            <span className="text-[9px] font-black uppercase tracking-tighter">WhatsApp</span>
-          </button>
-          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Google Rezension', content: 'https://search.google.com/local/writereview?placeid=' }])} className="p-6 bg-white border border-navy/5 rounded-3xl flex flex-col items-center gap-3 hover:border-petrol/20 hover:shadow-xl transition-all group active:scale-95 shadow-sm">
-            <div className="w-12 h-12 bg-cream rounded-2xl flex items-center justify-center text-yellow-500 group-hover:bg-yellow-500 group-hover:text-white transition-all"><Star size={24} /></div>
-            <span className="text-[9px] font-black uppercase tracking-tighter">Review</span>
-          </button>
-        </div>
-      </section>
-
-      <section className="space-y-5">
-        <div className="flex items-center justify-between px-2">
-          <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">Profil Inhalt</label>
-          <div className="flex gap-2">
-             <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'text', title: 'Neu', content: 'Hier Text einfügen...' }])} className="p-2 bg-white border border-navy/5 rounded-xl hover:text-petrol transition-colors"><Type size={14}/></button>
-             <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'image', title: 'Foto', content: '', imageUrl: '' }])} className="p-2 bg-white border border-navy/5 rounded-xl hover:text-petrol transition-colors"><ImageIcon size={14}/></button>
+        <div className="space-y-3">
+          <label className="text-[9px] font-black uppercase text-zinc-400 px-1">Markenfarbe</label>
+          <div className="flex flex-wrap gap-2.5">
+            {designColors.map(c => (
+              <button key={c} onClick={() => updateConfig('accentColor', c)} className={`w-8 h-8 rounded-full border-2 transition-all ${config.accentColor === c ? 'border-navy scale-110 ring-2 ring-navy/10' : 'border-white'}`} style={{ backgroundColor: c }} />
+            ))}
           </div>
         </div>
-        <div className="space-y-4">
-          {config.nfcBlocks.map(block => (
+        <div className="space-y-3">
+          <label className="text-[9px] font-black uppercase text-zinc-400 px-1">Schriftart</label>
+          <div className="grid grid-cols-1 gap-2">
+            {fontOptions.map(f => (
+              <button key={f.id} onClick={() => updateConfig('fontStyle', f.id)} className={`p-4 rounded-2xl border text-[10px] font-bold text-left transition-all ${config.fontStyle === f.id ? 'bg-navy text-white border-navy shadow-md' : 'bg-cream text-zinc-500 border-navy/5 hover:border-petrol/30'}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center justify-between pt-2 border-t border-navy/5">
+            <label className="text-[9px] font-black uppercase text-zinc-400">Midnight Mode</label>
+            <button onClick={() => updateConfig('theme', config.theme === 'light' ? 'dark' : 'light')} className="w-14 h-8 bg-cream border border-navy/5 rounded-full relative flex items-center px-1 transition-all">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${config.theme === 'dark' ? 'translate-x-6 bg-navy text-white shadow-xl' : 'bg-white text-petrol shadow-sm'}`}>
+                    {config.theme === 'light' ? <Sun size={12}/> : <Moon size={12}/>}
+                </div>
+            </button>
+        </div>
+      </section>
+
+      {/* 2. SMART TEMPLATES */}
+      <section className="space-y-5">
+        <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 px-3 flex items-center gap-2">
+          <Sparkles size={12} className="text-petrol" /> Smart Templates
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          {visibleTemplates.map(t => (
+            <button key={t.id} onClick={t.action} className="p-5 bg-white border border-navy/5 rounded-[2rem] flex flex-col items-center gap-3 hover:border-petrol/30 transition-all group shadow-sm text-center active:scale-95">
+              <div className="text-petrol group-hover:scale-110 transition-transform bg-cream p-3 rounded-2xl">{t.icon}</div>
+              <div className="space-y-1">
+                <span className="text-[8px] font-black uppercase leading-tight block">{t.label}</span>
+                <span className="text-[6px] text-zinc-400 font-bold uppercase block tracking-tighter">{t.company}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+        {templates.length > 4 && (
+          <button onClick={() => setShowAllTemplates(!showAllTemplates)} className="w-full py-4 border border-dashed border-navy/10 rounded-2xl flex items-center justify-center gap-2 text-[9px] font-black uppercase text-zinc-400 hover:bg-cream transition-all group">
+            {showAllTemplates ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {showAllTemplates ? 'Templates einklappen' : `${templates.length - 4} weitere Templates`}
+          </button>
+        )}
+      </section>
+
+      {/* 3. BASIS INHALTE (NEU) */}
+      <section className="space-y-5">
+        <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 px-3">Basis Inhalte</label>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'text', title: 'Neuer Text', content: 'Inhalt hier einfügen...' }])} className="p-5 bg-white border border-navy/5 rounded-[2rem] flex flex-col items-center gap-3 hover:border-petrol/30 transition-all shadow-sm active:scale-95">
+             <div className="w-10 h-10 bg-cream rounded-xl flex items-center justify-center text-navy"><Type size={20}/></div>
+             <span className="text-[8px] font-black uppercase">Fließtext</span>
+          </button>
+          <button onClick={() => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'image', title: 'Galeriebild', content: '', imageUrl: '' }])} className="p-5 bg-white border border-navy/5 rounded-[2rem] flex flex-col items-center gap-3 hover:border-petrol/30 transition-all shadow-sm active:scale-95">
+             <div className="w-10 h-10 bg-cream rounded-xl flex items-center justify-center text-navy"><ImageIcon size={20}/></div>
+             <span className="text-[8px] font-black uppercase">Bild / Foto</span>
+          </button>
+        </div>
+      </section>
+
+      {/* 4. MAGIC BUTTONS */}
+      <section className="space-y-5">
+        <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 px-3">Interaktive Magic Buttons</label>
+        <div className="grid grid-cols-2 gap-3">
+          {visibleMagicButtons.map(btn => (
+            <button key={btn.id} onClick={btn.action} className={`p-6 bg-white border border-navy/5 rounded-[2.5rem] flex flex-col items-center gap-4 transition-all group shadow-sm hover:shadow-xl hover:scale-[1.02] active:scale-95`}>
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${btn.colorClass} shadow-inner`}>
+                {btn.icon}
+              </div>
+              <span className="text-[8px] font-black uppercase tracking-widest">{btn.label}</span>
+            </button>
+          ))}
+        </div>
+        {magicButtons.length > 4 && (
+          <button onClick={() => setShowAllMagicButtons(!showAllMagicButtons)} className="w-full py-4 border border-dashed border-navy/10 rounded-2xl flex items-center justify-center gap-2 text-[9px] font-black uppercase text-zinc-400 hover:bg-cream transition-all group">
+            {showAllMagicButtons ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {showAllMagicButtons ? 'Buttons einklappen' : `${magicButtons.length - 4} weitere Buttons`}
+          </button>
+        )}
+      </section>
+
+      <section className="bg-white border border-navy/5 p-7 rounded-[2.5rem] space-y-6 shadow-sm">
+        <div className="space-y-2">
+          <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 px-1">Profil Überschrift</label>
+          <input type="text" value={config.profileTitle} onChange={e => updateConfig('profileTitle', e.target.value)} className="w-full p-4 rounded-xl border border-navy/5 text-xs bg-cream font-black uppercase" placeholder="DEINE BRAND" />
+        </div>
+        <div className="space-y-3">
+          <label className="text-[9px] font-black uppercase tracking-widest text-zinc-400 px-1">Profil Logo Icon</label>
+          <IconSelector selected={config.profileIcon} onSelect={i => updateConfig('profileIcon', i)} />
+        </div>
+      </section>
+
+      {/* 5. INHALTS-REIHENFOLGE & DETAIL EDITING */}
+      <section className="space-y-6">
+        <label className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 px-3 flex items-center justify-between">
+          <span>Inhalts-Reihenfolge</span>
+          <span className="text-[8px] bg-navy text-white px-2.5 py-1 rounded-full">{config.nfcBlocks.length}</span>
+        </label>
+        <div className="space-y-5">
+          {visibleBlocks.map(block => (
             <NFCBlockEditor 
               key={block.id} block={block} 
               onUpdate={u => updateConfig('nfcBlocks', config.nfcBlocks.map(b => b.id === block.id ? {...b, ...u} : b))}
@@ -267,6 +419,12 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
             />
           ))}
         </div>
+        {config.nfcBlocks.length > 4 && (
+          <button onClick={() => setShowAllBlocks(!showAllBlocks)} className="w-full py-4 border border-dashed border-navy/10 rounded-2xl flex items-center justify-center gap-2 text-[9px] font-black uppercase text-zinc-400 hover:bg-cream transition-all group">
+            {showAllBlocks ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {showAllBlocks ? 'Liste einklappen' : `${config.nfcBlocks.length - 4} weitere Elemente`}
+          </button>
+        )}
       </section>
     </div>
   );
