@@ -4,7 +4,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NUDAIM3D | 3D Studio</title>
+    <title>NUDAIM3D | NFeC Studio - Dein digitales Ich in 3D</title>
+    <meta name="description" content="Personalisiere deine NFeC Card: 3D-Druck trifft auf High-Tech NFC Profile. Erstelle dein Profil in Sekunden.">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="NUDAIM3D | NFeC Studio">
+    <meta property="og:description" content="3D-Druck Customizer für NFC-Profile. Jetzt designen.">
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://esm.sh">
@@ -24,6 +31,16 @@
             fontFamily: {
               serif: ['"Playfair Display"', 'serif'],
               sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            },
+            animation: {
+              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'shimmer': 'shimmer 2s linear infinite',
+            },
+            keyframes: {
+              shimmer: {
+                '0%': { backgroundPosition: '-200% 0' },
+                '100%': { backgroundPosition: '200% 0' },
+              }
             }
           }
         }
@@ -51,11 +68,16 @@
       .custom-scrollbar::-webkit-scrollbar-thumb { background: #006699; border-radius: 10px; }
       .serif-headline { font-family: 'Playfair Display', serif; }
       
-      @keyframes spin-soft {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
+      @keyframes scan-line {
+        0% { transform: translateY(-100%); opacity: 0; }
+        50% { opacity: 1; }
+        100% { transform: translateY(100%); opacity: 0; }
       }
-      .soft-spin { animation: spin-soft 2s linear infinite; }
+      .animate-scan { animation: scan-line 2s linear infinite; }
+      
+      .stempel-glow {
+        box-shadow: 0 0 15px rgba(18, 169, 224, 0.3);
+      }
     </style>
     <script type="importmap">
 {
@@ -76,8 +98,8 @@
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.4",
     "jsqr": "https://esm.sh/jsqr@1.4.0",
     "qrcode": "https://esm.sh/qrcode@1.5.4",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "vite": "https://esm.sh/vite@^7.3.1"
   }
 }
 </script>
