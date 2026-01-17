@@ -1,11 +1,11 @@
 
 import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, ContactShadows, Text, Float } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import { ModelConfig, SVGPathData, ActionIcon } from '../types';
 import { BlockRenderer } from './Microsite';
-import { Globe, ShoppingCart, Info, Briefcase, User, Star, Mail, Phone, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Activity, Link as LinkIcon, Zap } from 'lucide-react';
+import { Globe, ShoppingCart, Info, Briefcase, User, Star, Mail, Phone, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Link as LinkIcon, Zap, Map as MapIcon, Clock, Calendar } from 'lucide-react';
 
 const getLucideIcon = (name?: ActionIcon, size = 20) => {
   switch (name) {
@@ -24,54 +24,55 @@ const getLucideIcon = (name?: ActionIcon, size = 20) => {
     case 'dumbbell': return <Dumbbell size={size} />;
     case 'heart': return <Heart size={size} />;
     case 'zap': return <Zap size={size} />;
+    case 'map': return <MapIcon size={size} />;
+    case 'clock': return <Clock size={size} />;
+    case 'calendar': return <Calendar size={size} />;
     default: return <LinkIcon size={size} />;
   }
 };
 
 const PhonePreview: React.FC<{ config: ModelConfig }> = ({ config }) => {
   const blocks = config.nfcBlocks || [];
-  const params = new URLSearchParams(window.location.search);
-  const currentId = params.get('id') || 'preview';
   const isDark = config.theme === 'dark';
   const fontClass = config.fontStyle === 'luxury' ? 'font-serif' : config.fontStyle === 'elegant' ? 'serif-headline' : 'font-sans';
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center p-6 z-[100] pointer-events-none animate-in fade-in zoom-in duration-500">
-      <div className="w-[min(320px,85vw)] aspect-[9/19] bg-zinc-950 rounded-[3rem] border-[8px] border-zinc-900 shadow-2xl relative pointer-events-auto overflow-hidden flex flex-col ring-1 ring-white/10">
-        <div className={`h-10 flex items-center justify-center pt-1 shrink-0 ${isDark ? 'bg-zinc-900' : 'bg-cream'}`}>
-          <div className="w-16 h-5 bg-zinc-900 rounded-2xl flex items-center justify-center border border-white/5">
-             <div className="w-1 h-1 rounded-full bg-white/10 mr-2" />
-             <div className="w-6 h-1 rounded-full bg-white/20" />
-          </div>
+    <div className="absolute inset-0 z-[300] bg-white/40 backdrop-blur-md overflow-y-auto pt-10 pb-24 md:py-12 px-6 flex flex-col items-center">
+      <div className="w-full max-w-[280px] md:max-w-[340px] aspect-[9/18.5] bg-zinc-950 rounded-[3rem] border-[8px] border-zinc-900 shadow-[0_50px_100px_rgba(0,0,0,0.5)] relative flex flex-col ring-1 ring-white/10 shrink-0 overflow-hidden">
+        {/* Notch Area */}
+        <div className={`h-7 flex items-center justify-center pt-1 shrink-0 ${isDark ? 'bg-zinc-900' : 'bg-cream'}`}>
+          <div className="w-16 h-4 bg-zinc-900 rounded-full flex items-center justify-center border border-white/5" />
         </div>
-        <div className={`flex-1 overflow-y-auto space-y-4 pb-12 custom-scrollbar ${isDark ? 'bg-zinc-950' : 'bg-cream'} ${fontClass}`}>
+        
+        {/* Screen Content */}
+        <div className={`flex-1 overflow-y-auto space-y-4 pb-16 scroll-container min-h-0 ${isDark ? 'bg-zinc-950 text-white' : 'bg-cream text-navy'} ${fontClass}`}>
            {config.headerImageUrl && (
-             <div className="w-full h-32 overflow-hidden mb-[-2rem] relative">
+             <div className="w-full h-28 overflow-hidden mb-[-1.5rem] relative shrink-0">
                 <img src={config.headerImageUrl} className="w-full h-full object-cover" alt="Cover" />
                 <div className={`absolute inset-0 bg-gradient-to-b from-transparent ${isDark ? 'to-zinc-950' : 'to-cream'}`} />
              </div>
            )}
-           <header className="flex flex-col items-center text-center space-y-3 pt-6 px-4">
-              <div className="w-20 h-20 bg-white rounded-3xl shadow-xl flex items-center justify-center border border-navy/5 relative z-10">
+           <header className="flex flex-col items-center text-center space-y-3 pt-6 px-5 shrink-0">
+              <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center border border-navy/5 relative z-10 transition-transform">
                 <div style={{ color: config.accentColor }}>
-                   {getLucideIcon(config.profileIcon, 36)}
+                   {getLucideIcon(config.profileIcon, 28)}
                 </div>
               </div>
-              <h1 className="serif-headline text-xl font-black italic uppercase px-4 leading-tight" style={{ color: isDark ? '#fff' : config.accentColor }}>
+              <h1 className="serif-headline text-base md:text-xl font-black italic uppercase px-4 leading-tight" style={{ color: isDark ? '#fff' : config.accentColor }}>
                 {config.profileTitle}
               </h1>
-              <p className="text-[7px] font-black uppercase tracking-[0.3em] opacity-40">Live Preview</p>
+              <div className="w-6 h-0.5 rounded-full bg-current opacity-10" />
            </header>
-           <div className="space-y-4 px-4">
+           <div className="space-y-4 px-5 pb-8">
               {blocks.map(block => (
-                <div key={block.id} className="scale-90 origin-top -mb-4">
-                   <BlockRenderer block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
-                </div>
+                 <BlockRenderer key={block.id} block={block} configId="preview" accentColor={config.accentColor} theme={config.theme} />
               ))}
            </div>
         </div>
-        <div className={`h-6 flex items-center justify-center shrink-0 ${isDark ? 'bg-zinc-950' : 'bg-cream'}`}>
-           <div className={`w-20 h-1 rounded-full ${isDark ? 'bg-white/10' : 'bg-navy/10'}`} />
+        
+        {/* Bottom Bar */}
+        <div className={`h-5 flex items-center justify-center shrink-0 ${isDark ? 'bg-zinc-950' : 'bg-cream'}`}>
+           <div className={`w-14 h-1 rounded-full ${isDark ? 'bg-white/10' : 'bg-navy/10'}`} />
         </div>
       </div>
     </div>
@@ -127,11 +128,6 @@ const BaseModel = forwardRef<THREE.Mesh, { config: ModelConfig, showNFC?: boolea
           </mesh>
         ))}
       </group>
-      {showNFC && (
-        <Float speed={4} rotationIntensity={0.2} floatIntensity={0.4}>
-          <Text position={[0, 22, 0]} fontSize={3} color={config.accentColor} font="https://fonts.gstatic.com/s/plusjakartasans/v8/L0xPDF4xlVqn-I7F9mp8968m_E5v.woff2" outlineWidth={0.08} outlineColor="#ffffff" anchorY="middle">SMART CONNECT</Text>
-        </Float>
-      )}
     </group>
   );
 });
@@ -143,7 +139,7 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
       const geo = new THREE.ExtrudeGeometry(el.shapes, { depth: config.logoDepth, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.05 });
       geo.scale(1, -1, 1);
       geo.rotateX(-Math.PI / 2);
-      return { geo, color: config.logoColor }; // Benutze config.logoColor für alle Elemente
+      return { geo, color: config.logoColor };
     });
   }, [elements, config.logoDepth, config.logoColor]);
 
@@ -190,16 +186,15 @@ export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { co
   }));
 
   return (
-    <div className="w-full h-full relative bg-cream">
+    <div className="w-full h-full relative bg-cream overflow-hidden">
       <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={(state) => { r3fState.current = { gl: state.gl, scene: state.scene, camera: state.camera }; }}>
-        <PerspectiveCamera makeDefault position={[0, 100, 100]} fov={35} />
-        <OrbitControls makeDefault enableDamping minDistance={35} maxDistance={250} maxPolarAngle={Math.PI/2.1} />
-        <ambientLight intensity={1.0} />
-        <spotLight position={[60, 120, 60]} angle={0.3} penumbra={1} intensity={3} castShadow />
-        <pointLight position={[-50, 30, -50]} intensity={2.5} color={config.accentColor} />
-        <BaseModel ref={plateRef} config={config} showNFC={showNFCPreview} />
+        <PerspectiveCamera makeDefault position={[0, 80, 80]} fov={40} />
+        <OrbitControls makeDefault enableDamping minDistance={30} maxDistance={200} maxPolarAngle={Math.PI/2.2} />
+        <ambientLight intensity={1.2} />
+        <spotLight position={[50, 100, 50]} angle={0.2} penumbra={1} intensity={2} castShadow />
+        <BaseModel ref={plateRef} config={config} />
         {svgElements && <LogoGroup elements={svgElements} config={config} plateRef={plateRef} />}
-        <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={100} blur={3} far={25} />
+        <ContactShadows position={[0, -0.01, 0]} opacity={0.3} scale={80} blur={2.5} far={20} />
       </Canvas>
       {showNFCPreview && <PhonePreview config={config} />}
     </div>

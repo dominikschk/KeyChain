@@ -3,14 +3,8 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NUDAIM3D | NFeC Studio - Dein digitales Ich in 3D</title>
-    <meta name="description" content="Personalisiere deine NFeC Card: 3D-Druck trifft auf High-Tech NFC Profile. Erstelle dein Profil in Sekunden.">
-    
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="NUDAIM3D | NFeC Studio">
-    <meta property="og:description" content="3D-Druck Customizer für NFC-Profile. Jetzt designen.">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>NUDAIM3D | NFeC Studio</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -26,80 +20,83 @@
               action: '#12A9E0',
               navy: '#11235A',
               cream: '#FDFCF8',
-              offwhite: '#F9FBFC'
             },
             fontFamily: {
               serif: ['"Playfair Display"', 'serif'],
               sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            },
-            animation: {
-              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              'shimmer': 'shimmer 2s linear infinite',
-            },
-            keyframes: {
-              shimmer: {
-                '0%': { backgroundPosition: '-200% 0' },
-                '100%': { backgroundPosition: '200% 0' },
-              }
             }
           }
         }
       }
     </script>
     <style>
-      body { 
-        margin: 0; 
-        padding: 0; 
-        background-color: #FDFCF8; 
-        font-family: 'Plus Jakarta Sans', sans-serif; 
-        -webkit-font-smoothing: antialiased; 
-        overflow-x: hidden;
+      :root {
+        --app-height: 100dvh;
+      }
+      html, body {
+        margin: 0; padding: 0;
+        height: var(--app-height);
+        width: 100vw;
+        overflow: hidden;
+        background-color: #FDFCF8;
+        -webkit-text-size-adjust: 100%;
+        /* Ermöglicht native Scroll-Gesten ohne Page-Bounce */
+        overscroll-behavior: none;
       }
       #root { 
-        min-height: 100vh; 
-        width: 100vw; 
+        height: var(--app-height);
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
       }
+      .scroll-container {
+        flex: 1; 
+        overflow-y: auto; 
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        /* Wir erlauben das Standard-Verhalten für besseres "Nach-oben-scrollen" */
+        touch-action: pan-y;
+        min-height: 0;
+      }
+      /* Verhindert Scroll-Lag auf iOS */
+      .scroll-container > * {
+        transform: translateZ(0);
+      }
+      .scroll-container::-webkit-scrollbar { width: 4px; }
+      .scroll-container::-webkit-scrollbar-thumb { background: rgba(0, 102, 153, 0.1); border-radius: 10px; }
+      
       .technical-grid-fine {
         background-image: linear-gradient(rgba(18, 169, 224, 0.02) 1px, transparent 1px),
                           linear-gradient(90deg, rgba(18, 169, 224, 0.02) 1px, transparent 1px);
         background-size: 20px 20px;
       }
-      .custom-scrollbar::-webkit-scrollbar { width: 5px; }
-      .custom-scrollbar::-webkit-scrollbar-thumb { background: #006699; border-radius: 10px; }
       .serif-headline { font-family: 'Playfair Display', serif; }
       
-      @keyframes scan-line {
-        0% { transform: translateY(-100%); opacity: 0; }
-        50% { opacity: 1; }
-        100% { transform: translateY(100%); opacity: 0; }
-      }
-      .animate-scan { animation: scan-line 2s linear infinite; }
-      
-      .stempel-glow {
-        box-shadow: 0 0 15px rgba(18, 169, 224, 0.3);
+      @supports (-webkit-touch-callout: none) { 
+        #root { height: -webkit-fill-available; }
       }
     </style>
     <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@18.3.1",
-    "react/": "https://esm.sh/react@18.3.1/",
     "react-dom": "https://esm.sh/react-dom@18.3.1",
-    "react-dom/": "https://esm.sh/react-dom@18.3.1/",
     "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
     "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
     "three": "https://esm.sh/three@0.169.0",
-    "three/": "https://esm.sh/three@0.169.0/",
     "three/examples/jsm/loaders/SVGLoader": "https://esm.sh/three@0.169.0/examples/jsm/loaders/SVGLoader",
     "lucide-react": "https://esm.sh/lucide-react@0.454.0?deps=react@18.3.1",
     "@react-three/fiber": "https://esm.sh/@react-three/fiber@8.17.10?deps=react@18.3.1,react-dom@18.3.1,three@0.169.0",
     "@react-three/drei": "https://esm.sh/@react-three/drei@9.114.0?deps=react@18.3.1,react-dom@18.3.1,three@0.169.0,@react-three/fiber@8.17.10",
-    "three-bvh-csg": "https://esm.sh/three-bvh-csg@0.0.16?deps=three@0.169.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.4",
     "jsqr": "https://esm.sh/jsqr@1.4.0",
     "qrcode": "https://esm.sh/qrcode@1.5.4",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "vite": "https://esm.sh/vite@^7.3.1"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "three/": "https://esm.sh/three@^0.182.0/",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>

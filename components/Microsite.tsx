@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Smartphone, Wifi, Star, Globe, Link as LinkIcon, AlertTriangle, ShieldCheck, Award, Check, Gift, QrCode, X, MessageCircle, ShoppingCart, Info, User, Mail, Phone, Briefcase, MapPin, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Zap, Map as MapIcon, Clock, Calendar } from 'lucide-react';
+import { Smartphone, Wifi, Star, Globe, Link as LinkIcon, AlertTriangle, ShieldCheck, Award, Check, Gift, QrCode, X, MessageCircle, ShoppingCart, Info, User, Mail, Phone, Briefcase, MapPin, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Zap, Map as MapIcon, Clock, Calendar, CreditCard } from 'lucide-react';
 import { ModelConfig, NFCBlock, ActionIcon } from '../types';
 import jsQR from 'jsqr';
 
@@ -194,7 +194,7 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
       if (block.buttonType === 'wifi') {
         if(block.settings?.password) {
           navigator.clipboard.writeText(block.settings.password);
-          alert(`Passwort kopiert! Verbinde dich mit: ${block.settings.ssid}`);
+          alert(`WiFi Passwort "${block.settings.password}" wurde kopiert! Verbinde dich mit: ${block.settings.ssid}`);
         }
       } else if (block.buttonType === 'whatsapp') {
         const cleanPhone = block.content.replace(/[^\d+]/g, '');
@@ -203,6 +203,12 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
         const content = block.content;
         const url = content.startsWith('http') ? content : `https://instagram.com/${content.replace('@', '')}`;
         window.open(url, '_blank');
+      } else if (block.buttonType === 'google_profile' || block.buttonType === 'review') {
+        const url = block.content;
+        if(url && (url.startsWith('http'))) window.open(url, '_blank');
+      } else if (block.buttonType === 'action_card') {
+        // vCard creation logic would go here
+        alert(`Kontakt: ${block.settings?.name || 'Unbekannt'}\nTel: ${block.settings?.phone || 'Keine'}\nMail: ${block.content || 'Keine'}`);
       } else {
         const url = block.content;
         if(url && (url.startsWith('http') || url.startsWith('https'))) window.open(url, '_blank');
@@ -214,6 +220,7 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
     const isWhatsApp = block.buttonType === 'whatsapp';
     const isInstagram = block.buttonType === 'instagram';
     const isWiFi = block.buttonType === 'wifi';
+    const isActionCard = block.buttonType === 'action_card';
 
     return (
       <button 
@@ -223,28 +230,31 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
             isGoogle ? 'border-red-100' : 
             isWhatsApp ? 'border-emerald-100' :
             isInstagram ? 'border-pink-100' :
-            isWiFi ? 'border-blue-100' : ''}`}
+            isWiFi ? 'border-blue-100' : 
+            isActionCard ? 'border-indigo-100' : ''}`}
       >
-        <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center transition-all group-hover:rotate-6 
+        <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center transition-all group-hover:rotate-6 shadow-sm
           ${isReview ? 'bg-yellow-50 text-yellow-500' : 
             isGoogle ? 'bg-red-50 text-red-500' : 
             isWhatsApp ? 'bg-emerald-50 text-emerald-500' :
             isInstagram ? 'bg-pink-50 text-pink-500' :
-            isWiFi ? 'bg-blue-50 text-blue-500' : 'bg-cream'}`}
-          style={(!isReview && !isGoogle && !isWhatsApp && !isInstagram && !isWiFi) ? { color: accentColor } : {}}>
+            isWiFi ? 'bg-blue-50 text-blue-500' : 
+            isActionCard ? 'bg-indigo-50 text-indigo-500' : 'bg-cream'}`}
+          style={(!isReview && !isGoogle && !isWhatsApp && !isInstagram && !isWiFi && !isActionCard) ? { color: accentColor } : {}}>
            {isReview ? <Star size={32} fill="currentColor" /> : 
             isGoogle ? <MapPin size={32} /> : 
             isWhatsApp ? <MessageCircle size={32} /> :
             isInstagram ? <Instagram size={32} /> :
             isWiFi ? <Wifi size={32} /> :
+            isActionCard ? <CreditCard size={32} /> :
             getLucideIcon(block.settings?.icon, 28)}
         </div>
-        <div className="text-left flex-1">
-          <p className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[12px] uppercase tracking-widest`}>
-            {block.title || (isGoogle ? 'Google Profil' : isWhatsApp ? 'WhatsApp' : isInstagram ? 'Instagram' : isWiFi ? 'Wi-Fi Connect' : block.buttonType)}
+        <div className="text-left flex-1 min-w-0">
+          <p className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[12px] uppercase tracking-widest truncate`}>
+            {block.title || (isGoogle ? 'Google Profil' : isWhatsApp ? 'WhatsApp' : isInstagram ? 'Instagram' : isWiFi ? 'Wi-Fi Connect' : isActionCard ? 'Visitenkarte' : block.buttonType)}
           </p>
           <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-1 opacity-70">
-            {isWiFi ? 'Passwort kopieren' : 'Antippen zum Öffnen'}
+            {isWiFi ? `SSID: ${block.settings?.ssid || '...'}` : isActionCard ? (block.settings?.description || 'Kontakt Details') : 'Antippen zum Öffnen'}
           </p>
         </div>
       </button>
@@ -257,6 +267,7 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
   const params = new URLSearchParams(window.location.search);
   const currentId = params.get('id') || 'preview';
   const isDark = config.theme === 'dark';
+  const template = config.nfcTemplate || 'modern';
 
   const fontClass = config.fontStyle === 'luxury' ? 'font-serif' : config.fontStyle === 'elegant' ? 'serif-headline' : 'font-sans';
 
@@ -275,37 +286,49 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
     );
   }
 
+  // Template adjustments
+  const isMinimal = template === 'minimal';
+  const isProfessional = template === 'professional';
+
   return (
     <div className={`min-h-screen w-full ${isDark ? 'bg-zinc-950 text-white' : 'bg-cream text-navy'} selection:bg-petrol pb-40 flex flex-col items-center overflow-y-auto overflow-x-hidden ${fontClass}`}>
-      <header className="pt-24 pb-16 px-8 flex flex-col items-center text-center space-y-8 w-full relative">
-        {config.headerImageUrl && (
-          <div className="absolute top-0 left-0 w-full h-80 z-0">
+      <header className={`px-8 flex flex-col items-center text-center w-full relative transition-all duration-700 ${isMinimal ? 'pt-12 pb-8' : 'pt-24 pb-16'}`}>
+        {config.headerImageUrl && !isMinimal && (
+          <div className="absolute top-0 left-0 w-full h-80 z-0 overflow-hidden">
              <img src={config.headerImageUrl} className="w-full h-full object-cover opacity-60 blur-2xl scale-125" alt="Header Blur" />
              <div className={`absolute inset-0 bg-gradient-to-b from-transparent via-transparent ${isDark ? 'to-zinc-950' : 'to-cream'}`} />
           </div>
         )}
         
-        <div className="w-28 h-28 bg-white rounded-[2.8rem] shadow-[0_20px_60px_rgba(0,0,0,0.1)] flex items-center justify-center border border-navy/5 relative z-10 animate-in zoom-in duration-1000">
+        <div className={`bg-white shadow-[0_20px_60px_rgba(0,0,0,0.1)] flex items-center justify-center border border-navy/5 relative z-10 animate-in zoom-in duration-1000 transition-all
+          ${isMinimal ? 'w-20 h-20 rounded-2xl' : 'w-28 h-28 rounded-[2.8rem]'}`}>
            <div style={{ color: config.accentColor }} className="animate-pulse-slow">
-              {getLucideIcon(config.profileIcon, 48)}
+              {getLucideIcon(config.profileIcon, isMinimal ? 32 : 48)}
            </div>
-           <div className="absolute -bottom-2 -right-2 bg-action text-white p-2 rounded-2xl shadow-lg ring-4 ring-white">
-              <ShieldCheck size={16} />
-           </div>
+           {!isMinimal && (
+             <div className="absolute -bottom-2 -right-2 bg-action text-white p-2 rounded-2xl shadow-lg ring-4 ring-white">
+                <ShieldCheck size={16} />
+             </div>
+           )}
         </div>
-        <div className="space-y-4 relative z-10">
-           <h1 className="serif-headline text-5xl font-black italic uppercase tracking-tight leading-tight px-6 animate-in slide-in-from-top-4 duration-700" style={{ color: isDark ? '#fff' : config.accentColor }}>
+        
+        <div className={`space-y-4 relative z-10 ${isMinimal ? 'mt-6' : 'mt-8'}`}>
+           <h1 className={`serif-headline font-black italic uppercase tracking-tight leading-tight px-6 animate-in slide-in-from-top-4 duration-700 transition-all
+             ${isMinimal ? 'text-3xl' : 'text-5xl'}`} style={{ color: isDark ? '#fff' : config.accentColor }}>
                {config.profileTitle}
            </h1>
-           <div className="flex items-center justify-center gap-2">
-              <span className="w-8 h-[1px] bg-zinc-300" />
-              <span className="text-[9px] font-black uppercase tracking-[0.4em] opacity-40">NFeC Profile System</span>
-              <span className="w-8 h-[1px] bg-zinc-300" />
-           </div>
+           {!isMinimal && (
+             <div className="flex items-center justify-center gap-2">
+                <span className="w-8 h-[1px] bg-zinc-300" />
+                <span className="text-[9px] font-black uppercase tracking-[0.4em] opacity-40">NFeC Profile System</span>
+                <span className="w-8 h-[1px] bg-zinc-300" />
+             </div>
+           )}
         </div>
       </header>
 
-      <main className="max-w-md w-full px-6 space-y-6 flex-1 relative z-10">
+      <main className={`max-w-md w-full px-6 flex-1 relative z-10 transition-all duration-500
+        ${isProfessional ? 'space-y-4' : 'space-y-6'}`}>
         {config.nfcBlocks.length > 0 ? (
           config.nfcBlocks.map(block => (
             <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
