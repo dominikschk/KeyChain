@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ModelConfig, SVGPathData, NFCBlock, Department, ActionIcon, NFCTemplate } from '../types';
-import { Box, Type, Trash2, Link as LinkIcon, Image as ImageIcon, Sliders, Award, MessageCircle, Globe, ShoppingCart, Info, User, Mail, Phone, Loader2, Instagram, Utensils, Shield, Layout, Camera, Dumbbell, Heart, Palette, ArrowLeft, RefreshCw, Star, MapPin, Wifi, CreditCard, Briefcase, Zap, Sparkles } from 'lucide-react';
+import { Box, Type, Trash2, Link as LinkIcon, Image as ImageIcon, Sliders, Award, MessageCircle, Globe, ShoppingCart, Info, User, Mail, Phone, Loader2, Instagram, Utensils, Shield, Layout, Camera, Dumbbell, Heart, Palette, ArrowLeft, RefreshCw, Star, MapPin, Wifi, CreditCard, Briefcase, Zap, Sparkles, Home, Music, Hammer, Stethoscope, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ControlsProps {
@@ -28,7 +28,8 @@ const IconSelector: React.FC<{ selected: ActionIcon, onSelect: (i: ActionIcon) =
     { id: 'dumbbell', icon: Dumbbell }, { id: 'link', icon: LinkIcon }, { id: 'globe', icon: Globe }, 
     { id: 'shopping-cart', icon: ShoppingCart }, { id: 'info', icon: Info }, { id: 'user', icon: User }, 
     { id: 'star', icon: Star }, { id: 'mail', icon: Mail }, { id: 'phone', icon: Phone }, 
-    { id: 'instagram', icon: Instagram }, { id: 'shield', icon: Shield }, { id: 'heart', icon: Heart }
+    { id: 'instagram', icon: Instagram }, { id: 'shield', icon: Shield }, { id: 'heart', icon: Heart },
+    { id: 'home', icon: Home }, { id: 'hammer', icon: Hammer }, { id: 'stethoscope', icon: Stethoscope }
   ];
   return (
     <div className="grid grid-cols-5 gap-1.5 md:gap-2">
@@ -115,7 +116,7 @@ const PropertyPanel: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock>
               </div>
             )}
 
-            {['custom_link', 'instagram', 'whatsapp', 'review', 'google_profile'].includes(block.buttonType || '') && (
+            {['custom_link', 'instagram', 'whatsapp', 'review', 'google_profile', 'tiktok', 'linkedin', 'booking', 'email'].includes(block.buttonType || '') && (
               <div className="space-y-1.5">
                 <label className="text-[8px] font-black uppercase text-zinc-400 px-1">Ziel (URL / Telefon / Handle)</label>
                 <input type="text" value={block.content} placeholder={block.buttonType === 'instagram' ? '@deinname' : 'https://...'} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-3 rounded-xl border border-navy/5 text-xs bg-white font-bold outline-none" />
@@ -177,6 +178,9 @@ const PropertyPanel: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock>
 
 export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfig, svgElements, onUpload, onUpdateColor }) => {
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [showAllTemplates, setShowAllTemplates] = useState(false);
+  const [showAllButtons, setShowAllButtons] = useState(false);
+  
   const updateConfig = (key: keyof ModelConfig, val: any) => setConfig(prev => ({ ...prev, [key]: val }));
 
   const industryTemplates = [
@@ -187,48 +191,95 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
       blocks: [
         { id: 'g1', type: 'headline', content: 'Willkommen', title: 'Genuss pur' },
         { id: 'g2', type: 'magic_button', buttonType: 'review', title: 'Bewerte uns bei Google', content: '' },
-        { id: 'g3', type: 'magic_button', buttonType: 'wifi', title: 'Kostenloses Gäste-WLAN', content: '', settings: { ssid: 'Guest-WiFi' } },
-        { id: 'g4', type: 'magic_button', buttonType: 'whatsapp', title: 'Tisch reservieren', content: '+49' },
-        { id: 'g5', type: 'magic_button', buttonType: 'custom_link', title: 'Unsere Speisekarte', content: 'https://', settings: { icon: 'utensils' } }
+        { id: 'g3', type: 'magic_button', buttonType: 'wifi', title: 'Gäste-WLAN', content: '', settings: { ssid: 'Guest-WiFi' } },
+        { id: 'g4', type: 'magic_button', buttonType: 'whatsapp', title: 'Reservieren', content: '+49' },
+        { id: 'g5', type: 'magic_button', buttonType: 'custom_link', title: 'Speisekarte', content: 'https://', settings: { icon: 'utensils' } }
       ],
       accent: '#0D9488'
     },
     {
       id: 'engineer',
-      name: 'Ingenieur / Business',
+      name: 'Ingenieur',
       icon: <Briefcase size={18} />,
       blocks: [
-        { id: 'e1', type: 'headline', content: 'Expertise & Präzision', title: 'Ingenieurbüro' },
-        { id: 'e2', type: 'magic_button', buttonType: 'action_card', title: 'Kontakt speichern', content: '', settings: { name: 'Max Mustermann', description: 'Dipl. Ingenieur' } },
-        { id: 'e3', type: 'magic_button', buttonType: 'custom_link', title: 'LinkedIn Profil', content: 'https://linkedin.com/in/', settings: { icon: 'briefcase' } },
-        { id: 'e4', type: 'magic_button', buttonType: 'custom_link', title: 'Portfolio ansehen', content: 'https://', settings: { icon: 'globe' } },
-        { id: 'e5', type: 'text', title: 'Über mich', content: 'Spezialisiert auf innovative Lösungen im Bereich Maschinenbau und CAD-Design.' }
+        { id: 'e1', type: 'headline', content: 'Expertise', title: 'Engineering' },
+        { id: 'e2', type: 'magic_button', buttonType: 'action_card', title: 'Visitenkarte', content: '', settings: { name: 'Max Mustermann', description: 'Dipl. Ingenieur' } },
+        { id: 'e3', type: 'magic_button', buttonType: 'linkedin', title: 'LinkedIn', content: 'https://linkedin.com/in/' },
+        { id: 'e4', type: 'magic_button', buttonType: 'custom_link', title: 'Portfolio', content: 'https://', settings: { icon: 'globe' } }
       ],
       accent: '#11235A'
     },
     {
       id: 'creator',
-      name: 'Content Creator',
+      name: 'Creator',
       icon: <Zap size={18} />,
       blocks: [
-        { id: 'c1', type: 'headline', content: 'Folgt mir!', title: 'Social Media' },
-        { id: 'c2', type: 'magic_button', buttonType: 'instagram', title: 'Instagram Feed', content: '@' },
-        { id: 'c3', type: 'magic_button', buttonType: 'custom_link', title: 'YouTube Channel', content: 'https://youtube.com/', settings: { icon: 'camera' } },
+        { id: 'c1', type: 'headline', content: 'Folgt mir!', title: 'Social Feed' },
+        { id: 'c2', type: 'magic_button', buttonType: 'instagram', title: 'Instagram', content: '@' },
+        { id: 'c3', type: 'magic_button', buttonType: 'tiktok', title: 'TikTok', content: '@' },
         { id: 'c4', type: 'magic_button', buttonType: 'custom_link', title: 'Mein Shop', content: 'https://', settings: { icon: 'shopping-cart' } }
       ],
       accent: '#DB2777'
     },
     {
       id: 'beauty',
-      name: 'Beauty & Wellness',
+      name: 'Beauty',
       icon: <Sparkles size={18} />,
       blocks: [
-        { id: 'b1', type: 'headline', content: 'Zeit für dich', title: 'Beauty Salon' },
-        { id: 'b2', type: 'magic_button', buttonType: 'whatsapp', title: 'Termin vereinbaren', content: '+49' },
-        { id: 'b3', type: 'magic_button', buttonType: 'instagram', title: 'Unsere Arbeiten', content: '@' },
-        { id: 'b4', type: 'magic_button', buttonType: 'google_profile', title: 'Anfahrt & Standort', content: '' }
+        { id: 'b1', type: 'headline', content: 'Wellness', title: 'Beauty Salon' },
+        { id: 'b2', type: 'magic_button', buttonType: 'whatsapp', title: 'Termin buchen', content: '+49' },
+        { id: 'b3', type: 'magic_button', buttonType: 'instagram', title: 'Galerie', content: '@' },
+        { id: 'b4', type: 'magic_button', buttonType: 'google_profile', title: 'Anfahrt', content: '' }
       ],
       accent: '#4F46E5'
+    },
+    {
+      id: 'handwerk',
+      name: 'Handwerk',
+      icon: <Hammer size={18} />,
+      blocks: [
+        { id: 'h1', type: 'headline', content: 'Qualität', title: 'Meisterbetrieb' },
+        { id: 'h2', type: 'magic_button', buttonType: 'whatsapp', title: 'Anfrage stellen', content: '+49' },
+        { id: 'h3', type: 'magic_button', buttonType: 'action_card', title: 'Kontakt', content: '' },
+        { id: 'h4', type: 'magic_button', buttonType: 'review', title: 'Bewertungen', content: '' }
+      ],
+      accent: '#92400E'
+    },
+    {
+      id: 'immobilien',
+      name: 'Immobilien',
+      icon: <Home size={18} />,
+      blocks: [
+        { id: 'im1', type: 'headline', content: 'Exklusiv', title: 'Real Estate' },
+        { id: 'im2', type: 'magic_button', buttonType: 'custom_link', title: 'Objekte ansehen', content: 'https://', settings: { icon: 'home' } },
+        { id: 'im3', type: 'magic_button', buttonType: 'action_card', title: 'Ihr Makler', content: '' },
+        { id: 'im4', type: 'magic_button', buttonType: 'booking', title: 'Besichtigung', content: '' }
+      ],
+      accent: '#0F172A'
+    },
+    {
+      id: 'praxis',
+      name: 'Praxis',
+      icon: <Stethoscope size={18} />,
+      blocks: [
+        { id: 'pr1', type: 'headline', content: 'Gesundheit', title: 'Fachpraxis' },
+        { id: 'pr2', type: 'magic_button', buttonType: 'booking', title: 'Termin buchen', content: '' },
+        { id: 'pr3', type: 'magic_button', buttonType: 'google_profile', title: 'Anfahrt', content: '' },
+        { id: 'pr4', type: 'magic_button', buttonType: 'email', title: 'E-Rezept', content: '' }
+      ],
+      accent: '#0891B2'
+    },
+    {
+      id: 'events',
+      name: 'Nightlife',
+      icon: <Music size={18} />,
+      blocks: [
+        { id: 'ev1', type: 'headline', content: 'Party!', title: 'Club & Events' },
+        { id: 'ev2', type: 'magic_button', buttonType: 'custom_link', title: 'Tickets', content: 'https://', settings: { icon: 'star' } },
+        { id: 'ev3', type: 'magic_button', buttonType: 'instagram', title: 'Fotos', content: '@' },
+        { id: 'ev4', type: 'magic_button', buttonType: 'wifi', title: 'Gäste-WLAN', content: '' }
+      ],
+      accent: '#7C3AED'
     }
   ];
 
@@ -240,18 +291,29 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
         accentColor: tpl.accent,
         nfcBlocks: tpl.blocks as any[]
       }));
+      setShowAllTemplates(false);
     }
   };
 
   const magicButtons = [
-    { id: 'whatsapp', label: 'WhatsApp', icon: <MessageCircle size={18}/>, colorClass: 'text-emerald-500 bg-emerald-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'whatsapp', title: 'WhatsApp', content: '' }]) },
-    { id: 'instagram', label: 'Instagram', icon: <Instagram size={18}/>, colorClass: 'text-pink-500 bg-pink-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'instagram', title: 'Instagram', content: '@' }]) },
-    { id: 'stamps', label: 'Treue', icon: <Award size={18}/>, colorClass: 'text-amber-500 bg-amber-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: `block_${Date.now()}`, type: 'magic_button', buttonType: 'stamp_card', title: 'Treuekarte', content: '', settings: { slots: 10, secretKey: generateSecureKey() } }]) },
-    { id: 'review', label: 'Review', icon: <Star size={18}/>, colorClass: 'text-yellow-500 bg-yellow-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Google Review', content: '' }]) },
-    { id: 'wifi', label: 'WiFi', icon: <Wifi size={18}/>, colorClass: 'text-blue-500 bg-blue-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'wifi', title: 'Kostenloses Gäste-WLAN', content: '' }]) },
-    { id: 'google_profile', label: 'Standort', icon: <MapPin size={18}/>, colorClass: 'text-red-500 bg-red-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'google_profile', title: 'Find us here', content: '' }]) },
-    { id: 'action_card', label: 'Visitenkarte', icon: <CreditCard size={18}/>, colorClass: 'text-indigo-500 bg-indigo-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'action_card', title: 'Kontakt speichern', content: '' }]) },
-    { id: 'link', label: 'Smart Link', icon: <LinkIcon size={18}/>, colorClass: 'text-navy bg-zinc-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'custom_link', title: 'Webseite', content: 'https://', settings: { icon: 'link' } }]) }
+    { group: 'Social', items: [
+      { id: 'whatsapp', label: 'WhatsApp', icon: <MessageCircle size={18}/>, colorClass: 'text-emerald-500 bg-emerald-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'whatsapp', title: 'WhatsApp', content: '' }]) },
+      { id: 'instagram', label: 'Instagram', icon: <Instagram size={18}/>, colorClass: 'text-pink-500 bg-pink-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'instagram', title: 'Instagram', content: '@' }]) },
+      { id: 'tiktok', label: 'TikTok', icon: <Music size={18}/>, colorClass: 'text-zinc-900 bg-zinc-100', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'tiktok', title: 'TikTok', content: '@' }]) },
+      { id: 'linkedin', label: 'LinkedIn', icon: <Briefcase size={18}/>, colorClass: 'text-blue-600 bg-blue-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'linkedin', title: 'LinkedIn', content: 'https://' }]) },
+    ]},
+    { group: 'Business', items: [
+      { id: 'action_card', label: 'VCard', icon: <CreditCard size={18}/>, colorClass: 'text-indigo-500 bg-indigo-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'action_card', title: 'Kontakt speichern', content: '' }]) },
+      { id: 'booking', label: 'Termine', icon: <Calendar size={18}/>, colorClass: 'text-sky-500 bg-sky-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'booking', title: 'Termin buchen', content: 'https://' }]) },
+      { id: 'email', label: 'E-Mail', icon: <Mail size={18}/>, colorClass: 'text-amber-500 bg-amber-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'email', title: 'Schreib uns', content: '' }]) },
+      { id: 'link', label: 'Link', icon: <LinkIcon size={18}/>, colorClass: 'text-navy bg-zinc-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'custom_link', title: 'Webseite', content: 'https://', settings: { icon: 'link' } }]) },
+    ]},
+    { group: 'Local Tools', items: [
+      { id: 'stamps', label: 'Treue', icon: <Award size={18}/>, colorClass: 'text-amber-500 bg-amber-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: `block_${Date.now()}`, type: 'magic_button', buttonType: 'stamp_card', title: 'Treuekarte', content: '', settings: { slots: 10, secretKey: generateSecureKey() } }]) },
+      { id: 'review', label: 'Review', icon: <Star size={18}/>, colorClass: 'text-yellow-500 bg-yellow-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'review', title: 'Google Review', content: '' }]) },
+      { id: 'wifi', label: 'WiFi', icon: <Wifi size={18}/>, colorClass: 'text-blue-500 bg-blue-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'wifi', title: 'Gäste-WLAN', content: '' }]) },
+      { id: 'google_profile', label: 'Maps', icon: <MapPin size={18}/>, colorClass: 'text-red-500 bg-red-50', action: () => updateConfig('nfcBlocks', [...config.nfcBlocks, { id: Date.now().toString(), type: 'magic_button', buttonType: 'google_profile', title: 'Standort', content: '' }]) },
+    ]}
   ];
 
   const designColors = ['#006699', '#12A9E0', '#11235A', '#ff4d4d', '#2ecc71', '#d4af37', '#000000', '#0D9488', '#4F46E5', '#DB2777'];
@@ -298,13 +360,19 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
         <PropertyPanel block={activeEditingBlock} onUpdate={u => updateConfig('nfcBlocks', config.nfcBlocks.map(b => b.id === activeEditingBlock.id ? {...b, ...u} : b))} onClose={() => setEditingBlockId(null)} />
       )}
 
+      {/* BRANCHEN VORLAGEN - UNPACKED */}
       <section className="space-y-3">
-          <label className="text-[9px] font-black uppercase text-zinc-400 px-2 flex items-center gap-2">
-             <Sparkles size={10} className="text-petrol" /> Schnellstart Vorlagen
-          </label>
+          <div className="flex items-center justify-between px-2">
+            <label className="text-[9px] font-black uppercase text-zinc-400 flex items-center gap-2">
+               <Sparkles size={10} className="text-petrol" /> Branchen Vorlagen
+            </label>
+            <button onClick={() => setShowAllTemplates(!showAllTemplates)} className="text-[8px] font-black uppercase text-petrol flex items-center gap-1">
+               {showAllTemplates ? 'Weniger' : 'Alle anzeigen'} {showAllTemplates ? <ChevronUp size={10}/> : <ChevronDown size={10}/>}
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-2 px-1">
-             {industryTemplates.map(tpl => (
-               <button key={tpl.id} onClick={() => applyTemplate(tpl)} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-start gap-3 transition-all active:scale-95 shadow-sm group hover:border-petrol/30">
+             {(showAllTemplates ? industryTemplates : industryTemplates.slice(0, 4)).map(tpl => (
+               <button key={tpl.id} onClick={() => applyTemplate(tpl)} className="p-4 bg-white border border-navy/5 rounded-2xl flex flex-col items-start gap-3 transition-all active:scale-95 shadow-sm group hover:border-petrol/30 animate-in fade-in duration-300">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors group-hover:scale-110" style={{ backgroundColor: `${tpl.accent}10`, color: tpl.accent }}>
                     {tpl.icon}
                   </div>
@@ -317,9 +385,10 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
           </div>
       </section>
 
+      {/* PROFIL DESIGN */}
       <section className="bg-white border border-navy/5 p-6 rounded-[2.5rem] space-y-6 shadow-sm">
           <div className="flex items-center gap-2 text-[8px] font-black uppercase text-zinc-400">
-              <Layout size={10} className="text-petrol" /> Layout-Template
+              <Layout size={10} className="text-petrol" /> Layout & Branding
           </div>
           <div className="grid grid-cols-3 gap-2">
              {(['modern', 'minimal', 'professional'] as NFCTemplate[]).map(t => (
@@ -330,26 +399,23 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
           </div>
           
           <div className="space-y-4 pt-4 border-t border-navy/5">
-             <div className="flex items-center gap-2 text-[8px] font-black uppercase text-zinc-400">
-                <Palette size={10} className="text-petrol" /> Profil-Design
-             </div>
-             <div className="flex flex-wrap gap-2">
-                 {designColors.map(c => (
-                 <button key={c} onClick={() => updateConfig('accentColor', c)} className={`w-7 h-7 rounded-full border-2 transition-all ${config.accentColor === c ? 'border-navy scale-110 shadow-sm' : 'border-white'}`} style={{ backgroundColor: c }} />
-                 ))}
-             </div>
-             <div className="flex items-center justify-between pt-2">
-                 <label className="text-[8px] font-black uppercase text-zinc-400">Dark Mode</label>
-                 <button onClick={() => updateConfig('theme', config.theme === 'light' ? 'dark' : 'light')} className="w-11 h-6 bg-cream border border-navy/5 rounded-full relative flex items-center px-1 transition-colors">
-                     <div className={`w-4 h-4 rounded-full bg-white shadow-md transition-all ${config.theme === 'dark' ? 'translate-x-5' : 'translate-x-0'}`} />
-                 </button>
+             <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[8px] font-black uppercase text-zinc-400">
+                  <Palette size={10} className="text-petrol" /> Accent Farbe
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                   {designColors.slice(0, 5).map(c => (
+                   <button key={c} onClick={() => updateConfig('accentColor', c)} className={`w-5 h-5 rounded-full border border-white transition-all ${config.accentColor === c ? 'scale-125 ring-2 ring-navy/20' : ''}`} style={{ backgroundColor: c }} />
+                   ))}
+                </div>
              </div>
           </div>
       </section>
 
+      {/* STANDARD MODULE */}
       <section className="space-y-3">
           <label className="text-[9px] font-black uppercase text-zinc-400 px-2 flex items-center gap-2">
-             <Layout size={10} className="text-petrol" /> Standard Module
+             <Layout size={10} className="text-petrol" /> Content Module
           </label>
           <div className="grid grid-cols-4 gap-2 px-1">
             {[
@@ -366,18 +432,37 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
           </div>
       </section>
 
-      <section className="space-y-3">
-          <label className="text-[9px] font-black uppercase text-zinc-400 px-2">Magic Buttons</label>
-          <div className="grid grid-cols-2 gap-2.5 px-1">
-          {magicButtons.map(btn => (
-              <button key={btn.id} onClick={btn.action} className="p-3.5 bg-white border border-navy/5 rounded-[1.25rem] flex items-center gap-3 active:scale-95 shadow-sm group hover:border-petrol/30">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${btn.colorClass} transition-transform group-hover:scale-110`}>{btn.icon}</div>
-                <span className="text-[8px] font-black uppercase tracking-wider truncate">{btn.label}</span>
-              </button>
-          ))}
+      {/* MAGIC BUTTONS - UNPACKED BY GROUPS */}
+      <section className="space-y-6">
+          <div className="flex items-center justify-between px-2">
+             <label className="text-[9px] font-black uppercase text-zinc-400">Magic Buttons</label>
+             <button onClick={() => setShowAllButtons(!showAllButtons)} className="text-[8px] font-black uppercase text-petrol flex items-center gap-1">
+               {showAllButtons ? 'Standard' : 'Alle Buttons'} {showAllButtons ? <ChevronUp size={10}/> : <ChevronDown size={10}/>}
+             </button>
+          </div>
+
+          <div className="space-y-8">
+            {magicButtons.map((group, gIdx) => (
+              <div key={group.group} className={`space-y-3 ${!showAllButtons && gIdx > 0 ? 'hidden' : 'block animate-in fade-in slide-in-from-top-2 duration-300'}`}>
+                <div className="flex items-center gap-2 px-2">
+                   <div className="h-[1px] flex-1 bg-navy/5" />
+                   <span className="text-[7px] font-black uppercase text-zinc-300 tracking-[0.2em]">{group.group}</span>
+                   <div className="h-[1px] flex-1 bg-navy/5" />
+                </div>
+                <div className="grid grid-cols-2 gap-2.5 px-1">
+                {group.items.map(btn => (
+                    <button key={btn.id} onClick={btn.action} className="p-3.5 bg-white border border-navy/5 rounded-[1.25rem] flex items-center gap-3 active:scale-95 shadow-sm group hover:border-petrol/30">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${btn.colorClass} transition-transform group-hover:scale-110`}>{btn.icon}</div>
+                      <span className="text-[8px] font-black uppercase tracking-wider truncate">{btn.label}</span>
+                    </button>
+                ))}
+                </div>
+              </div>
+            ))}
           </div>
       </section>
 
+      {/* PROFIL LISTE */}
       <section className="space-y-3 px-1 pb-16">
         <label className="text-[9px] font-black uppercase text-zinc-400 px-2 flex justify-between items-center">
           Profil-Inhalte <span>{config.nfcBlocks.length} Module</span>

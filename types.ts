@@ -2,13 +2,13 @@
 import * as THREE from 'three';
 
 export type BaseType = 'nfec_standard';
-export type MagicButtonType = 'stamp_card' | 'review' | 'wifi' | 'whatsapp' | 'custom_link' | 'action_card' | 'google_profile' | 'standard' | 'instagram';
+export type MagicButtonType = 'stamp_card' | 'review' | 'wifi' | 'whatsapp' | 'custom_link' | 'action_card' | 'google_profile' | 'standard' | 'instagram' | 'tiktok' | 'linkedin' | 'booking' | 'email';
 export type NFCTemplate = 'modern' | 'minimal' | 'professional';
 export type Department = '3d' | 'digital';
 export type SavingStep = 'idle' | 'screenshot' | 'upload' | 'db' | 'done';
 
 export type StampValidation = 'pattern' | 'long_press' | 'daily_limit' | 'qr_code';
-export type ActionIcon = 'link' | 'globe' | 'shopping-cart' | 'info' | 'briefcase' | 'user' | 'star' | 'mail' | 'phone' | 'instagram' | 'utensils' | 'shield' | 'camera' | 'dumbbell' | 'heart' | 'cross' | 'zap' | 'map' | 'clock' | 'calendar';
+export type ActionIcon = 'link' | 'globe' | 'shopping-cart' | 'info' | 'briefcase' | 'user' | 'star' | 'mail' | 'phone' | 'instagram' | 'utensils' | 'shield' | 'camera' | 'dumbbell' | 'heart' | 'cross' | 'zap' | 'map' | 'clock' | 'calendar' | 'home' | 'music' | 'hammer' | 'stethoscope';
 
 export type FontStyle = 'luxury' | 'modern' | 'elegant';
 export type ProfileTheme = 'light' | 'dark';
