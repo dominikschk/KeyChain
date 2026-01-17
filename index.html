@@ -35,16 +35,15 @@
       }
       html, body {
         margin: 0; padding: 0;
-        height: var(--app-height);
-        width: 100vw;
+        height: 100%;
+        width: 100%;
         overflow: hidden;
         background-color: #FDFCF8;
         -webkit-text-size-adjust: 100%;
-        /* Ermöglicht native Scroll-Gesten ohne Page-Bounce */
         overscroll-behavior: none;
       }
       #root { 
-        height: var(--app-height);
+        height: 100%;
         width: 100%;
         display: flex;
         flex-direction: column;
@@ -55,8 +54,7 @@
         overflow-y: auto; 
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
-        /* Wir erlauben das Standard-Verhalten für besseres "Nach-oben-scrollen" */
-        touch-action: pan-y;
+        touch-action: pan-y pinch-zoom;
         min-height: 0;
       }
       /* Verhindert Scroll-Lag auf iOS */
@@ -74,7 +72,7 @@
       .serif-headline { font-family: 'Playfair Display', serif; }
       
       @supports (-webkit-touch-callout: none) { 
-        #root { height: -webkit-fill-available; }
+        #root { height: 100dvh; }
       }
     </style>
     <script type="importmap">

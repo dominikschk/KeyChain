@@ -160,7 +160,7 @@ const App: React.FC = () => {
       )}
 
       {/* SIDEBAR / EDITOR */}
-      <aside className={`flex flex-col bg-white border-r border-navy/5 shadow-2xl transition-all duration-300 w-full md:w-[420px] shrink-0 z-20 h-full min-h-0 ${mobileTab === 'editor' ? 'flex' : 'hidden md:flex'}`}>
+      <aside className={`flex flex-col bg-white border-r border-navy/5 shadow-2xl transition-all duration-300 w-full md:w-[420px] shrink-0 z-20 min-h-0 ${mobileTab === 'editor' ? 'flex-1' : 'hidden md:flex'}`}>
         <header className="p-4 md:p-6 border-b border-navy/5 bg-zinc-50/30 shrink-0">
           <div className="flex items-center justify-between mb-4">
              <h1 className="serif-headline font-black text-xl uppercase italic text-navy leading-none tracking-tight">NUDAIM3D</h1>
@@ -172,20 +172,20 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div className="flex-1 scroll-container technical-grid-fine min-h-0">
-          <div className="p-4 md:p-6 pb-40 md:pb-12">
+        <div className="flex-1 scroll-container technical-grid-fine">
+          <div className="p-4 md:p-6 pb-4 md:pb-12">
             <Controls activeDept={activeDept} config={config} setConfig={setConfig} svgElements={svgElements} onUpload={handleFileUpload} onUpdateColor={(id, c) => setSvgElements(prev => prev?.map(el => el.id === id ? { ...el, currentColor: c } : el) || null)} />
           </div>
         </div>
 
-        {/* MOBILE EDITOR ACTIONS (Fixed above nav) */}
-        <div className="md:hidden p-4 bg-white/90 backdrop-blur-md border-t border-navy/5">
+        {/* MOBILE EDITOR ACTIONS */}
+        <div className="md:hidden p-4 bg-white border-t border-navy/5 shrink-0">
            <button 
              onClick={() => setMobileTab('preview')}
-             className="w-full h-14 bg-petrol/5 border border-petrol/20 text-petrol rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all shadow-sm"
+             className="w-full h-12 bg-petrol text-white rounded-xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg"
            >
              <span>Vorschau ansehen</span>
-             <ArrowRight size={16} />
+             <ArrowRight size={14} />
            </button>
         </div>
 
@@ -199,35 +199,35 @@ const App: React.FC = () => {
       </aside>
 
       {/* PREVIEW AREA */}
-      <main className={`flex-1 relative bg-cream z-10 h-full min-h-0 ${mobileTab === 'preview' ? 'flex' : 'hidden md:flex'}`}>
-        <div className="absolute inset-0 w-full h-full overflow-hidden">
+      <main className={`flex-1 relative bg-cream z-10 min-h-0 ${mobileTab === 'preview' ? 'flex flex-col' : 'hidden md:flex'}`}>
+        <div className="flex-1 relative overflow-hidden">
           <Viewer ref={viewerRef} config={config} svgElements={svgElements} showNFCPreview={previewType === 'digital'} />
-        </div>
-        
-        {/* VIEW TYPE TOGGLE - Mobile Only - Bottom Safe Zone */}
-        <div className="md:hidden absolute bottom-[170px] left-1/2 -translate-x-1/2 z-[400] flex p-1.5 bg-white/95 backdrop-blur-xl rounded-2xl border border-navy/10 shadow-2xl scale-90 ring-4 ring-black/5">
-           <button 
-             onClick={() => setPreviewType('3d')}
-             className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all ${previewType === '3d' ? 'bg-navy text-white shadow-lg' : 'text-zinc-400'}`}
-           >
-             <Box size={14} />
-             <span>3D View</span>
-           </button>
-           <button 
-             onClick={() => setPreviewType('digital')}
-             className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all ${previewType === 'digital' ? 'bg-navy text-white shadow-lg' : 'text-zinc-400'}`}
-           >
-             <Smartphone size={14} />
-             <span>Screen</span>
-           </button>
+          
+          {/* VIEW TYPE TOGGLE - Mobile Only - Floating */}
+          <div className="md:hidden absolute bottom-24 left-1/2 -translate-x-1/2 z-[400] flex p-1 bg-white/90 backdrop-blur-xl rounded-2xl border border-navy/10 shadow-2xl scale-90">
+             <button 
+               onClick={() => setPreviewType('3d')}
+               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-[0.1em] transition-all ${previewType === '3d' ? 'bg-navy text-white shadow-lg' : 'text-zinc-400'}`}
+             >
+               <Box size={14} />
+               <span>3D View</span>
+             </button>
+             <button 
+               onClick={() => setPreviewType('digital')}
+               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-[0.1em] transition-all ${previewType === 'digital' ? 'bg-navy text-white shadow-lg' : 'text-zinc-400'}`}
+             >
+               <Smartphone size={14} />
+               <span>Screen</span>
+             </button>
+          </div>
         </div>
 
-        {/* MOBILE PREVIEW ACTIONS (Fixed above nav) */}
-        <div className={`md:hidden absolute bottom-[85px] left-4 right-4 z-[500] transition-all duration-300 ${mobileTab === 'preview' ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0 pointer-events-none'}`}>
-          <button onClick={initiateSave} className="w-full h-14 bg-navy text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-transform border border-white/10">
-             <ShoppingCart size={18} />
+        {/* MOBILE PREVIEW ACTIONS (Bottom fixed when in preview tab) */}
+        <div className="md:hidden p-4 bg-white border-t border-navy/5 shrink-0">
+          <button onClick={initiateSave} className="w-full h-12 bg-navy text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-transform">
+             <ShoppingCart size={16} />
              <span>JETZT BESTELLEN</span>
-             <ArrowRight size={18} />
+             <ArrowRight size={16} />
           </button>
         </div>
 
@@ -240,14 +240,14 @@ const App: React.FC = () => {
       </main>
 
       {/* MOBILE BOTTOM NAV */}
-      <nav className="md:hidden flex h-[75px] bg-white border-t border-navy/5 z-[600] shrink-0 relative shadow-[0_-5px_30px_rgba(0,0,0,0.05)] pb-safe">
+      <nav className="md:hidden flex h-[65px] bg-white border-t border-navy/5 z-[600] shrink-0 relative shadow-[0_-5px_30px_rgba(0,0,0,0.05)] pb-safe">
         <button onClick={() => setMobileTab('editor')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${mobileTab === 'editor' ? 'text-petrol' : 'text-zinc-300'}`}>
-          <Edit3 size={20} />
-          <span className="text-[8px] font-black uppercase tracking-[0.15em]">Editor</span>
+          <Edit3 size={18} />
+          <span className="text-[7px] font-black uppercase tracking-[0.15em]">Editor</span>
         </button>
         <button onClick={() => setMobileTab('preview')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${mobileTab === 'preview' ? 'text-petrol' : 'text-zinc-300'}`}>
-          <Smartphone size={20} />
-          <span className="text-[8px] font-black uppercase tracking-[0.15em]">Vorschau</span>
+          <Smartphone size={18} />
+          <span className="text-[7px] font-black uppercase tracking-[0.15em]">Vorschau</span>
         </button>
       </nav>
     </div>
