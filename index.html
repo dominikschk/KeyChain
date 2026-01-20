@@ -57,9 +57,7 @@
         touch-action: pan-y pinch-zoom;
         min-height: 0;
       }
-      .scroll-container > * {
-        transform: translateZ(0);
-      }
+      /* Removed transform: translateZ(0) to fix position: fixed bugs */
       .scroll-container::-webkit-scrollbar { width: 4px; }
       .scroll-container::-webkit-scrollbar-thumb { background: rgba(0, 102, 153, 0.1); border-radius: 10px; }
       
@@ -72,14 +70,15 @@
 
       /* Professional Circular Reveal Animation */
       .circular-reveal {
-        animation: circularReveal 0.6s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+        animation: circularReveal 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         clip-path: circle(0% at 100% 50%);
+        will-change: clip-path;
       }
 
       @keyframes circularReveal {
         from {
           clip-path: circle(0% at 100% 50%);
-          opacity: 0;
+          opacity: 0.5;
         }
         to {
           clip-path: circle(150% at 100% 50%);
@@ -108,9 +107,9 @@
     "qrcode": "https://esm.sh/qrcode@1.5.4",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
+    "three/": "https://esm.sh/three@^0.182.0/",
     "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "three/": "https://esm.sh/three@^0.182.0/"
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>
