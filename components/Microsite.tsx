@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Smartphone, Wifi, Star, Globe, Link as LinkIcon, AlertTriangle, ShieldCheck, Award, Check, Gift, QrCode, X, MessageCircle, ShoppingCart, Info, User, Mail, Phone, Briefcase, MapPin, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Zap, Map as MapIcon, Clock, Calendar, CreditCard, Youtube, Video } from 'lucide-react';
+import { Smartphone, Wifi, Star, Globe, Link as LinkIcon, AlertTriangle, ShieldCheck, Award, Check, Gift, QrCode, X, MessageCircle, ShoppingCart, Info, User, Mail, Phone, Briefcase, MapPin, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Zap, Map as MapIcon, Clock, Calendar, CreditCard, Youtube, Video, Music } from 'lucide-react';
 import { ModelConfig, NFCBlock, ActionIcon } from '../types';
 import jsQR from 'jsqr';
 
@@ -31,6 +31,7 @@ const getLucideIcon = (name?: ActionIcon, size = 20) => {
     case 'calendar': return <Calendar size={size} />;
     case 'youtube': return <Youtube size={size} />;
     case 'video': return <Video size={size} />;
+    case 'music': return <Music size={size} />;
     default: return <LinkIcon size={size} />;
   }
 };
@@ -193,69 +194,84 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
     if (block.buttonType === 'stamp_card') return <StampCard block={block} configId={configId} accentColor={accentColor} />;
 
     const handleAction = () => {
-      if (block.buttonType === 'wifi') {
+      const type = block.buttonType;
+      const content = block.content;
+
+      if (type === 'wifi') {
         if(block.settings?.password) {
           navigator.clipboard.writeText(block.settings.password);
           alert(`WiFi Passwort "${block.settings.password}" wurde kopiert! Verbinde dich mit: ${block.settings.ssid}`);
         }
-      } else if (block.buttonType === 'whatsapp') {
-        const cleanPhone = block.content.replace(/[^\d+]/g, '');
+      } else if (type === 'whatsapp') {
+        const cleanPhone = content.replace(/[^\d+]/g, '');
         window.open(`https://wa.me/${cleanPhone}`, '_blank');
-      } else if (block.buttonType === 'instagram') {
-        const content = block.content;
+      } else if (type === 'instagram') {
         const url = content.startsWith('http') ? content : `https://instagram.com/${content.replace('@', '')}`;
         window.open(url, '_blank');
-      } else if (block.buttonType === 'google_profile' || block.buttonType === 'review') {
-        const url = block.content;
-        if(url && (url.startsWith('http'))) window.open(url, '_blank');
-      } else if (block.buttonType === 'action_card') {
-        alert(`Kontakt: ${block.settings?.name || 'Unbekannt'}\nTel: ${block.settings?.phone || 'Keine'}\nMail: ${block.content || 'Keine'}`);
-      } else {
-        const url = block.content;
-        if(url && (url.startsWith('http') || url.startsWith('https'))) window.open(url, '_blank');
+      } else if (type === 'tiktok') {
+        const url = content.startsWith('http') ? content : `https://tiktok.com/@${content.replace('@', '')}`;
+        window.open(url, '_blank');
+      } else if (type === 'linkedin') {
+        const url = content.startsWith('http') ? content : `https://linkedin.com/in/${content}`;
+        window.open(url, '_blank');
+      } else if (type === 'youtube') {
+        const url = content.startsWith('http') ? content : `https://youtube.com/@${content}`;
+        window.open(url, '_blank');
+      } else if (type === 'booking' || type === 'review' || type === 'google_profile' || type === 'custom_link') {
+        if (content.startsWith('http')) window.open(content, '_blank');
+        else if (content) window.open(`https://${content}`, '_blank');
+      } else if (type === 'email') {
+        window.open(`mailto:${content}`, '_blank');
+      } else if (type === 'phone') {
+        window.open(`tel:${content}`, '_blank');
+      } else if (type === 'action_card') {
+        alert(`Kontakt: ${block.settings?.name || 'Unbekannt'}\nTel: ${block.settings?.phone || 'Keine'}\nMail: ${block.content || 'Keine'}\n\nPosition: ${block.settings?.description || 'N/A'}`);
       }
     };
 
-    const isReview = block.buttonType === 'review';
-    const isGoogle = block.buttonType === 'google_profile';
-    const isWhatsApp = block.buttonType === 'whatsapp';
-    const isInstagram = block.buttonType === 'instagram';
-    const isWiFi = block.buttonType === 'wifi';
-    const isActionCard = block.buttonType === 'action_card';
+    const isSocial = ['instagram', 'tiktok', 'linkedin', 'youtube', 'whatsapp'].includes(block.buttonType || '');
+    const isTool = ['wifi', 'booking', 'email', 'phone', 'action_card', 'review', 'google_profile'].includes(block.buttonType || '');
+
+    const getColors = () => {
+      switch(block.buttonType) {
+        case 'instagram': return 'bg-pink-50 text-pink-500 border-pink-100';
+        case 'tiktok': return 'bg-zinc-900 text-white border-zinc-800';
+        case 'whatsapp': return 'bg-emerald-50 text-emerald-500 border-emerald-100';
+        case 'linkedin': return 'bg-blue-50 text-blue-600 border-blue-100';
+        case 'youtube': return 'bg-red-50 text-red-600 border-red-100';
+        case 'wifi': return 'bg-sky-50 text-sky-500 border-sky-100';
+        case 'review': return 'bg-yellow-50 text-yellow-500 border-yellow-100';
+        case 'action_card': return 'bg-indigo-50 text-indigo-500 border-indigo-100';
+        default: return isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5';
+      }
+    };
 
     return (
       <button 
         onClick={(e) => { e.stopPropagation(); handleAction(); }}
-        className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} w-full p-6 rounded-[2.5rem] border shadow-sm flex items-center gap-6 hover:scale-[1.02] active:scale-[0.98] transition-all pointer-events-auto animate-in slide-in-from-right duration-500
-          ${isReview ? 'border-yellow-100 shadow-yellow-500/5' : 
-            isGoogle ? 'border-red-100' : 
-            isWhatsApp ? 'border-emerald-100' :
-            isInstagram ? 'border-pink-100' :
-            isWiFi ? 'border-blue-100' : 
-            isActionCard ? 'border-indigo-100' : ''}`}
+        className={`${getColors()} w-full p-6 rounded-[2.5rem] border shadow-sm flex items-center gap-6 hover:scale-[1.02] active:scale-[0.98] transition-all pointer-events-auto animate-in slide-in-from-right duration-500`}
       >
-        <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center transition-all group-hover:rotate-6 shadow-sm
-          ${isReview ? 'bg-yellow-50 text-yellow-500' : 
-            isGoogle ? 'bg-red-50 text-red-500' : 
-            isWhatsApp ? 'bg-emerald-50 text-emerald-500' :
-            isInstagram ? 'bg-pink-50 text-pink-500' :
-            isWiFi ? 'bg-blue-50 text-blue-500' : 
-            isActionCard ? 'bg-indigo-50 text-indigo-500' : 'bg-cream'}`}
-          style={(!isReview && !isGoogle && !isWhatsApp && !isInstagram && !isWiFi && !isActionCard) ? { color: accentColor } : {}}>
-           {isReview ? <Star size={32} fill="currentColor" /> : 
-            isGoogle ? <MapPin size={32} /> : 
-            isWhatsApp ? <MessageCircle size={32} /> :
-            isInstagram ? <Instagram size={32} /> :
-            isWiFi ? <Wifi size={32} /> :
-            isActionCard ? <CreditCard size={32} /> :
-            getLucideIcon(block.settings?.icon, 28)}
+        <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center shadow-sm`}>
+           {block.buttonType === 'instagram' && <Instagram size={32} />}
+           {block.buttonType === 'tiktok' && <Music size={32} />}
+           {block.buttonType === 'whatsapp' && <MessageCircle size={32} />}
+           {block.buttonType === 'linkedin' && <Briefcase size={32} />}
+           {block.buttonType === 'youtube' && <Youtube size={32} />}
+           {block.buttonType === 'wifi' && <Wifi size={32} />}
+           {block.buttonType === 'review' && <Star size={32} fill="currentColor" />}
+           {block.buttonType === 'google_profile' && <MapPin size={32} />}
+           {block.buttonType === 'action_card' && <CreditCard size={32} />}
+           {block.buttonType === 'phone' && <Phone size={32} />}
+           {block.buttonType === 'email' && <Mail size={32} />}
+           {block.buttonType === 'booking' && <Calendar size={32} />}
+           {block.buttonType === 'custom_link' && getLucideIcon(block.settings?.icon, 28)}
         </div>
         <div className="text-left flex-1 min-w-0">
-          <p className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[12px] uppercase tracking-widest truncate`}>
-            {block.title || (isGoogle ? 'Google Profil' : isWhatsApp ? 'WhatsApp' : isInstagram ? 'Instagram' : isWiFi ? 'Wi-Fi Connect' : isActionCard ? 'Visitenkarte' : block.buttonType)}
+          <p className={`${isDark && block.buttonType !== 'tiktok' ? 'text-white' : 'font-black'} text-[12px] uppercase tracking-widest truncate`}>
+            {block.title || block.buttonType}
           </p>
-          <p className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-1 opacity-70">
-            {isWiFi ? `SSID: ${block.settings?.ssid || '...'}` : isActionCard ? (block.settings?.description || 'Kontakt Details') : 'Antippen zum Öffnen'}
+          <p className="text-[9px] opacity-60 font-bold uppercase tracking-widest mt-1">
+            {block.buttonType === 'wifi' ? `SSID: ${block.settings?.ssid || '...'}` : 'Antippen zum Öffnen'}
           </p>
         </div>
       </button>

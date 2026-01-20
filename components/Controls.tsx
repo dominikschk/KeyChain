@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { ModelConfig, SVGPathData, NFCBlock, Department, ActionIcon, NFCTemplate, MagicButtonType } from '../types';
 import { Box, Type, Trash2, Edit3, Link as LinkIcon, Image as ImageIcon, Sliders, Award, MessageCircle, Globe, ShoppingCart, Info, User, Mail, Phone, Loader2, Instagram, Utensils, Shield, Layout, Camera, Dumbbell, Heart, Palette, ArrowLeft, RefreshCw, Star, MapPin, Wifi, CreditCard, Briefcase, Zap, Sparkles, Home, Music, Hammer, Stethoscope, ChevronDown, ChevronUp, Calendar, Youtube, Video } from 'lucide-react';
@@ -29,7 +30,7 @@ const IconSelector: React.FC<{ selected: ActionIcon, onSelect: (i: ActionIcon) =
     { id: 'star', icon: Star }, { id: 'mail', icon: Mail }, { id: 'phone', icon: Phone }, 
     { id: 'instagram', icon: Instagram }, { id: 'shield', icon: Shield }, { id: 'heart', icon: Heart },
     { id: 'home', icon: Home }, { id: 'hammer', icon: Hammer }, { id: 'stethoscope', icon: Stethoscope },
-    { id: 'youtube', icon: Youtube }, { id: 'video', icon: Video }
+    { id: 'youtube', icon: Youtube }, { id: 'video', icon: Video }, { id: 'music', icon: Music }
   ];
   return (
     <div className="grid grid-cols-5 gap-1.5 md:gap-2">
@@ -52,7 +53,7 @@ const PropertyPanel: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock>
            <button onClick={onClose} className="p-2.5 hover:bg-cream rounded-full transition-colors active:scale-90"><ArrowLeft size={22} className="text-navy"/></button>
            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-navy">Modul bearbeiten</h2>
         </div>
-        <button onClick={onClose} className="text-[9px] font-black uppercase text-petrol bg-petrol/5 px-5 py-2.5 rounded-xl transition-all active:scale-95">Speichern</button>
+        <button onClick={onClose} className="text-[9px] font-black uppercase text-petrol bg-petrol/5 px-5 py-2.5 rounded-xl transition-all active:scale-95 font-bold">Speichern</button>
       </header>
       
       <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 scroll-container pb-44">
@@ -63,7 +64,7 @@ const PropertyPanel: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock>
 
         {(block.type === 'text' || block.type === 'headline') && (
           <div className="space-y-2">
-            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Textinhalt</label>
+            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Inhaltstext</label>
             <textarea value={block.content} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-2xl border border-navy/5 text-xs h-40 bg-white resize-none font-medium leading-relaxed outline-none focus:border-petrol/30 transition-colors" />
           </div>
         )}
@@ -119,7 +120,7 @@ const PropertyPanel: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock>
             {['custom_link', 'instagram', 'whatsapp', 'review', 'google_profile', 'tiktok', 'linkedin', 'booking', 'email', 'youtube', 'phone'].includes(block.buttonType || '') && (
               <div className="space-y-2">
                 <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Link / Handle / Telefon</label>
-                <input type="text" value={block.content} placeholder={block.buttonType === 'instagram' ? '@name' : 'https://...'} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-2xl border border-navy/5 text-xs bg-white font-bold outline-none" />
+                <input type="text" value={block.content} placeholder={block.buttonType === 'instagram' ? '@deinname' : 'https://...'} onChange={e => onUpdate({ content: e.target.value })} className="w-full p-4 rounded-2xl border border-navy/5 text-xs bg-white font-bold outline-none" />
               </div>
             )}
 
@@ -142,13 +143,13 @@ const PropertyPanel: React.FC<{ block: NFCBlock, onUpdate: (u: Partial<NFCBlock>
               <div className="bg-cream p-4 rounded-xl space-y-4 border border-navy/5">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center px-1">
-                    <label className="text-[8px] font-black uppercase text-zinc-400">Slots</label>
+                    <label className="text-[8px] font-black uppercase text-zinc-400">Anzahl Stempel</label>
                     <span className="text-[10px] font-black text-petrol">{block.settings?.slots || 10}</span>
                   </div>
                   <input type="range" min="5" max="15" value={block.settings?.slots || 10} onChange={e => onUpdate({ settings: { ...block.settings, slots: parseInt(e.target.value) } })} className="w-full accent-petrol" />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[8px] font-black uppercase text-zinc-400 px-1">Admin Code</label>
+                  <label className="text-[8px] font-black uppercase text-zinc-400 px-1">Validierungs-Code</label>
                   <div className="flex gap-2">
                     <input type="text" value={block.settings?.secretKey || ''} readOnly className="flex-1 p-2 rounded bg-white text-[7px] font-mono border border-navy/5" />
                     <button onClick={() => onUpdate({ settings: { ...block.settings, secretKey: generateSecureKey() } })} className="p-2 bg-navy text-white rounded-lg active:scale-90 transition-transform"><RefreshCw size={12}/></button>
@@ -179,8 +180,8 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
       blocks: [
         { id: 'sb1', type: 'headline', content: 'Willkommen', title: 'Entdecke mehr' },
         { id: 'sb2', type: 'magic_button', buttonType: 'action_card', title: 'Kontakt sichern', content: '' },
-        { id: 'sb3', type: 'magic_button', buttonType: 'instagram', title: 'Folge uns', content: '@' },
-        { id: 'sb4', type: 'magic_button', buttonType: 'custom_link', title: 'Webseite', content: 'https://', settings: { icon: 'globe' } }
+        { id: 'sb3', type: 'magic_button', buttonType: 'instagram', title: 'Folge uns', content: 'nudaim3d' },
+        { id: 'sb4', type: 'magic_button', buttonType: 'custom_link', title: 'Webseite', content: 'https://nudaim3d.de', settings: { icon: 'globe' } }
       ],
       accent: '#11235A',
       profileTitle: 'NUDAIM STUDIO'
@@ -193,7 +194,7 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
         { id: 'g1', type: 'headline', content: 'Genuss pur', title: 'Herzlich Willkommen' },
         { id: 'g2', type: 'magic_button', buttonType: 'review', title: 'Bewerte uns', content: '' },
         { id: 'g3', type: 'magic_button', buttonType: 'whatsapp', title: 'Tisch reservieren', content: '' },
-        { id: 'g4', type: 'magic_button', buttonType: 'wifi', title: 'Gäste WLAN', content: '', settings: { ssid: 'WiFi' } }
+        { id: 'g4', type: 'magic_button', buttonType: 'wifi', title: 'Gäste WLAN', content: '', settings: { ssid: 'Gäste-WiFi' } }
       ],
       accent: '#0D9488',
       profileTitle: 'REST-AURANT'
@@ -209,12 +210,12 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
       { id: 'youtube', label: 'YouTube', icon: <Youtube size={18}/>, color: 'text-red-600 bg-red-50', type: 'youtube' },
     ]},
     { group: 'Business Tools', items: [
-      { id: 'action_card', label: 'VCard', icon: <CreditCard size={18}/>, color: 'text-indigo-500 bg-indigo-50', type: 'action_card' },
-      { id: 'booking', label: 'Booking', icon: <Calendar size={18}/>, color: 'text-sky-500 bg-sky-50', type: 'booking' },
+      { id: 'action_card', label: 'Visitenkarte', icon: <CreditCard size={18}/>, color: 'text-indigo-500 bg-indigo-50', type: 'action_card' },
+      { id: 'booking', label: 'Buchung', icon: <Calendar size={18}/>, color: 'text-sky-500 bg-sky-50', type: 'booking' },
       { id: 'email', label: 'E-Mail', icon: <Mail size={18}/>, color: 'text-amber-500 bg-amber-50', type: 'email' },
       { id: 'wifi', label: 'Wi-Fi', icon: <Wifi size={18}/>, color: 'text-blue-500 bg-blue-50', type: 'wifi' },
-      { id: 'link', label: 'Link', icon: <LinkIcon size={18}/>, color: 'text-navy bg-zinc-50', type: 'custom_link' },
-      { id: 'stamp', label: 'Stempel', icon: <Award size={18}/>, color: 'text-orange-500 bg-orange-50', type: 'stamp_card' },
+      { id: 'link', label: 'Web-Link', icon: <LinkIcon size={18}/>, color: 'text-navy bg-zinc-50', type: 'custom_link' },
+      { id: 'stamp', label: 'Treue-Karte', icon: <Award size={18}/>, color: 'text-orange-500 bg-orange-50', type: 'stamp_card' },
     ]}
   ];
 
@@ -329,7 +330,7 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-               <label className="text-[8px] font-black uppercase text-zinc-400 px-1">Banner</label>
+               <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Banner</label>
                <div className="relative h-20 rounded-2xl border border-dashed border-navy/10 bg-cream flex items-center justify-center overflow-hidden cursor-pointer">
                   {config.headerImageUrl ? <img src={config.headerImageUrl} className="w-full h-full object-cover" /> : <ImageIcon size={20} className="text-zinc-300" />}
                   <input type="file" accept="image/*" onChange={async (e) => {
@@ -345,7 +346,7 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
                </div>
             </div>
             <div className="space-y-2">
-               <label className="text-[8px] font-black uppercase text-zinc-400 px-1">Logo</label>
+               <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Logo</label>
                <div className="relative h-20 rounded-2xl border border-dashed border-navy/10 bg-cream flex items-center justify-center overflow-hidden cursor-pointer">
                   {config.profileLogoUrl ? <img src={config.profileLogoUrl} className="w-full h-full object-contain p-2" /> : <User size={20} className="text-zinc-300" />}
                   <input type="file" accept="image/*" onChange={async (e) => {

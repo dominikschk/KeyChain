@@ -20,17 +20,44 @@ export const DEFAULT_CONFIG: ModelConfig = {
   eyeletPosX: -20,
   eyeletPosY: 20,
   nfcTemplate: 'modern',
-  profileTitle: 'DEINE BRAND',
+  profileTitle: 'NUDAIM STUDIO',
   profileIcon: 'briefcase',
-  accentColor: '#006699',
+  accentColor: '#11235A',
   fontStyle: 'luxury',
   theme: 'light',
   nfcBlocks: [
-    {
-      id: 'welcome',
-      type: 'text',
-      title: 'WILLKOMMEN',
-      content: 'Verbinde dich mit uns! Scanne diesen Tag für alle Links.'
+    { 
+      id: 'sb1', 
+      type: 'headline', 
+      content: 'Willkommen', 
+      title: 'Entdecke mehr' 
+    },
+    { 
+      id: 'sb2', 
+      type: 'magic_button', 
+      buttonType: 'action_card', 
+      title: 'Kontakt sichern', 
+      content: '',
+      settings: {
+        name: 'Max Mustermann',
+        description: 'Geschäftsführer',
+        phone: '+49 123 456789'
+      }
+    },
+    { 
+      id: 'sb3', 
+      type: 'magic_button', 
+      buttonType: 'instagram', 
+      title: 'Folge uns', 
+      content: 'nudaim3d' 
+    },
+    { 
+      id: 'sb4', 
+      type: 'magic_button', 
+      buttonType: 'custom_link', 
+      title: 'Unsere Webseite', 
+      content: 'https://nudaim3d.de', 
+      settings: { icon: 'globe' } 
     }
   ]
 };

@@ -1,11 +1,17 @@
-
 import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, ThreeElements } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import { ModelConfig, SVGPathData, ActionIcon } from '../types';
 import { BlockRenderer } from './Microsite';
 import { Globe, ShoppingCart, Info, Briefcase, User, Star, Mail, Phone, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Link as LinkIcon, Zap, Map as MapIcon, Clock, Calendar, Youtube, Video } from 'lucide-react';
+
+// Fix for JSX intrinsic element type errors for @react-three/fiber
+declare global {
+  namespace JSX {
+    interface IntrinsicElements extends ThreeElements {}
+  }
+}
 
 const getLucideIcon = (name?: ActionIcon, size = 20) => {
   switch (name) {
