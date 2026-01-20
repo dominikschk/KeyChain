@@ -1,3 +1,4 @@
+
 import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Canvas, useFrame, ThreeElements } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, ContactShadows } from '@react-three/drei';
@@ -7,6 +8,7 @@ import { BlockRenderer } from './Microsite';
 import { Globe, ShoppingCart, Info, Briefcase, User, Star, Mail, Phone, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Link as LinkIcon, Zap, Map as MapIcon, Clock, Calendar, Youtube, Video } from 'lucide-react';
 
 // Fix for JSX intrinsic element type errors for @react-three/fiber
+// Correctly augmenting the global JSX namespace for Three.js elements recognition
 declare global {
   namespace JSX {
     interface IntrinsicElements extends ThreeElements {}
@@ -91,6 +93,7 @@ const PhonePreview: React.FC<{ config: ModelConfig }> = ({ config }) => {
   );
 };
 
+// BaseModel using augmented intrinsic elements
 const BaseModel = forwardRef<THREE.Mesh, { config: ModelConfig, showNFC?: boolean }>(({ config, showNFC }, ref) => {
   const geometry = useMemo(() => {
     const size = 40;
@@ -144,11 +147,18 @@ const BaseModel = forwardRef<THREE.Mesh, { config: ModelConfig, showNFC?: boolea
   );
 });
 
+// LogoGroup using augmented intrinsic elements
 const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateRef: React.RefObject<THREE.Mesh | null> }> = ({ elements, config, plateRef }) => {
   const groupRef = useRef<THREE.Group>(null);
+  
   const logoElements = useMemo(() => {
     return elements.map(el => {
-      const geo = new THREE.ExtrudeGeometry(el.shapes, { depth: config.logoDepth, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.05 });
+      const geo = new THREE.ExtrudeGeometry(el.shapes, { 
+        depth: config.logoDepth, 
+        bevelEnabled: true, 
+        bevelThickness: 0.1, 
+        bevelSize: 0.05 
+      });
       geo.scale(1, -1, 1);
       geo.rotateX(-Math.PI / 2);
       return { geo, color: config.logoColor };
@@ -169,21 +179,36 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
   useFrame(() => {
     if (plateRef.current && groupRef.current) {
       const plateBox = new THREE.Box3().setFromObject(plateRef.current);
-      groupRef.current.position.y = plateBox.max.y - 0.02;
+      // Adjusted elevation slightly higher (0.05) and ensured it sits correctly on the base
+      groupRef.current.position.y = plateBox.max.y + 0.05;
     }
   });
 
   return (
-    <group position={[config.logoPosX, 0, config.logoPosY]} scale={[config.logoScale, config.logoScale, config.logoScale]} rotation={[0, THREE.MathUtils.degToRad(config.logoRotation), 0]} ref={groupRef}>
+    <group 
+      position={[config.logoPosX, 0, config.logoPosY]} 
+      scale={[config.logoScale, 1, config.logoScale]} 
+      rotation={[0, THREE.MathUtils.degToRad(config.logoRotation), 0]} 
+      ref={groupRef}
+    >
       <group position={[-initialOffset.x, 0, -initialOffset.z]}>
         {logoElements.map((el, idx) => (
-          <mesh key={idx} geometry={el.geo} castShadow><meshStandardMaterial color={el.color} roughness={0.3} metalness={0.1} /></mesh>
+          <mesh key={idx} geometry={el.geo} castShadow>
+            {/* Added DoubleSide and adjusted material to handle "hollow" paths or thin geometry better */}
+            <meshStandardMaterial 
+              color={el.color} 
+              roughness={0.3} 
+              metalness={0.2} 
+              side={THREE.DoubleSide}
+            />
+          </mesh>
         ))}
       </group>
     </group>
   );
 };
 
+// Viewer component utilizing Canvas and Three.js components
 export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean }>(({ config, svgElements, showNFCPreview }, ref) => {
   const plateRef = useRef<THREE.Mesh>(null);
   const r3fState = useRef<{ gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera } | null>(null);
@@ -200,13 +225,13 @@ export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { co
   return (
     <div className="w-full h-full relative bg-cream overflow-hidden">
       <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={(state) => { r3fState.current = { gl: state.gl, scene: state.scene, camera: state.camera }; }}>
-        <PerspectiveCamera makeDefault position={[0, 80, 80]} fov={40} />
-        <OrbitControls makeDefault enableDamping minDistance={30} maxDistance={200} maxPolarAngle={Math.PI/2.2} />
-        <ambientLight intensity={1.2} />
-        <spotLight position={[50, 100, 50]} angle={0.2} penumbra={1} intensity={2} castShadow />
+        <PerspectiveCamera makeDefault position={[0, 60, 60]} fov={40} />
+        <OrbitControls makeDefault enableDamping minDistance={30} maxDistance={150} maxPolarAngle={Math.PI/2.1} />
+        <ambientLight intensity={1.8} />
+        <spotLight position={[50, 100, 50]} angle={0.3} penumbra={1} intensity={4} castShadow />
         <BaseModel ref={plateRef} config={config} />
         {svgElements && <LogoGroup elements={svgElements} config={config} plateRef={plateRef} />}
-        <ContactShadows position={[0, -0.01, 0]} opacity={0.3} scale={80} blur={2.5} far={20} />
+        <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={100} blur={2} far={20} />
       </Canvas>
       {showNFCPreview && <PhonePreview config={config} />}
     </div>

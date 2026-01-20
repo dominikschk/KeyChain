@@ -7,6 +7,7 @@ import { Microsite } from './components/Microsite';
 import { DEFAULT_CONFIG } from './constants';
 import { ModelConfig, SVGPathData, Department, SavingStep, NFCBlock } from './types';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
+import * as THREE from 'three';
 import { supabase } from './lib/supabase';
 
 const ConfirmationModal: React.FC<{ 
@@ -19,7 +20,7 @@ const ConfirmationModal: React.FC<{
     <div className="fixed inset-0 z-[2000] bg-navy/95 backdrop-blur-xl flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[85dvh] shadow-2xl animate-in zoom-in duration-300">
         <header className="p-4 md:p-5 border-b border-navy/5 flex items-center justify-between shrink-0">
-          <h2 className="serif-headline text-lg md:text-xl font-black italic uppercase text-navy">Bestätigung</h2>
+          <h2 className="serif-headline text-lg md:text-xl font-black italic uppercase text-navy">Konfiguration bestätigen</h2>
           <button onClick={onCancel} className="p-2 text-zinc-300 hover:text-navy transition-colors"><X size={24} /></button>
         </header>
         <div className="flex-1 overflow-y-auto p-5 space-y-6 scroll-container min-h-0">
@@ -27,16 +28,21 @@ const ConfirmationModal: React.FC<{
             <div className="aspect-square bg-cream rounded-2xl flex items-center justify-center p-4 border border-navy/5">
               {screenshot ? <img src={screenshot} className="w-full h-full object-contain" alt="Hardware Preview" /> : <Loader2 className="animate-spin opacity-10" />}
             </div>
-            <div className="aspect-square bg-navy rounded-2xl flex flex-col items-center justify-center p-4 text-white text-center">
-               <QrIcon size={24} className="opacity-20 mb-2" />
-               <p className="text-[10px] font-black uppercase tracking-widest">{config.profileTitle}</p>
+            <div className="aspect-square bg-navy rounded-2xl flex flex-col items-center justify-center p-8 text-white text-center">
+               <QrIcon size={32} className="opacity-20 mb-4" />
+               <p className="text-[12px] font-black uppercase tracking-[0.2em]">{config.profileTitle}</p>
+               <p className="text-[8px] uppercase tracking-widest mt-2 opacity-50">Digitales Profil aktiv</p>
             </div>
           </div>
-          <p className="text-[10px] text-zinc-400 leading-relaxed text-center italic">Dein Unikat wird nun vorbereitet. Das Digital-Profil bleibt jederzeit anpassbar.</p>
+          <div className="bg-cream p-4 rounded-2xl border border-navy/5">
+            <p className="text-[10px] text-zinc-500 leading-relaxed text-center italic">
+              Hinweis: Dein Unikat wird nun mit dem gewählten Branding produziert. Das digitale Profil kannst du auch nach der Bestellung jederzeit im Studio anpassen.
+            </p>
+          </div>
         </div>
         <footer className="p-4 md:p-5 border-t border-navy/5 bg-zinc-50 shrink-0">
-          <button onClick={onConfirm} className="w-full h-12 md:h-14 bg-navy text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-transform">
-            <span>ZUM WARENKORB</span>
+          <button onClick={onConfirm} className="w-full h-12 md:h-14 bg-navy text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-transform shadow-lg shadow-navy/20">
+            <span>JETZT BESTELLEN</span>
             <ArrowRight size={18} />
           </button>
         </footer>
@@ -53,17 +59,19 @@ const App: React.FC = () => {
 
   const [config, setConfig] = useState<ModelConfig>(DEFAULT_CONFIG);
   const [svgElements, setSvgElements] = useState<SVGPathData[] | null>(null);
-  const [activeDept, setActiveDept] = useState<Department>('digital');
+  const [activeDept, setActiveDept] = useState<Department>('3d');
   const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('editor');
   const [savingStep, setSavingStep] = useState('idle');
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [currentScreenshot, setCurrentScreenshot] = useState<string | null>(null);
   
   const viewerRef = useRef<{ takeScreenshot: () => Promise<string> }>(null);
-  const [previewType, setPreviewType] = useState<'3d' | 'digital'>('digital');
+  const [previewType, setPreviewType] = useState<'3d' | 'digital'>('3d');
 
   useEffect(() => {
-    setPreviewType(activeDept === '3d' ? '3d' : 'digital');
+    // Sync preview type with tab selection
+    if (activeDept === '3d') setPreviewType('3d');
+    else setPreviewType('digital');
   }, [activeDept]);
 
   const initiateSave = async () => {
@@ -106,40 +114,35 @@ const App: React.FC = () => {
           plateDepth: config.plateDepth,
           logoScale: config.logoScale,
           logoColor: config.logoColor,
-          logoDepth: config.logoDepth
+          logoDepth: config.logoDepth,
+          logoPosX: config.logoPosX,
+          logoPosY: config.logoPosY,
+          logoRotation: config.logoRotation
         }
       }]).select().single();
 
       if (dbError) throw dbError;
 
-      const contentBlocks = config.nfcBlocks.filter(b => b.type !== 'magic_button');
-      if (contentBlocks.length > 0) {
-        await supabase.from('nfc_microsite_blocks').insert(contentBlocks.map((b, i) => ({
-          config_id: configRow.id,
-          type: b.type,
-          title: b.title,
-          content: b.content,
-          image_url: b.imageUrl,
-          sort_order: i
-        })));
-      }
+      // Handle Blocks
+      const { error: blockError } = await supabase.from('nfc_blocks').insert(config.nfcBlocks.map((b, i) => ({
+        config_id: configRow.id,
+        type: b.type,
+        title: b.title,
+        content: b.content,
+        button_type: b.buttonType,
+        image_url: b.imageUrl,
+        settings: b.settings,
+        sort_order: i
+      })));
 
-      const magicButtons = config.nfcBlocks.filter(b => b.type === 'magic_button');
-      if (magicButtons.length > 0) {
-        await supabase.from('nfc_magic_buttons').insert(magicButtons.map((b, i) => ({
-          config_id: configRow.id,
-          button_type: b.buttonType,
-          label: b.title || b.buttonType,
-          target_value: b.content,
-          extra_metadata: b.settings || {},
-          sort_order: i
-        })));
-      }
+      if (blockError) throw blockError;
 
-      window.location.href = `https://nudaim3d.de/cart/add?id=56564338262361&quantity=1&properties[Config-ID]=${shortId}`;
+      // Shopify Redirect
+      window.location.href = `https://nudaim3d.de/cart/add?id=56564338262361&quantity=1&properties[Config-ID]=${shortId}&properties[Preview]=${finalImageUrl}`;
     } catch (err) {
       console.error("Save error:", err);
       setSavingStep('idle');
+      alert("Fehler beim Speichern. Bitte versuche es erneut.");
     }
   };
 
@@ -150,9 +153,38 @@ const App: React.FC = () => {
     reader.onload = (ev) => {
       const loader = new SVGLoader();
       const svgData = loader.parse(ev.target?.result as string);
-      setSvgElements(svgData.paths.map((path, i) => ({
-        id: `path-${i}`, shapes: SVGLoader.createShapes(path), color: path.color.getStyle(), currentColor: path.color.getStyle(), name: `Teil ${i + 1}`
-      })));
+      
+      const elements = svgData.paths.map((path, i) => ({
+        id: `path-${i}`, 
+        shapes: SVGLoader.createShapes(path), 
+        color: path.color.getStyle(), 
+        currentColor: path.color.getStyle(), 
+        name: `Teil ${i + 1}`
+      }));
+
+      // Calculate Bounding Box for Auto-Scaling
+      const box = new THREE.Box3();
+      elements.forEach(el => {
+        el.shapes.forEach(shape => {
+          const points = shape.getPoints();
+          points.forEach(p => box.expandByPoint(new THREE.Vector3(p.x, -p.y, 0)));
+        });
+      });
+
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      
+      // Aim for ~38mm on a 40mm plate (Maximized with small safety margin)
+      const targetSize = 38;
+      const autoScale = targetSize / Math.max(size.x, size.y);
+
+      setSvgElements(elements);
+      setConfig(prev => ({ 
+        ...prev, 
+        logoScale: parseFloat(autoScale.toFixed(3)),
+        logoPosX: 0,
+        logoPosY: 0
+      }));
     };
     reader.readAsText(file);
   };
@@ -175,8 +207,8 @@ const App: React.FC = () => {
              <div className="bg-action/10 text-action px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest">STUDIO</div>
           </div>
           <div className="flex bg-cream p-1 rounded-xl border border-navy/5 shadow-inner">
-            <button onClick={() => setActiveDept('3d')} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeDept === '3d' ? 'bg-white shadow-sm text-petrol' : 'text-zinc-400'}`}>Hardware</button>
-            <button onClick={() => setActiveDept('digital')} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeDept === 'digital' ? 'bg-white shadow-sm text-petrol' : 'text-zinc-400'}`}>Profil</button>
+            <button onClick={() => setActiveDept('3d')} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeDept === '3d' ? 'bg-white shadow-sm text-petrol' : 'text-zinc-400'}`}>3D Branding</button>
+            <button onClick={() => setActiveDept('digital')} className={`flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeDept === 'digital' ? 'bg-white shadow-sm text-petrol' : 'text-zinc-400'}`}>Microsite</button>
           </div>
         </header>
 
@@ -200,7 +232,7 @@ const App: React.FC = () => {
         {/* DESKTOP FOOTER */}
         <footer className="p-5 border-t border-navy/5 bg-zinc-50/50 shrink-0 hidden md:block">
           <button onClick={initiateSave} className="w-full h-12 bg-navy text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 active:scale-95 transition-transform">
-             <span>KONFIGURATION SPEICHERN</span>
+             <span>KONFIGURATION ABSCHLIESSEN</span>
              <ArrowRight size={16} />
           </button>
         </footer>
@@ -211,26 +243,26 @@ const App: React.FC = () => {
         <div className="flex-1 relative overflow-hidden">
           <Viewer ref={viewerRef} config={config} svgElements={svgElements} showNFCPreview={previewType === 'digital'} />
           
-          {/* VIEW TYPE TOGGLE - Mobile Only - Floating */}
-          <div className="md:hidden absolute bottom-24 left-1/2 -translate-x-1/2 z-[400] flex p-1 bg-white/90 backdrop-blur-xl rounded-2xl border border-navy/10 shadow-2xl scale-90">
+          {/* VIEW TYPE TOGGLE - Floating UI */}
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[400] flex p-1 bg-white/90 backdrop-blur-xl rounded-2xl border border-navy/10 shadow-2xl transition-all">
              <button 
                onClick={() => setPreviewType('3d')}
                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-[0.1em] transition-all ${previewType === '3d' ? 'bg-navy text-white shadow-lg' : 'text-zinc-400'}`}
              >
                <Box size={14} />
-               <span>3D View</span>
+               <span>Hardware</span>
              </button>
              <button 
                onClick={() => setPreviewType('digital')}
                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-[0.1em] transition-all ${previewType === 'digital' ? 'bg-navy text-white shadow-lg' : 'text-zinc-400'}`}
              >
                <Smartphone size={14} />
-               <span>Screen</span>
+               <span>Digital</span>
              </button>
           </div>
         </div>
 
-        {/* MOBILE PREVIEW ACTIONS (Bottom fixed when in preview tab) */}
+        {/* MOBILE PREVIEW ACTIONS */}
         <div className="md:hidden p-4 bg-white border-t border-navy/5 shrink-0">
           <button onClick={initiateSave} className="w-full h-12 bg-navy text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-transform">
              <ShoppingCart size={16} />
@@ -242,7 +274,8 @@ const App: React.FC = () => {
         {savingStep !== 'idle' && (
           <div className="absolute inset-0 bg-white/95 backdrop-blur-xl z-[600] flex flex-col items-center justify-center text-center px-6">
             <RefreshCw className="text-petrol animate-spin mb-4" size={48} />
-            <p className="font-black uppercase tracking-widest italic text-navy">Synchronisierung...</p>
+            <p className="font-black uppercase tracking-widest italic text-navy">Konfiguration wird gesichert...</p>
+            <p className="text-[10px] font-bold uppercase text-zinc-400 mt-2">Gleich geht's zum Warenkorb</p>
           </div>
         )}
       </main>
@@ -255,7 +288,7 @@ const App: React.FC = () => {
         </button>
         <button onClick={() => setMobileTab('preview')} className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${mobileTab === 'preview' ? 'text-petrol' : 'text-zinc-300'}`}>
           <Smartphone size={18} />
-          <span className="text-[7px] font-black uppercase tracking-[0.15em]">Vorschau</span>
+          <span className="text-[7px] font-black uppercase tracking-[0.15em]">Preview</span>
         </button>
       </nav>
     </div>
