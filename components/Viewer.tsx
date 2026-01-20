@@ -5,7 +5,7 @@ import { OrbitControls, PerspectiveCamera, ContactShadows } from '@react-three/d
 import * as THREE from 'three';
 import { ModelConfig, SVGPathData, ActionIcon } from '../types';
 import { BlockRenderer } from './Microsite';
-import { Globe, ShoppingCart, Info, Briefcase, User, Star, Mail, Phone, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Link as LinkIcon, Zap, Map as MapIcon, Clock, Calendar } from 'lucide-react';
+import { Globe, ShoppingCart, Info, Briefcase, User, Star, Mail, Phone, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Link as LinkIcon, Zap, Map as MapIcon, Clock, Calendar, Youtube, Video } from 'lucide-react';
 
 const getLucideIcon = (name?: ActionIcon, size = 20) => {
   switch (name) {
@@ -27,6 +27,8 @@ const getLucideIcon = (name?: ActionIcon, size = 20) => {
     case 'map': return <MapIcon size={size} />;
     case 'clock': return <Clock size={size} />;
     case 'calendar': return <Calendar size={size} />;
+    case 'youtube': return <Youtube size={size} />;
+    case 'video': return <Video size={size} />;
     default: return <LinkIcon size={size} />;
   }
 };
@@ -53,10 +55,14 @@ const PhonePreview: React.FC<{ config: ModelConfig }> = ({ config }) => {
              </div>
            )}
            <header className="flex flex-col items-center text-center space-y-3 pt-6 px-5 shrink-0">
-              <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center border border-navy/5 relative z-10 transition-transform">
-                <div style={{ color: config.accentColor }}>
-                   {getLucideIcon(config.profileIcon, 28)}
-                </div>
+              <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center border border-navy/5 relative z-10 transition-transform overflow-hidden">
+                {config.profileLogoUrl ? (
+                   <img src={config.profileLogoUrl} className="w-full h-full object-contain p-2" />
+                ) : (
+                  <div style={{ color: config.accentColor }}>
+                     {getLucideIcon(config.profileIcon, 28)}
+                  </div>
+                )}
               </div>
               <h1 className="serif-headline text-base md:text-xl font-black italic uppercase px-4 leading-tight" style={{ color: isDark ? '#fff' : config.accentColor }}>
                 {config.profileTitle}

@@ -57,7 +57,6 @@
         touch-action: pan-y pinch-zoom;
         min-height: 0;
       }
-      /* Verhindert Scroll-Lag auf iOS */
       .scroll-container > * {
         transform: translateZ(0);
       }
@@ -70,6 +69,23 @@
         background-size: 20px 20px;
       }
       .serif-headline { font-family: 'Playfair Display', serif; }
+
+      /* Professional Circular Reveal Animation */
+      .circular-reveal {
+        animation: circularReveal 0.6s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+        clip-path: circle(0% at 100% 50%);
+      }
+
+      @keyframes circularReveal {
+        from {
+          clip-path: circle(0% at 100% 50%);
+          opacity: 0;
+        }
+        to {
+          clip-path: circle(150% at 100% 50%);
+          opacity: 1;
+        }
+      }
       
       @supports (-webkit-touch-callout: none) { 
         #root { height: 100dvh; }
@@ -92,9 +108,9 @@
     "qrcode": "https://esm.sh/qrcode@1.5.4",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
-    "three/": "https://esm.sh/three@^0.182.0/",
     "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "three/": "https://esm.sh/three@^0.182.0/"
   }
 }
 </script>

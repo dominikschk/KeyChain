@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Smartphone, Wifi, Star, Globe, Link as LinkIcon, AlertTriangle, ShieldCheck, Award, Check, Gift, QrCode, X, MessageCircle, ShoppingCart, Info, User, Mail, Phone, Briefcase, MapPin, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Zap, Map as MapIcon, Clock, Calendar, CreditCard } from 'lucide-react';
+import { Smartphone, Wifi, Star, Globe, Link as LinkIcon, AlertTriangle, ShieldCheck, Award, Check, Gift, QrCode, X, MessageCircle, ShoppingCart, Info, User, Mail, Phone, Briefcase, MapPin, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Zap, Map as MapIcon, Clock, Calendar, CreditCard, Youtube, Video } from 'lucide-react';
 import { ModelConfig, NFCBlock, ActionIcon } from '../types';
 import jsQR from 'jsqr';
 
@@ -29,6 +29,8 @@ const getLucideIcon = (name?: ActionIcon, size = 20) => {
     case 'map': return <MapIcon size={size} />;
     case 'clock': return <Clock size={size} />;
     case 'calendar': return <Calendar size={size} />;
+    case 'youtube': return <Youtube size={size} />;
+    case 'video': return <Video size={size} />;
     default: return <LinkIcon size={size} />;
   }
 };
@@ -207,7 +209,6 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
         const url = block.content;
         if(url && (url.startsWith('http'))) window.open(url, '_blank');
       } else if (block.buttonType === 'action_card') {
-        // vCard creation logic would go here
         alert(`Kontakt: ${block.settings?.name || 'Unbekannt'}\nTel: ${block.settings?.phone || 'Keine'}\nMail: ${block.content || 'Keine'}`);
       } else {
         const url = block.content;
@@ -268,7 +269,6 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
   const currentId = params.get('id') || 'preview';
   const isDark = config.theme === 'dark';
   const template = config.nfcTemplate || 'modern';
-
   const fontClass = config.fontStyle === 'luxury' ? 'font-serif' : config.fontStyle === 'elegant' ? 'serif-headline' : 'font-sans';
 
   if (error) {
@@ -286,28 +286,25 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
     );
   }
 
-  // Template adjustments
   const isMinimal = template === 'minimal';
-  const isProfessional = template === 'professional';
 
   return (
     <div className={`min-h-screen w-full ${isDark ? 'bg-zinc-950 text-white' : 'bg-cream text-navy'} selection:bg-petrol pb-40 flex flex-col items-center overflow-y-auto overflow-x-hidden ${fontClass}`}>
       <header className={`px-8 flex flex-col items-center text-center w-full relative transition-all duration-700 ${isMinimal ? 'pt-12 pb-8' : 'pt-24 pb-16'}`}>
-        {config.headerImageUrl && !isMinimal && (
+        {config.headerImageUrl && (
           <div className="absolute top-0 left-0 w-full h-80 z-0 overflow-hidden">
              <img src={config.headerImageUrl} className="w-full h-full object-cover opacity-60 blur-2xl scale-125" alt="Header Blur" />
              <div className={`absolute inset-0 bg-gradient-to-b from-transparent via-transparent ${isDark ? 'to-zinc-950' : 'to-cream'}`} />
           </div>
         )}
         
-        <div className={`bg-white shadow-[0_20px_60px_rgba(0,0,0,0.1)] flex items-center justify-center border border-navy/5 relative z-10 animate-in zoom-in duration-1000 transition-all
+        <div className={`bg-white shadow-xl flex items-center justify-center border border-navy/5 relative z-10 animate-in zoom-in duration-1000 overflow-hidden
           ${isMinimal ? 'w-20 h-20 rounded-2xl' : 'w-28 h-28 rounded-[2.8rem]'}`}>
-           <div style={{ color: config.accentColor }} className="animate-pulse-slow">
-              {getLucideIcon(config.profileIcon, isMinimal ? 32 : 48)}
-           </div>
-           {!isMinimal && (
-             <div className="absolute -bottom-2 -right-2 bg-action text-white p-2 rounded-2xl shadow-lg ring-4 ring-white">
-                <ShieldCheck size={16} />
+           {config.profileLogoUrl ? (
+             <img src={config.profileLogoUrl} className="w-full h-full object-contain p-2" />
+           ) : (
+             <div style={{ color: config.accentColor }}>
+                {getLucideIcon(config.profileIcon, isMinimal ? 32 : 48)}
              </div>
            )}
         </div>
@@ -320,43 +317,26 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
            {!isMinimal && (
              <div className="flex items-center justify-center gap-2">
                 <span className="w-8 h-[1px] bg-zinc-300" />
-                <span className="text-[9px] font-black uppercase tracking-[0.4em] opacity-40">NFeC Profile System</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.4em] opacity-40">NFeC Verified</span>
                 <span className="w-8 h-[1px] bg-zinc-300" />
              </div>
            )}
         </div>
       </header>
 
-      <main className={`max-w-md w-full px-6 flex-1 relative z-10 transition-all duration-500
-        ${isProfessional ? 'space-y-4' : 'space-y-6'}`}>
-        {config.nfcBlocks.length > 0 ? (
-          config.nfcBlocks.map(block => (
-            <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
-          ))
-        ) : (
-          <div className="p-12 text-center opacity-20 space-y-4">
-             <Smartphone size={48} className="mx-auto" />
-             <p className="font-black uppercase text-xs tracking-widest italic">Keine Inhalte hinterlegt</p>
-          </div>
-        )}
-
-        {/* Microsite Legal Footer */}
-        <div className="pt-20 pb-10 flex flex-col items-center gap-4 opacity-30">
-           <div className="flex gap-6 text-[9px] font-black uppercase tracking-widest">
-              <a href="#" className="hover:opacity-100 transition-opacity">Impressum</a>
-              <a href="#" className="hover:opacity-100 transition-opacity">Datenschutz</a>
-           </div>
-           <p className="text-[7px] font-bold tracking-[0.3em]">POWERED BY NUDAIM3D</p>
-        </div>
+      <main className="max-w-md w-full px-6 flex-1 relative z-10 space-y-6">
+        {config.nfcBlocks.map(block => (
+          <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
+        ))}
       </main>
 
       <footer className="fixed bottom-0 left-0 right-0 p-8 flex justify-center pointer-events-none z-[200]">
         <button 
-          onClick={() => window.location.href = window.location.origin + window.location.pathname}
-          className="px-10 py-5 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex items-center gap-4 hover:scale-105 transition-all pointer-events-auto font-black text-[11px] uppercase tracking-[0.2em] ring-4 ring-white/10 active:scale-95 group"
+          onClick={() => window.location.href = window.location.origin}
+          className="px-10 py-5 rounded-full shadow-2xl flex items-center gap-4 hover:scale-105 transition-all pointer-events-auto font-black text-[11px] uppercase tracking-[0.2em] active:scale-95 group"
           style={{ backgroundColor: config.accentColor, color: '#fff' }}
         >
-          <Smartphone size={18} className="group-hover:rotate-12 transition-transform" />
+          <Smartphone size={18} />
           <span>Eigene NFeC erstellen</span>
         </button>
       </footer>

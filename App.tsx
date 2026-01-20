@@ -93,13 +93,20 @@ const App: React.FC = () => {
       const { data: configRow, error: dbError } = await supabase.from('nfc_configs').insert([{ 
         short_id: shortId, 
         preview_image: finalImageUrl,
+        profile_title: config.profileTitle,
+        header_image_url: config.headerImageUrl,
+        profile_logo_url: config.profileLogoUrl,
+        accent_color: config.accentColor,
+        theme: config.theme,
+        font_style: config.fontStyle,
         plate_data: {
           baseType: config.baseType,
           plateWidth: config.plateWidth,
           plateHeight: config.plateHeight,
           plateDepth: config.plateDepth,
           logoScale: config.logoScale,
-          logoColor: config.logoColor
+          logoColor: config.logoColor,
+          logoDepth: config.logoDepth
         }
       }]).select().single();
 
@@ -131,6 +138,7 @@ const App: React.FC = () => {
 
       window.location.href = `https://nudaim3d.de/cart/add?id=56564338262361&quantity=1&properties[Config-ID]=${shortId}`;
     } catch (err) {
+      console.error("Save error:", err);
       setSavingStep('idle');
     }
   };

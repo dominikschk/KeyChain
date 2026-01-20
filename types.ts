@@ -2,13 +2,13 @@
 import * as THREE from 'three';
 
 export type BaseType = 'nfec_standard';
-export type MagicButtonType = 'stamp_card' | 'review' | 'wifi' | 'whatsapp' | 'custom_link' | 'action_card' | 'google_profile' | 'standard' | 'instagram' | 'tiktok' | 'linkedin' | 'booking' | 'email';
+export type MagicButtonType = 'stamp_card' | 'review' | 'wifi' | 'whatsapp' | 'custom_link' | 'action_card' | 'google_profile' | 'standard' | 'instagram' | 'tiktok' | 'linkedin' | 'booking' | 'email' | 'youtube' | 'phone';
 export type NFCTemplate = 'modern' | 'minimal' | 'professional';
 export type Department = '3d' | 'digital';
 export type SavingStep = 'idle' | 'screenshot' | 'upload' | 'db' | 'done';
 
 export type StampValidation = 'pattern' | 'long_press' | 'daily_limit' | 'qr_code';
-export type ActionIcon = 'link' | 'globe' | 'shopping-cart' | 'info' | 'briefcase' | 'user' | 'star' | 'mail' | 'phone' | 'instagram' | 'utensils' | 'shield' | 'camera' | 'dumbbell' | 'heart' | 'cross' | 'zap' | 'map' | 'clock' | 'calendar' | 'home' | 'music' | 'hammer' | 'stethoscope';
+export type ActionIcon = 'link' | 'globe' | 'shopping-cart' | 'info' | 'briefcase' | 'user' | 'star' | 'mail' | 'phone' | 'instagram' | 'utensils' | 'shield' | 'camera' | 'dumbbell' | 'heart' | 'cross' | 'zap' | 'map' | 'clock' | 'calendar' | 'home' | 'music' | 'hammer' | 'stethoscope' | 'youtube' | 'video';
 
 export type FontStyle = 'luxury' | 'modern' | 'elegant';
 export type ProfileTheme = 'light' | 'dark';
@@ -38,8 +38,8 @@ export interface NFCBlock {
     icon?: ActionIcon;
     buttonLabel?: string;
     description?: string;
-    height?: number; // for spacer
-    address?: string; // for map
+    height?: number;
+    address?: string;
   };
 }
 
@@ -64,6 +64,7 @@ export interface ModelConfig {
   // Digital Profile Customization
   profileTitle: string;
   profileIcon: ActionIcon;
+  profileLogoUrl?: string; // Neues Feld für das digitale Logo
   headerImageUrl?: string;
   accentColor: string;
   fontStyle: FontStyle;
