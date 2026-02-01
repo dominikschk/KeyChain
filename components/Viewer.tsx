@@ -41,10 +41,10 @@ const getLucideIcon = (name?: ActionIcon, size = 20) => {
   }
 };
 
-const PhonePreview: React.FC<{ config: ModelConfig }> = ({ config }) => {
+const PhonePreview: React.FC<{ config: ModelConfig; googleLogoUrl?: string | null }> = ({ config, googleLogoUrl }) => {
   const blocks = config.nfcBlocks || [];
   const isDark = config.theme === 'dark';
-  const fontClass = config.fontStyle === 'luxury' ? 'font-serif' : config.fontStyle === 'elegant' ? 'serif-headline' : 'font-sans';
+  const fontClass = config.fontStyle === 'luxury' ? 'font-sans font-medium' : config.fontStyle === 'elegant' ? 'font-headline' : 'font-sans';
 
   return (
     <div className="absolute inset-0 z-[300] bg-white/40 backdrop-blur-md overflow-y-auto pt-10 pb-24 md:py-12 px-6 flex flex-col items-center">
@@ -64,15 +64,15 @@ const PhonePreview: React.FC<{ config: ModelConfig }> = ({ config }) => {
            )}
            <header className="flex flex-col items-center text-center space-y-3 pt-6 px-5 shrink-0">
               <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center border border-navy/5 relative z-10 transition-transform overflow-hidden">
-                {config.profileLogoUrl ? (
-                   <img src={config.profileLogoUrl} className="w-full h-full object-contain p-2" />
+                {(googleLogoUrl || config.profileLogoUrl) ? (
+                   <img src={googleLogoUrl || config.profileLogoUrl} alt="" className="w-full h-full object-cover object-center" />
                 ) : (
                   <div style={{ color: config.accentColor }}>
                      {getLucideIcon(config.profileIcon, 28)}
                   </div>
                 )}
               </div>
-              <h1 className="serif-headline text-base md:text-xl font-black italic uppercase px-4 leading-tight" style={{ color: isDark ? '#fff' : config.accentColor }}>
+              <h1 className="font-headline text-base md:text-xl font-extrabold uppercase tracking-tight px-4 leading-tight" style={{ color: isDark ? '#fff' : config.accentColor }}>
                 {config.profileTitle}
               </h1>
               <div className="w-6 h-0.5 rounded-full bg-current opacity-10" />
@@ -209,31 +209,58 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
 };
 
 // Viewer component utilizing Canvas and Three.js components
-export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean }>(({ config, svgElements, showNFCPreview }, ref) => {
+export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean, googleLogoUrl?: string | null }>(({ config, svgElements, showNFCPreview, googleLogoUrl }, ref) => {
   const plateRef = useRef<THREE.Mesh>(null);
   const r3fState = useRef<{ gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera } | null>(null);
 
+  /** Zentrierte Kameraposition für konsistente Screenshots (Modell mittig im Bild). */
+  const screenshotCamera = useRef<{ position: [number, number, number]; target: [number, number, number] }>({
+    position: [50, 38, 50],
+    target: [0, 8, 0],
+  });
+
   useImperativeHandle(ref, () => ({
     takeScreenshot: async () => {
-      if (!r3fState.current) return '';
-      const { gl, scene, camera } = r3fState.current;
-      gl.render(scene, camera);
-      return gl.domElement.toDataURL('image/png');
+      try {
+        if (!r3fState.current) {
+          console.warn('R3F state not initialized');
+          return '';
+        }
+        const { gl, scene, camera } = r3fState.current;
+        const cam = camera as THREE.PerspectiveCamera;
+        const savedPosition = cam.position.clone();
+        const savedQuaternion = cam.quaternion.clone();
+        const [px, py, pz] = screenshotCamera.current.position;
+        const [tx, ty, tz] = screenshotCamera.current.target;
+        cam.position.set(px, py, pz);
+        cam.lookAt(new THREE.Vector3(tx, ty, tz));
+        gl.render(scene, camera);
+        const dataUrl = gl.domElement.toDataURL('image/png');
+        cam.position.copy(savedPosition);
+        cam.quaternion.copy(savedQuaternion);
+        if (!dataUrl || dataUrl === 'data:,') {
+          throw new Error('Screenshot generation failed');
+        }
+        return dataUrl;
+      } catch (error) {
+        console.error('Error taking screenshot:', error);
+        throw error;
+      }
     }
   }));
 
   return (
     <div className="w-full h-full relative bg-cream overflow-hidden">
       <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={(state) => { r3fState.current = { gl: state.gl, scene: state.scene, camera: state.camera }; }}>
-        <PerspectiveCamera makeDefault position={[0, 60, 60]} fov={40} />
-        <OrbitControls makeDefault enableDamping minDistance={30} maxDistance={150} maxPolarAngle={Math.PI/2.1} />
+        <PerspectiveCamera makeDefault position={[50, 38, 50]} fov={40} />
+        <OrbitControls makeDefault enableDamping minDistance={30} maxDistance={150} maxPolarAngle={Math.PI/2.1} target={[0, 8, 0]} />
         <ambientLight intensity={1.8} />
         <spotLight position={[50, 100, 50]} angle={0.3} penumbra={1} intensity={4} castShadow />
         <BaseModel ref={plateRef} config={config} />
         {svgElements && <LogoGroup elements={svgElements} config={config} plateRef={plateRef} />}
         <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={100} blur={2} far={20} />
       </Canvas>
-      {showNFCPreview && <PhonePreview config={config} />}
+      {showNFCPreview && <PhonePreview config={config} googleLogoUrl={googleLogoUrl} />}
     </div>
   );
 });

@@ -4,6 +4,20 @@ import { ModelConfig } from './types';
 export const SHOPIFY_CART_URL = 'https://nudaim3d.de/cart/add';
 export const VARIANT_ID = '56564338262361';
 
+/** Builds the Shopify cart add URL with config ID, preview image and optional Microsite-URL. */
+export function buildShopifyCartUrl(shortId: string, previewImageUrl: string, baseUrl?: string): string {
+  const params: Record<string, string> = {
+    id: VARIANT_ID,
+    quantity: '1',
+    'properties[Config-ID]': shortId,
+    'properties[Preview]': previewImageUrl,
+  };
+  if (baseUrl) {
+    params['properties[Microsite-URL]'] = `${baseUrl.replace(/\/$/, '')}/?id=${encodeURIComponent(shortId)}`;
+  }
+  return `${SHOPIFY_CART_URL}?${new URLSearchParams(params).toString()}`;
+}
+
 export const DEFAULT_CONFIG: ModelConfig = {
   baseType: 'nfec_standard',
   plateWidth: 40,

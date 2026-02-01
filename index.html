@@ -9,7 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://esm.sh">
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=League+Spartan:wght@100..900&display=swap" rel="stylesheet">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -22,8 +23,8 @@
               cream: '#FDFCF8',
             },
             fontFamily: {
-              serif: ['"Playfair Display"', 'serif'],
-              sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+              sans: ['"League Spartan"', 'system-ui', 'sans-serif'],
+              headline: ['"League Spartan"', 'system-ui', 'sans-serif'],
             }
           }
         }
@@ -32,17 +33,27 @@
     <style>
       :root {
         --app-height: 100dvh;
+        --navy: #11235A;
+        --petrol: #006699;
+        --action: #12A9E0;
+        --cream: #FDFCF8;
+        --radius: 1rem;
+        --radius-lg: 1.25rem;
+        --tap-min: 44px;
       }
       html, body {
         margin: 0; padding: 0;
         height: 100%;
         width: 100%;
         overflow: hidden;
-        background-color: #FDFCF8;
+        background: var(--cream);
+        font-family: 'League Spartan', system-ui, sans-serif;
+        font-weight: 500;
         -webkit-text-size-adjust: 100%;
         overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
       }
-      #root { 
+      #root {
         height: 100%;
         width: 100%;
         display: flex;
@@ -50,44 +61,58 @@
         overflow: hidden;
       }
       .scroll-container {
-        flex: 1; 
-        overflow-y: auto; 
+        flex: 1;
+        overflow-y: auto;
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
         touch-action: pan-y pinch-zoom;
         min-height: 0;
       }
-      /* Removed transform: translateZ(0) to fix position: fixed bugs */
-      .scroll-container::-webkit-scrollbar { width: 4px; }
-      .scroll-container::-webkit-scrollbar-thumb { background: rgba(0, 102, 153, 0.1); border-radius: 10px; }
-      
-      .technical-grid-fine {
-        background-image: linear-gradient(rgba(18, 169, 224, 0.02) 1px, transparent 1px),
-                          linear-gradient(90deg, rgba(18, 169, 224, 0.02) 1px, transparent 1px);
-        background-size: 20px 20px;
-      }
-      .serif-headline { font-family: 'Playfair Display', serif; }
+      .scroll-container::-webkit-scrollbar { width: 6px; }
+      .scroll-container::-webkit-scrollbar-thumb { background: rgba(0, 102, 153, 0.15); border-radius: 3px; }
+      .scroll-container::-webkit-scrollbar-track { background: transparent; }
 
-      /* Professional Circular Reveal Animation */
+      .technical-grid-fine {
+        background-image:
+          linear-gradient(rgba(17, 35, 90, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(17, 35, 90, 0.03) 1px, transparent 1px);
+        background-size: 16px 16px;
+      }
+      .font-headline { font-family: 'League Spartan', system-ui, sans-serif; font-weight: 700; letter-spacing: -0.02em; }
+      .font-headline-tight { font-family: 'League Spartan', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.03em; }
+
+      .card {
+        background: #fff;
+        border: 1px solid rgba(17, 35, 90, 0.1);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 2px 8px rgba(17, 35, 90, 0.06);
+      }
+      input, textarea, select, button {
+        font-family: inherit;
+      }
+      .btn-tap {
+        min-height: var(--tap-min);
+        min-width: var(--tap-min);
+      }
+
       .circular-reveal {
-        animation: circularReveal 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        animation: circularReveal 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         clip-path: circle(0% at 100% 50%);
         will-change: clip-path;
       }
-
       @keyframes circularReveal {
-        from {
-          clip-path: circle(0% at 100% 50%);
-          opacity: 0.5;
-        }
-        to {
-          clip-path: circle(150% at 100% 50%);
-          opacity: 1;
-        }
+        from { clip-path: circle(0% at 100% 50%); opacity: 0.6; }
+        to { clip-path: circle(150% at 100% 50%); opacity: 1; }
       }
-      
-      @supports (-webkit-touch-callout: none) { 
-        #root { height: 100dvh; }
+
+      .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
+      .pt-safe { padding-top: env(safe-area-inset-top, 0); }
+      .pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0), 8px); }
+      @media (max-width: 768px) {
+        :root { --radius: 0.875rem; --radius-lg: 1rem; }
+      }
+      @supports (-webkit-touch-callout: none) {
+        #root { height: 100dvh; min-height: -webkit-fill-available; }
       }
     </style>
     <script type="importmap">

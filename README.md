@@ -1,20 +1,39 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# NUDAIM / NFeC Studio
 
-# Run and deploy your AI Studio app
+Standalone-App zum Konfigurieren und Bestellen von NFeC-Produkten. Läuft unabhängig; **nur Google** wird für die Anmeldung genutzt (kein Gemini, kein AI Studio).
 
-This contains everything you need to run your app locally.
+## Drei Bereiche (Struktur)
 
-View your app in AI Studio: https://ai.studio/apps/drive/1ff-0mTxXKUGTiVIlONgPEXQrxhbxVvQz
+| Bereich | Pfad | Beschreibung |
+|--------|------|--------------|
+| **Konfigurator** | `/` oder `/configurator` | Panel zum Konfigurieren (3D + Microsite) und Bestellen. |
+| **CCP (Kunden-Panel)** | `/ccp` | Seite für Kunden nach Bestellung: Microsite bearbeiten, Statistiken (Chip-Scans). |
+| **Admin** | `/admin` | Panel für dich: Alle Bestellungen mit Link zur jeweiligen Microsite-URL. |
 
-## Run Locally
+**Ordner:**  
+- `pages/` – ConfiguratorPage, CcpPage, AdminPage  
+- `components/configurator/` – Konfigurator-Komponenten (Controls, Viewer)  
+- `components/ccp/` – CCP-Komponenten (Statistiken, Microsite-Editor für Kunden)  
+- `components/admin/` – Admin-Komponenten (Bestellliste, Microsite-Links)
 
-**Prerequisites:**  Node.js
+## Lokal starten
 
+**Voraussetzung:** Node.js
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1. Abhängigkeiten installieren: `npm install`
+2. App starten: `npm run dev`
+
+## Google-Anmeldung (ohne Supabase)
+
+Die Anmeldung erfolgt **nur über Google** (Google Identity Services). Es wird **kein Supabase** verwendet – das Google-ID-Token wird in der App dekodiert und die Session nur lokal (localStorage) gespeichert. Kein Client-Secret nötig.
+
+1. **Google Cloud Console:** [APIs & Dienste → Anmeldedaten](https://console.cloud.google.com/apis/credentials) → „Anmeldedaten erstellen“ → **OAuth 2.0-Client-ID** → Anwendungstyp **Webanwendung**. Client-ID kopieren.
+2. **Umgebung:** In `.env.local` setzen: `VITE_GOOGLE_CLIENT_ID=<deine-Google-Client-ID>`.
+3. **Autorisierte JavaScript-Quellen** in der Google-Client-ID: z. B. `http://localhost:5174` (dein Vite-Port).
+4. **Autorisierte Weiterleitungs-URIs:** z. B. `http://localhost:5174/`.
+
+(Supabase wird nur noch für Speichern/Upload genutzt, falls konfiguriert – nicht für die Anmeldung.)
+
+## E-Mail nach Bestellung (Microsite + Short-ID)
+
+Siehe **EMAIL_NACH_BESTELLUNG.md**: Option 1 = Microsite-Link in der Shopify-Bestellbestätigung anzeigen. Option 2 = eigene E-Mail per Supabase Edge Function (Resend) nach Bestellung versenden.

@@ -21,9 +21,18 @@ export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
-export const getDetailedError = (error: any) => {
-  const msgText = error?.message || (error && typeof error === 'object' ? JSON.stringify(error) : String(error || "Unknown Error"));
-  const status = error?.status || error?.statusCode || error?.code;
+export interface DetailedError {
+  title: string;
+  msg: string;
+  code: string;
+}
+
+export function getDetailedError(error: unknown): DetailedError {
+  const err = error as { message?: string; status?: string; statusCode?: string; code?: string };
+  const msgText =
+    err?.message ||
+    (error && typeof error === 'object' ? JSON.stringify(error) : String(error ?? 'Unknown Error'));
+  const status = err?.status ?? err?.statusCode ?? err?.code;
 
   console.group("NFeC Sync Diagnostic");
   console.error("Error Message:", msgText);

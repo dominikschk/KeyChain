@@ -1,12 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Smartphone, Wifi, Star, Globe, Link as LinkIcon, AlertTriangle, ShieldCheck, Award, Check, Gift, QrCode, X, MessageCircle, ShoppingCart, Info, User, Mail, Phone, Briefcase, MapPin, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Zap, Map as MapIcon, Clock, Calendar, CreditCard, Youtube, Video, Music } from 'lucide-react';
+import { Smartphone, Wifi, Star, Globe, Link as LinkIcon, AlertTriangle, Award, Check, Gift, QrCode, X, MessageCircle, ShoppingCart, Info, User, Mail, Phone, Briefcase, MapPin, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Zap, Map as MapIcon, Clock, Calendar, CreditCard, Youtube, Video, Music } from 'lucide-react';
 import { ModelConfig, NFCBlock, ActionIcon } from '../types';
 import jsQR from 'jsqr';
+import { showError } from '../lib/utils';
+import { isValidEmail } from '../lib/validation';
 
 interface MicrositeProps {
   config: ModelConfig;
   error?: { title: string, msg: string } | null;
+  /** Logo-URL von Google (Profilbild) – wird verwendet, wenn gesetzt. */
+  googleLogoUrl?: string | null;
 }
 
 const getLucideIcon = (name?: ActionIcon, size = 20) => {
@@ -114,7 +118,7 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string, accentColor: stri
       {isFull && (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-8 text-center text-white animate-in zoom-in duration-500" style={{ backgroundColor: `${accentColor}f2`, backdropFilter: 'blur(12px)' }}>
            <Gift size={48} className="mb-4 animate-bounce" />
-           <h3 className="serif-headline text-3xl font-black italic uppercase mb-2">Karte Voll!</h3>
+           <h3 className="font-headline text-3xl font-extrabold uppercase tracking-tight mb-2">Karte Voll!</h3>
            <p className="text-[10px] font-bold uppercase tracking-widest mb-6 opacity-80">Glückwunsch zum Reward</p>
            <button onClick={(e) => { e.stopPropagation(); setStamps(0); setIsFull(false); localStorage.setItem(`stamps_${configId}_${block.id}`, '0'); }} className="px-8 py-3 bg-white text-navy rounded-xl font-black uppercase text-[10px] hover:shadow-lg transition-all">Neu starten</button>
         </div>
@@ -147,7 +151,7 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
   if (block.type === 'headline') {
     return (
       <div className="py-6 text-center animate-in slide-in-from-bottom-4 duration-700">
-        <h2 className={`serif-headline text-4xl font-black italic uppercase tracking-tight`} style={{ color: isDark ? '#fff' : accentColor }}>
+        <h2 className={`font-headline text-4xl font-extrabold uppercase tracking-tight`} style={{ color: isDark ? '#fff' : accentColor }}>
           {block.content}
         </h2>
         {block.title && <p className="text-[10px] font-black uppercase text-zinc-400 mt-2 tracking-[0.3em]">{block.title}</p>}
@@ -198,9 +202,9 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
       const content = block.content;
 
       if (type === 'wifi') {
-        if(block.settings?.password) {
+        if (block.settings?.password) {
           navigator.clipboard.writeText(block.settings.password);
-          alert(`WiFi Passwort "${block.settings.password}" wurde kopiert! Verbinde dich mit: ${block.settings.ssid}`);
+          showError(`Verbinde dich mit: ${block.settings?.ssid ?? 'WLAN'}`, 'WiFi-Passwort kopiert');
         }
       } else if (type === 'whatsapp') {
         const cleanPhone = content.replace(/[^\d+]/g, '');
@@ -218,14 +222,34 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
         const url = content.startsWith('http') ? content : `https://youtube.com/@${content}`;
         window.open(url, '_blank');
       } else if (type === 'booking' || type === 'review' || type === 'google_profile' || type === 'custom_link') {
-        if (content.startsWith('http')) window.open(content, '_blank');
-        else if (content) window.open(`https://${content}`, '_blank');
+        if (!content) {
+          showError('Bitte gib einen Link ein.');
+          return;
+        }
+        try {
+          const url = content.startsWith('http') ? content : `https://${content}`;
+          const urlObj = new URL(url);
+          window.open(urlObj.toString(), '_blank');
+        } catch {
+          showError('Bitte prüfe die Eingabe.', 'Ungültiger Link');
+        }
       } else if (type === 'email') {
+        if (!content || !isValidEmail(content)) {
+          showError('Bitte gib eine gültige E-Mail-Adresse ein.');
+          return;
+        }
         window.open(`mailto:${content}`, '_blank');
       } else if (type === 'phone') {
+        if (!content) {
+          showError('Bitte gib eine Telefonnummer ein.');
+          return;
+        }
         window.open(`tel:${content}`, '_blank');
       } else if (type === 'action_card') {
-        alert(`Kontakt: ${block.settings?.name || 'Unbekannt'}\nTel: ${block.settings?.phone || 'Keine'}\nMail: ${block.content || 'Keine'}\n\nPosition: ${block.settings?.description || 'N/A'}`);
+        showError(
+          `Tel: ${block.settings?.phone ?? 'Keine'}\nMail: ${block.content ?? 'Keine'}\n\nPosition: ${block.settings?.description ?? 'N/A'}`,
+          `Kontakt: ${block.settings?.name ?? 'Unbekannt'}`
+        );
       }
     };
 
@@ -280,12 +304,12 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
   return null;
 };
 
-export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
+export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoUrl }) => {
   const params = new URLSearchParams(window.location.search);
   const currentId = params.get('id') || 'preview';
   const isDark = config.theme === 'dark';
   const template = config.nfcTemplate || 'modern';
-  const fontClass = config.fontStyle === 'luxury' ? 'font-serif' : config.fontStyle === 'elegant' ? 'serif-headline' : 'font-sans';
+  const fontClass = config.fontStyle === 'luxury' ? 'font-sans font-medium' : config.fontStyle === 'elegant' ? 'font-headline' : 'font-sans';
 
   if (error) {
     return (
@@ -293,7 +317,7 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
         <div className="bg-red-50 p-10 rounded-[3rem] border border-red-100 shadow-2xl space-y-6">
            <AlertTriangle size={64} className="text-red-500 mx-auto animate-bounce" />
            <div className="space-y-2">
-              <h2 className="serif-headline text-3xl font-black italic uppercase">Profil inaktiv</h2>
+              <h2 className="font-headline text-3xl font-extrabold uppercase tracking-tight">Profil inaktiv</h2>
               <p className="text-zinc-500 text-sm max-w-xs mx-auto leading-relaxed">{error.msg}</p>
            </div>
            <button onClick={() => window.location.reload()} className="px-8 py-3 bg-navy text-white rounded-xl font-black uppercase text-[10px] tracking-widest">Erneut versuchen</button>
@@ -316,8 +340,8 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
         
         <div className={`bg-white shadow-xl flex items-center justify-center border border-navy/5 relative z-10 animate-in zoom-in duration-1000 overflow-hidden
           ${isMinimal ? 'w-20 h-20 rounded-2xl' : 'w-28 h-28 rounded-[2.8rem]'}`}>
-           {config.profileLogoUrl ? (
-             <img src={config.profileLogoUrl} className="w-full h-full object-contain p-2" />
+           {(googleLogoUrl || config.profileLogoUrl) ? (
+             <img src={googleLogoUrl || config.profileLogoUrl} alt="" className="w-full h-full object-cover object-center" />
            ) : (
              <div style={{ color: config.accentColor }}>
                 {getLucideIcon(config.profileIcon, isMinimal ? 32 : 48)}
@@ -326,7 +350,7 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error }) => {
         </div>
         
         <div className={`space-y-4 relative z-10 ${isMinimal ? 'mt-6' : 'mt-8'}`}>
-           <h1 className={`serif-headline font-black italic uppercase tracking-tight leading-tight px-6 animate-in slide-in-from-top-4 duration-700 transition-all
+           <h1 className={`font-headline font-extrabold uppercase tracking-tight leading-tight px-6 animate-in slide-in-from-top-4 duration-700 transition-all
              ${isMinimal ? 'text-3xl' : 'text-5xl'}`} style={{ color: isDark ? '#fff' : config.accentColor }}>
                {config.profileTitle}
            </h1>
