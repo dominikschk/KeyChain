@@ -16,7 +16,7 @@ interface ControlsProps {
 }
 
 const IconSelector: React.FC<{ selected: ActionIcon; onSelect: (i: ActionIcon) => void }> = ({ selected, onSelect }) => {
-  const icons: { id: ActionIcon; icon: React.ComponentType<{ size?: number }> }[] = [
+  const icons: { id: ActionIcon; icon: React.ComponentType<{ size?: number | string }> }[] = [
     { id: 'briefcase', icon: Briefcase }, { id: 'utensils', icon: Utensils }, { id: 'camera', icon: Camera },
     { id: 'dumbbell', icon: Dumbbell }, { id: 'link', icon: LinkIcon }, { id: 'globe', icon: Globe }, 
     { id: 'shopping-cart', icon: ShoppingCart }, { id: 'info', icon: Info }, { id: 'user', icon: User }, 
@@ -442,7 +442,7 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
           </label>
           <div className="grid grid-cols-2 gap-2 sm:gap-3">
              {industryTemplates.map(tpl => (
-               <button key={tpl.id} type="button" onClick={() => applyTemplate(tpl)} className={`card p-3 sm:p-4 flex flex-col items-start gap-2 sm:gap-3 transition-all active:scale-[0.98] min-h-[80px] sm:min-h-0 text-left ${config.profileTitle === tpl.profileTitle ? 'ring-2 ring-petrol/30 border-petrol/20' : ''}`}>
+               <button key={tpl.id} type="button" onClick={() => applyTemplate({ name: tpl.name, profileTitle: tpl.profileTitle, accent: tpl.accent, blocks: tpl.blocks as NFCBlock[] })} className={`card p-3 sm:p-4 flex flex-col items-start gap-2 sm:gap-3 transition-all active:scale-[0.98] min-h-[80px] sm:min-h-0 text-left ${config.profileTitle === tpl.profileTitle ? 'ring-2 ring-petrol/30 border-petrol/20' : ''}`}>
                   <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${tpl.accent}18`, color: tpl.accent }}>{tpl.icon}</div>
                   <div className="min-w-0">
                     <p className="text-[8px] font-black uppercase tracking-wider text-navy truncate">{tpl.name}</p>
