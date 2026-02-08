@@ -1,0 +1,10 @@
+{
+  "rewrites": [
+    { "source": "/ccp", "destination": "/index.html" },
+    { "source": "/ccp/", "destination": "/index.html" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/admin/", "destination": "/index.html" },
+    { "source": "/configurator", "destination": "/index.html" },
+    { "source": "/configurator/", "destination": "/index.html" }
+  ]
+}
