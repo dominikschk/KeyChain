@@ -2,6 +2,18 @@
 
 Standalone-App zum Konfigurieren und Bestellen von NFeC-Produkten. B2B-orientiert; Anmeldung per **Google** (Google Identity Services).
 
+## Produktion (Vercel)
+
+**App-URL:** Alle Bereiche laufen unter derselben Domain, z. B. **https://konfigurator.nudaim3d.de**:
+
+| Bereich | URL |
+|--------|-----|
+| Konfigurator | https://konfigurator.nudaim3d.de |
+| Kunden-Panel (CCP) | https://konfigurator.nudaim3d.de/ccp?id=SHORT_ID |
+| Admin | https://konfigurator.nudaim3d.de/admin |
+
+Microsite-Links (nach Bestellung) zeigen auf `https://konfigurator.nudaim3d.de/?id=SHORT_ID`. In Vercel die Custom Domain **konfigurator.nudaim3d.de** eintragen (Settings → Domains).
+
 ## Bereiche
 
 | Bereich | Pfad | Beschreibung |
@@ -48,7 +60,7 @@ Die Anmeldung erfolgt **nur über Google** (Google Identity Services). Es wird *
 
 ## Admin-Panel (nur direkter Link + Passwort)
 
-- **URL:** Nur über direkte Eingabe erreichbar, z. B. `https://deine-domain.de/admin`. Es gibt **keinen Link** dazu in der App.
+- **URL:** Nur über direkte Eingabe erreichbar, z. B. `https://konfigurator.nudaim3d.de/admin`. Es gibt **keinen Link** dazu in der App.
 - **Passwort:** `VITE_ADMIN_PASSWORD` **muss gesetzt sein**, sonst ist der Admin-Zugang deaktiviert (niemand kommt rein). In `.env.local` (lokal) oder in den Umgebungsvariablen des Hosters (Vercel/Netlify) setzen.
 - **Sicherheit:** Nach Login läuft die Sitzung nach 8 Stunden ab (optional: `VITE_ADMIN_SESSION_HOURS`). Nach 5 Fehlversuchen: 15 Minuten Lockout. Kein Zugang ohne Passwort.
 

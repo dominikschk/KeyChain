@@ -84,7 +84,7 @@ export const CcpPage: React.FC = () => {
           <section className="card p-5">
             <p className="text-sm text-zinc-600">
               Bitte den Link aus deiner Bestellbestätigung verwenden, z. B.:{' '}
-              <strong className="text-navy">http://localhost:5173/ccp?id=DEIN_SHORT_ID</strong>
+              <strong className="text-navy break-all">{typeof window !== 'undefined' ? `${window.location.origin}/ccp?id=DEIN_SHORT_ID` : 'https://konfigurator.nudaim3d.de/ccp?id=DEIN_SHORT_ID'}</strong>
             </p>
           </section>
         )}
