@@ -48,7 +48,7 @@ function mapBlockRow(row: BlockRow): NFCBlock {
 /**
  * Konfiguration anhand short_id aus Supabase laden (für Microsite-URL ?id=short_id und CCP).
  */
-export async function getConfigByShortId(shortId: string): Promise<{ config: ModelConfig; configId: string } | null> {
+export async function getConfigByShortId(shortId: string): Promise<{ config: ModelConfig; configId: string; logoSvg?: string | null } | null> {
   if (!supabase) return null;
 
   const { data: configRow, error: configError } = await supabase

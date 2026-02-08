@@ -154,10 +154,12 @@ const ConfiguratorPage: React.FC = () => {
   useEffect(() => {
     const product = PRODUCTS.find((p) => p.id === selectedProductId);
     if (product?.plateWidthMm != null && product?.plateHeightMm != null) {
+      const w = product.plateWidthMm;
+      const h = product.plateHeightMm;
       setConfig((prev) => ({
         ...prev,
-        plateWidth: product.plateWidthMm,
-        plateHeight: product.plateHeightMm,
+        plateWidth: w,
+        plateHeight: h,
       }));
     }
   }, [selectedProductId]);
