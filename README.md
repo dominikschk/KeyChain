@@ -1,14 +1,14 @@
-# NUDAIM / NFeC Studio
+# NFeC Konfigurator (B2B)
 
-Standalone-App zum Konfigurieren und Bestellen von NFeC-Produkten. Läuft unabhängig; **nur Google** wird für die Anmeldung genutzt (kein Gemini, kein AI Studio).
+Standalone-App zum Konfigurieren und Bestellen von NFeC-Produkten. B2B-orientiert; Anmeldung per **Google** (Google Identity Services).
 
-## Drei Bereiche (Struktur)
+## Bereiche
 
 | Bereich | Pfad | Beschreibung |
 |--------|------|--------------|
-| **Konfigurator** | `/` oder `/configurator` | Panel zum Konfigurieren (3D + Microsite) und Bestellen. |
-| **CCP (Kunden-Panel)** | `/ccp` | Seite für Kunden nach Bestellung: Microsite bearbeiten, Statistiken (Chip-Scans). |
-| **Admin** | `/admin` | Panel für dich: Alle Bestellungen mit Link zur jeweiligen Microsite-URL. |
+| **Konfigurator** | `/` oder `/configurator` | Konfigurieren (3D + Microsite) und Bestellen. |
+| **Kunden-Panel** | `/ccp?id=SHORT_ID` | Für Kunden nach Bestellung: Microsite-Link, Scan-Statistiken. |
+| **Admin** | `/admin` | **Nur per direkter URL** – kein Link in der App. Mit Passwortschutz (siehe unten). Bestellübersicht, Copy-Links für Microsite und Kunden-Panel. |
 
 **Ordner:**  
 - `pages/` – ConfiguratorPage, CcpPage, AdminPage  
@@ -32,7 +32,25 @@ Die Anmeldung erfolgt **nur über Google** (Google Identity Services). Es wird *
 3. **Autorisierte JavaScript-Quellen** in der Google-Client-ID: z. B. `http://localhost:5174` (dein Vite-Port).
 4. **Autorisierte Weiterleitungs-URIs:** z. B. `http://localhost:5174/`.
 
-(Supabase wird nur noch für Speichern/Upload genutzt, falls konfiguriert – nicht für die Anmeldung.)
+(Supabase wird für Speichern/Upload und Bestellübersicht genutzt – nicht für die Anmeldung.)
+
+## Umgebungsvariablen (Übersicht)
+
+| Variable | Pflicht | Beschreibung |
+|----------|--------|--------------|
+| `VITE_SUPABASE_URL` | Ja | Supabase Project URL (Project Settings → API). |
+| `VITE_SUPABASE_ANON_KEY` | Ja | Supabase anon (public) Key. |
+| `VITE_ADMIN_PASSWORD` | Ja für Admin | Ohne gesetztes Passwort ist `/admin` gesperrt. Starkes Passwort verwenden. |
+| `VITE_ADMIN_SESSION_HOURS` | Nein | Session-Dauer in Stunden (Standard 8). |
+| `VITE_GOOGLE_CLIENT_ID` | Nein | Für Google-Login im Konfigurator. |
+
+**Lokal:** `.env.local` anlegen (siehe `.env.example`). **Deploy (z. B. Vercel):** Settings → Environment Variables → alle `VITE_*` eintragen und neu deployen.
+
+## Admin-Panel (nur direkter Link + Passwort)
+
+- **URL:** Nur über direkte Eingabe erreichbar, z. B. `https://deine-domain.de/admin`. Es gibt **keinen Link** dazu in der App.
+- **Passwort:** `VITE_ADMIN_PASSWORD` **muss gesetzt sein**, sonst ist der Admin-Zugang deaktiviert (niemand kommt rein). In `.env.local` (lokal) oder in den Umgebungsvariablen des Hosters (Vercel/Netlify) setzen.
+- **Sicherheit:** Nach Login läuft die Sitzung nach 8 Stunden ab (optional: `VITE_ADMIN_SESSION_HOURS`). Nach 5 Fehlversuchen: 15 Minuten Lockout. Kein Zugang ohne Passwort.
 
 ## E-Mail nach Bestellung (Microsite + Short-ID)
 

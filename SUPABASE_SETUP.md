@@ -133,3 +133,34 @@ CREATE POLICY "nudaim_public_read" ON storage.objects FOR SELECT
 | Bucket `nudaim`  | Storage → New bucket        | Screenshots / Bilder           |
 
 Nach dem Einrichten: App neu starten (`npm run dev`), dann funktionieren `/admin`, `/ccp?id=…` und `/?id=…` mit deinem Supabase-Projekt.
+
+---
+
+## Erweiterungen (Orders, STL, mehrere Produkte)
+
+Falls du die Tabellen schon angelegt hast und nur **Bestellungen**, **STL-URL** und **Produkttyp** ergänzen willst:
+
+```sql
+-- Spalten in nfc_configs (falls noch nicht vorhanden)
+ALTER TABLE public.nfc_configs ADD COLUMN IF NOT EXISTS stl_url TEXT;
+ALTER TABLE public.nfc_configs ADD COLUMN IF NOT EXISTS product_type TEXT;
+
+-- Tabelle Bestellungen (Short-ID ↔ Bestellung ↔ Status)
+CREATE TABLE IF NOT EXISTS public.orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shopify_order_id TEXT,
+  order_number TEXT,
+  short_id TEXT NOT NULL,
+  config_id UUID REFERENCES public.nfc_configs(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_orders_short_id ON public.orders(short_id);
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "orders_select" ON public.orders FOR SELECT USING (true);
+CREATE POLICY "orders_insert" ON public.orders FOR INSERT WITH CHECK (true);
+CREATE POLICY "orders_update" ON public.orders FOR UPDATE USING (true);
+```
+
+Vollständiges Schema siehe **supabase-schema.sql**.

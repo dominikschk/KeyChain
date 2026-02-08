@@ -6,15 +6,32 @@ import type { ModelConfig, NFCBlock } from '../types';
 import { DEFAULT_CONFIG } from '../constants';
 
 const STORAGE_KEY_DRAFT = 'nudaim_studio_draft';
+const STORAGE_KEY_DRAFT_SVG = 'nudaim_studio_draft_svg';
 /** SessionStorage-Key für Vorschau in neuem Tab. */
 export const PREVIEW_STORAGE_KEY = 'nudaim_preview_config';
 
 /** Speichert die aktuelle Konfiguration als Entwurf im localStorage. */
-export function saveDraft(config: ModelConfig): void {
+export function saveDraft(config: ModelConfig, svgContent?: string | null): void {
   try {
     localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(config));
+    if (svgContent !== undefined) {
+      if (svgContent) {
+        localStorage.setItem(STORAGE_KEY_DRAFT_SVG, svgContent);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_DRAFT_SVG);
+      }
+    }
   } catch (e) {
     console.warn('saveDraft failed:', e);
+  }
+}
+
+/** Lädt den gespeicherten SVG-Content aus dem Draft. */
+export function loadDraftSvg(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY_DRAFT_SVG);
+  } catch {
+    return null;
   }
 }
 
@@ -34,6 +51,7 @@ export function loadDraft(): ModelConfig | null {
 export function clearDraft(): void {
   try {
     localStorage.removeItem(STORAGE_KEY_DRAFT);
+    localStorage.removeItem(STORAGE_KEY_DRAFT_SVG);
   } catch {
     // ignore
   }

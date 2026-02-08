@@ -1,10 +1,10 @@
 /**
  * CCP – Customer Control Panel.
- * URL: http://localhost:5173/ccp?id=SHORT_ID (oder ?short_id=SHORT_ID)
- * Kunden nach Bestellung: Microsite bearbeiten, Statistiken Chip-Scans (Supabase).
+ * URL: /ccp?id=SHORT_ID (oder ?short_id=SHORT_ID)
+ * Kunden nach Bestellung: Microsite-Link, Statistiken Chip-Scans.
  */
-import React, { useState, useEffect } from 'react';
-import { Smartphone, BarChart3, ArrowLeft, Loader2, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Smartphone, BarChart3, ArrowLeft, Loader2, ExternalLink, Copy, Check } from 'lucide-react';
 import { getConfigByShortId, getScanCount, getScanCountLast30Days } from '../lib/configApi';
 
 function getShortIdFromUrl(): string | null {
@@ -59,6 +59,14 @@ export const CcpPage: React.FC = () => {
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const micrositeUrl = shortId ? `${baseUrl}/?id=${encodeURIComponent(shortId)}` : '';
+  const [copied, setCopied] = useState(false);
+  const copyMicrositeLink = useCallback(() => {
+    if (!micrositeUrl) return;
+    navigator.clipboard.writeText(micrositeUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [micrositeUrl]);
 
   return (
     <div className="min-h-screen flex flex-col bg-cream text-navy">
@@ -99,38 +107,48 @@ export const CcpPage: React.FC = () => {
             <section className="card p-5">
               <h2 className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy flex items-center gap-2 mb-3">
                 <Smartphone size={18} />
-                Meine Microsite bearbeiten
+                Meine Microsite
               </h2>
-              <p className="text-sm text-zinc-600 mb-4">
+              <p className="text-sm text-zinc-500 mb-4">
                 Profil: <strong className="text-navy">{profileTitle}</strong>
               </p>
-              <a
-                href={micrositeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-navy text-white text-sm font-semibold hover:bg-navy/90 active:scale-[0.98]"
-              >
-                <ExternalLink size={16} />
-                Microsite öffnen
-              </a>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={micrositeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-navy text-white text-sm font-semibold hover:bg-navy/90 active:scale-[0.98]"
+                >
+                  <ExternalLink size={16} />
+                  Öffnen
+                </a>
+                <button
+                  type="button"
+                  onClick={copyMicrositeLink}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-zinc-200 text-zinc-700 text-sm font-medium hover:bg-zinc-50"
+                >
+                  {copied ? <Check size={16} /> : <Copy size={16} />}
+                  {copied ? 'Kopiert' : 'Link kopieren'}
+                </button>
+              </div>
             </section>
 
             <section className="card p-5">
               <h2 className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy flex items-center gap-2 mb-3">
                 <BarChart3 size={18} />
-                Statistiken – Chip-Scans (Supabase)
+                Chip-Scans
               </h2>
-              <p className="text-sm text-zinc-600 mb-4">
-                Wie oft deine NFeC-Chips gescannt wurden. Tabelle <code className="text-xs bg-zinc-100 px-1 rounded">nfc_scans</code> in Supabase.
+              <p className="text-sm text-zinc-500 mb-4">
+                Anzahl Aufrufe deiner Microsite (NFC-Scans).
               </p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-zinc-50 border border-zinc-200/80 p-4 text-center">
+                <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-center">
                   <p className="text-2xl font-extrabold text-navy">{scanTotal ?? '—'}</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Scans gesamt</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Gesamt</p>
                 </div>
-                <div className="rounded-xl bg-zinc-50 border border-zinc-200/80 p-4 text-center">
+                <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-center">
                   <p className="text-2xl font-extrabold text-navy">{scan30d ?? '—'}</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Scans (30 Tage)</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Letzte 30 Tage</p>
                 </div>
               </div>
             </section>

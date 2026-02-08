@@ -7,7 +7,7 @@ import { Viewer } from '../components/Viewer';
 import { Controls } from '../components/Controls';
 import { Microsite } from '../components/Microsite';
 import { LoginScreen } from '../components/LoginScreen';
-import { DEFAULT_CONFIG, buildShopifyCartUrl } from '../constants';
+import { DEFAULT_CONFIG, buildShopifyCartUrl, PRODUCTS } from '../constants';
 import { ModelConfig, SVGPathData, Department } from '../types';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import * as THREE from 'three';
@@ -20,6 +20,7 @@ import type { AuthSession } from '../lib/auth';
 import {
   saveDraft,
   loadDraft,
+  loadDraftSvg,
   clearDraft,
   getDefaultConfig,
   exportConfigToJson,
@@ -121,6 +122,8 @@ const ConfiguratorPage: React.FC = () => {
     return draft ?? JSON.parse(JSON.stringify(DEFAULT_CONFIG));
   });
   const [svgElements, setSvgElements] = useState<SVGPathData[] | null>(null);
+  const [svgContent, setSvgContent] = useState<string | null>(() => loadDraftSvg());
+  const [selectedProductId, setSelectedProductId] = useState<string>(() => PRODUCTS[0]?.id ?? 'keychain');
   const [activeDept, setActiveDept] = useState<Department>('3d');
   const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('editor');
   const [savingStep, setSavingStep] = useState('idle');
@@ -130,7 +133,7 @@ const ConfiguratorPage: React.FC = () => {
   const draftSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const viewerRef = useRef<{ takeScreenshot: () => Promise<string> }>(null);
+  const viewerRef = useRef<{ takeScreenshot: () => Promise<string>; exportSTL: () => Promise<Blob | null> }>(null);
   const [previewType, setPreviewType] = useState<'3d' | 'digital'>('3d');
 
   useEffect(() => {
@@ -141,15 +144,29 @@ const ConfiguratorPage: React.FC = () => {
   useEffect(() => {
     if (draftSaveRef.current) clearTimeout(draftSaveRef.current);
     draftSaveRef.current = setTimeout(() => {
-      saveDraft(config);
+      saveDraft(config, svgContent);
       draftSaveRef.current = null;
     }, 1500);
     return () => { if (draftSaveRef.current) clearTimeout(draftSaveRef.current); };
-  }, [config]);
+  }, [config, svgContent]);
+
+  // Beim Produktwechsel Plattenmaße aus Produkt übernehmen (z. B. Messe-Badge 110×150 mm)
+  useEffect(() => {
+    const product = PRODUCTS.find((p) => p.id === selectedProductId);
+    if (product?.plateWidthMm != null && product?.plateHeightMm != null) {
+      setConfig((prev) => ({
+        ...prev,
+        plateWidth: product.plateWidthMm,
+        plateHeight: product.plateHeightMm,
+      }));
+    }
+  }, [selectedProductId]);
 
   const handleResetConfig = useCallback(() => {
     if (!window.confirm('Konfiguration auf Standard zurücksetzen? Der aktuelle Entwurf geht verloren.')) return;
     setConfig(getDefaultConfig());
+    setSvgElements(null);
+    setSvgContent(null);
     clearDraft();
   }, []);
 
@@ -229,6 +246,7 @@ const ConfiguratorPage: React.FC = () => {
         finalImageUrl = url;
       }
       setSavingStep('db');
+      const product = PRODUCTS.find((p) => p.id === selectedProductId) ?? PRODUCTS[0];
       const { data: configRow, error: dbError } = await supabase.from('nfc_configs').insert([{
         short_id: shortId,
         preview_image: finalImageUrl,
@@ -238,6 +256,7 @@ const ConfiguratorPage: React.FC = () => {
         accent_color: config.accentColor,
         theme: config.theme,
         font_style: config.fontStyle,
+        product_type: product?.id ?? null,
         plate_data: {
           baseType: config.baseType,
           plateWidth: config.plateWidth,
@@ -248,7 +267,8 @@ const ConfiguratorPage: React.FC = () => {
           logoDepth: config.logoDepth,
           logoPosX: config.logoPosX,
           logoPosY: config.logoPosY,
-          logoRotation: config.logoRotation
+          logoRotation: config.logoRotation,
+          logo_svg: svgContent || null
         }
       }]).select().single();
       if (dbError) throw dbError;
@@ -265,9 +285,25 @@ const ConfiguratorPage: React.FC = () => {
         })));
         if (blockError) throw blockError;
       }
+      let stlUrl: string | null = null;
+      if (viewerRef.current?.exportSTL) {
+        try {
+          const stlBlob = await viewerRef.current.exportSTL();
+          if (stlBlob) {
+            const stlPath = `stl/${shortId}.stl`;
+            stlUrl = await uploadAndGetPublicUrl(supabase, stlPath, stlBlob, { upsert: true });
+            if (stlUrl) {
+              await supabase.from('nfc_configs').update({ stl_url: stlUrl }).eq('id', configRow.id);
+            }
+          }
+        } catch (e) {
+          console.warn('STL export/upload failed:', e);
+        }
+      }
       setSavingStep('done');
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      window.location.href = buildShopifyCartUrl(shortId, finalImageUrl, baseUrl);
+      const variantId = product?.variantId ?? '56564338262361';
+      window.location.href = buildShopifyCartUrl(variantId, shortId, finalImageUrl, baseUrl);
     } catch (err) {
       console.error('Save error:', err);
       setSavingStep('idle');
@@ -275,6 +311,49 @@ const ConfiguratorPage: React.FC = () => {
       showError(errorDetails.msg, errorDetails.title);
     }
   };
+
+  const parseSvgContent = useCallback((content: string, autoScaleLogo = true): { elements: SVGPathData[]; scale: number } | null => {
+    try {
+      if (!content?.trim()) return null;
+      const loader = new SVGLoader();
+      const svgData = loader.parse(content);
+      if (!svgData.paths?.length) return null;
+      const elements = svgData.paths.map((path, i) => ({
+        id: `path-${i}`,
+        shapes: SVGLoader.createShapes(path),
+        color: path.color.getStyle(),
+        currentColor: path.color.getStyle(),
+        name: `Teil ${i + 1}`,
+      }));
+      const box = new THREE.Box3();
+      elements.forEach((el) => {
+        el.shapes.forEach((shape) => {
+          shape.getPoints().forEach((p) =>
+            box.expandByPoint(new THREE.Vector3(p.x, -p.y, 0))
+          );
+        });
+      });
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      if (size.x === 0 && size.y === 0) return null;
+      const targetSize = 38;
+      const scale = autoScaleLogo ? parseFloat((targetSize / Math.max(size.x, size.y)).toFixed(3)) : 1;
+      return { elements, scale };
+    } catch (err) {
+      console.error('SVG parsing error:', err);
+      return null;
+    }
+  }, []);
+
+  // SVG aus Draft beim Initialisieren wiederherstellen
+  useEffect(() => {
+    if (svgContent && !svgElements) {
+      const parsed = parseSvgContent(svgContent, false);
+      if (parsed) {
+        setSvgElements(parsed.elements);
+      }
+    }
+  }, [svgContent, svgElements, parseSvgContent]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -292,48 +371,28 @@ const ConfiguratorPage: React.FC = () => {
     };
     reader.onload = (ev) => {
       try {
-        const svgContent = ev.target?.result as string;
-        if (!svgContent?.trim()) throw new Error('Die SVG-Datei ist leer.');
-        const loader = new SVGLoader();
-        const svgData = loader.parse(svgContent);
-        if (!svgData.paths?.length) {
-          showError('Bitte verwende eine gültige SVG-Datei.', 'Die SVG-Datei enthält keine Pfade.');
+        const content = ev.target?.result as string;
+        if (!content?.trim()) {
+          showError('Die SVG-Datei ist leer.');
           resetFileInput(e.target);
           return;
         }
-        const elements = svgData.paths.map((path, i) => ({
-          id: `path-${i}`,
-          shapes: SVGLoader.createShapes(path),
-          color: path.color.getStyle(),
-          currentColor: path.color.getStyle(),
-          name: `Teil ${i + 1}`,
-        }));
-        const box = new THREE.Box3();
-        elements.forEach((el) => {
-          el.shapes.forEach((shape) => {
-            shape.getPoints().forEach((p) =>
-              box.expandByPoint(new THREE.Vector3(p.x, -p.y, 0))
-            );
-          });
-        });
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        if (size.x === 0 && size.y === 0) {
-          showError('Bitte prüfe die Datei.', 'Die SVG-Datei konnte nicht verarbeitet werden.');
+        const parsed = parseSvgContent(content);
+        if (!parsed) {
+          showError('Bitte verwende eine gültige SVG-Datei.', 'Die SVG-Datei konnte nicht verarbeitet werden.');
           resetFileInput(e.target);
           return;
         }
-        const targetSize = 38;
-        const autoScale = targetSize / Math.max(size.x, size.y);
-        setSvgElements(elements);
+        setSvgElements(parsed.elements);
+        setSvgContent(content);
         setConfig((prev) => ({
           ...prev,
-          logoScale: parseFloat(autoScale.toFixed(3)),
+          logoScale: parsed.scale,
           logoPosX: 0,
           logoPosY: 0,
         }));
       } catch (err) {
-        console.error('SVG parsing error:', err);
+        console.error('SVG upload error:', err);
         showError('Bitte stelle sicher, dass es sich um eine gültige SVG-Datei handelt.', 'Fehler beim Verarbeiten der SVG-Datei.');
         resetFileInput(e.target);
       }
@@ -423,7 +482,6 @@ const ConfiguratorPage: React.FC = () => {
                     <p className="text-xs font-semibold text-navy truncate">{session?.user?.id === 'guest' ? 'Gast' : (session?.user?.email ?? 'Angemeldet')}</p>
                   </div>
                   <a href="/ccp" className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Smartphone size={14} /> Kunden-Panel</a>
-                  <a href="/admin" className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ShoppingCart size={14} /> Admin</a>
                   <button type="button" onClick={() => { handleExportConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Download size={14} /> Export</button>
                   <label className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"><Upload size={14} /> Import<input type="file" accept=".json,application/json" onChange={(e) => { handleImportConfig(e); setUserMenuOpen(false); }} className="hidden" /></label>
                   <button type="button" onClick={() => { handlePreviewInNewTab(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ExternalLink size={14} /> Vorschau (Tab)</button>
@@ -449,6 +507,20 @@ const ConfiguratorPage: React.FC = () => {
         <aside className={`flex flex-col bg-zinc-50/50 min-h-0 w-full md:w-[380px] lg:w-[400px] shrink-0 border-r border-zinc-200/80 ${mobileTab === 'editor' ? 'flex' : 'hidden md:flex'}`}>
           <div className="flex-1 scroll-container technical-grid-fine">
             <div className="p-4 sm:p-5 pb-28 md:pb-6">
+              {PRODUCTS.length > 1 && (
+                <div className="mb-4">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2">Produkt</label>
+                  <select
+                    value={selectedProductId}
+                    onChange={(e) => setSelectedProductId(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-medium text-navy bg-white focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy"
+                  >
+                    {PRODUCTS.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <Controls
                 activeDept={activeDept}
                 config={config}

@@ -3,6 +3,7 @@ import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Canvas, useFrame, ThreeElements } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 import { ModelConfig, SVGPathData, ActionIcon } from '../types';
 import { BlockRenderer } from './Microsite';
 import { Globe, ShoppingCart, Info, Briefcase, User, Star, Mail, Phone, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Link as LinkIcon, Zap, Map as MapIcon, Clock, Calendar, Youtube, Video } from 'lucide-react';
@@ -209,7 +210,7 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
 };
 
 // Viewer component utilizing Canvas and Three.js components
-export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean, googleLogoUrl?: string | null }>(({ config, svgElements, showNFCPreview, googleLogoUrl }, ref) => {
+export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string>; exportSTL: () => Promise<Blob | null> }, { config: ModelConfig, svgElements: SVGPathData[] | null, showNFCPreview: boolean, googleLogoUrl?: string | null }>(({ config, svgElements, showNFCPreview, googleLogoUrl }, ref) => {
   const plateRef = useRef<THREE.Mesh>(null);
   const r3fState = useRef<{ gl: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera } | null>(null);
 
@@ -246,7 +247,29 @@ export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string> }, { co
         console.error('Error taking screenshot:', error);
         throw error;
       }
-    }
+    },
+    exportSTL: async (): Promise<Blob | null> => {
+      try {
+        if (!r3fState.current) return null;
+        const { scene } = r3fState.current;
+        const group = new THREE.Group();
+        scene.traverse((obj) => {
+          if (obj instanceof THREE.Mesh && obj.geometry && obj.visible) {
+            const clone = obj.clone();
+            clone.applyMatrix4(obj.matrixWorld);
+            group.add(clone);
+          }
+        });
+        if (group.children.length === 0) return null;
+        const exporter = new STLExporter();
+        const stlString = exporter.parse(group, { binary: false });
+        const blob = new Blob([stlString], { type: 'model/stl' });
+        return blob;
+      } catch (error) {
+        console.error('STL export error:', error);
+        return null;
+      }
+    },
   }));
 
   return (

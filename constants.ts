@@ -1,13 +1,33 @@
-
 import { ModelConfig } from './types';
 
 export const SHOPIFY_CART_URL = 'https://nudaim3d.de/cart/add';
-export const VARIANT_ID = '56564338262361';
+/** Link zu Bestellungen im Shopify Admin (Order-ID anhängen: /admin/orders/ORDER_ID) */
+export const SHOPIFY_ADMIN_ORDERS_URL = 'https://nudaim3d.de/admin/orders';
 
-/** Builds the Shopify cart add URL with config ID, preview image and optional Microsite-URL. */
-export function buildShopifyCartUrl(shortId: string, previewImageUrl: string, baseUrl?: string): string {
+/** Produkte für den Konfigurator (Variant-ID aus Shopify). Optionale Maße in mm (plateWidth × plateHeight). */
+export interface ShopifyProduct {
+  id: string;
+  name: string;
+  variantId: string;
+  /** Breite in mm (für 3D-Platte). */
+  plateWidthMm?: number;
+  /** Länge/Höhe in mm (für 3D-Platte). */
+  plateHeightMm?: number;
+}
+export const PRODUCTS: ShopifyProduct[] = [
+  { id: 'keychain', name: 'Schlüsselanhänger', variantId: '56564338262361', plateWidthMm: 40, plateHeightMm: 40 },
+  { id: 'badge', name: 'Messe-Badge', variantId: '56564338262361', plateWidthMm: 110, plateHeightMm: 150 }, // 150 mm lang, 110 mm breit – echte Variant-ID eintragen
+];
+
+/** Builds the Shopify cart add URL with variant ID, config ID, preview image and optional Microsite-URL. */
+export function buildShopifyCartUrl(
+  variantId: string,
+  shortId: string,
+  previewImageUrl: string,
+  baseUrl?: string
+): string {
   const params: Record<string, string> = {
-    id: VARIANT_ID,
+    id: variantId,
     quantity: '1',
     'properties[Config-ID]': shortId,
     'properties[Preview]': previewImageUrl,

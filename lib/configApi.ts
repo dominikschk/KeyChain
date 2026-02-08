@@ -9,12 +9,15 @@ export interface ConfigRow {
   id: string;
   short_id: string;
   profile_title: string;
+  preview_image?: string | null;
+  stl_url?: string | null;
   header_image_url?: string | null;
   profile_logo_url?: string | null;
   accent_color?: string | null;
   theme?: string | null;
   font_style?: string | null;
   plate_data?: Record<string, unknown> | null;
+  product_type?: string | null;
   created_at?: string | null;
 }
 
@@ -86,7 +89,9 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     logoRotation: Number(plate.logoRotation) ?? base.logoRotation,
   };
 
-  return { config, configId: configRow.id };
+  const logoSvg = (plate.logo_svg as string | undefined) || null;
+
+  return { config, configId: configRow.id, logoSvg };
 }
 
 /**
@@ -97,8 +102,8 @@ export async function getConfigsList(): Promise<ConfigRow[]> {
 
   const { data, error } = await supabase
     .from('nfc_configs')
-    .select('id, short_id, profile_title')
-    .order('id', { ascending: false });
+    .select('id, short_id, profile_title, preview_image, stl_url, created_at')
+    .order('created_at', { ascending: false });
 
   if (error) return [];
   return (data as ConfigRow[]) || [];

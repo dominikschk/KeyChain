@@ -21,6 +21,8 @@
               action: '#12A9E0',
               navy: '#11235A',
               cream: '#FDFCF8',
+              'app-bar': '#11235A',
+              'app-accent': '#006699',
             },
             fontFamily: {
               sans: ['"League Spartan"', 'system-ui', 'sans-serif'],
@@ -33,12 +35,19 @@
     <style>
       :root {
         --app-height: 100dvh;
+        --app-bar: #11235A;
+        --app-bar-text: #FDFCF8;
+        --app-accent: #006699;
+        --app-accent-hover: #005580;
         --navy: #11235A;
         --petrol: #006699;
         --action: #12A9E0;
         --cream: #FDFCF8;
-        --radius: 1rem;
-        --radius-lg: 1.25rem;
+        --bg-base: #FDFCF8;
+        --bg-panel: #ffffff;
+        --border: rgba(17, 35, 90, 0.1);
+        --radius: 0.75rem;
+        --radius-lg: 1rem;
         --tap-min: 44px;
       }
       html, body {
@@ -69,7 +78,7 @@
         min-height: 0;
       }
       .scroll-container::-webkit-scrollbar { width: 6px; }
-      .scroll-container::-webkit-scrollbar-thumb { background: rgba(0, 102, 153, 0.15); border-radius: 3px; }
+      .scroll-container::-webkit-scrollbar-thumb { background: rgba(0, 102, 153, 0.2); border-radius: 3px; }
       .scroll-container::-webkit-scrollbar-track { background: transparent; }
 
       .technical-grid-fine {
