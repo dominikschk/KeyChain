@@ -2,10 +2,11 @@
  * Konfigurator – Panel zum Konfigurieren von NFeC-Produkten (3D + Microsite).
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, QrCode as QrIcon, X, ArrowRight, RefreshCw, Edit3, Smartphone, Box, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown } from 'lucide-react';
+import { Loader2, QrCode as QrIcon, X, ArrowRight, RefreshCw, Edit3, Smartphone, Box, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown, Sparkles } from 'lucide-react';
 import { Viewer } from '../components/Viewer';
 import { Controls } from '../components/Controls';
 import { Microsite } from '../components/Microsite';
+import { MicrositeChat } from '../components/MicrositeChat';
 import { LoginScreen } from '../components/LoginScreen';
 import { DEFAULT_CONFIG, buildShopifyCartUrl, PRODUCTS } from '../constants';
 import { ModelConfig, SVGPathData, Department } from '../types';
@@ -78,6 +79,7 @@ const ConfiguratorPage: React.FC = () => {
   const [session, setSession] = useState<AuthSession>(null);
   const [authReady, setAuthReady] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [showMicrositeChat, setShowMicrositeChat] = useState(false);
 
   useEffect(() => {
     getSession().then((s) => {
@@ -456,6 +458,16 @@ const ConfiguratorPage: React.FC = () => {
       {showConfirmation && (
         <ConfirmationModal config={config} onConfirm={executeSave} onCancel={() => setShowConfirmation(false)} screenshot={currentScreenshot} />
       )}
+      {showMicrositeChat && (
+        <MicrositeChat
+          config={config}
+          onApplyConfig={(next) => {
+            setConfig(next);
+            setActiveDept('digital');
+          }}
+          onClose={() => setShowMicrositeChat(false)}
+        />
+      )}
 
       <header className="shrink-0 h-14 md:h-14 flex items-center justify-between px-4 md:px-5 bg-white border-b border-zinc-200/80 z-30">
         <div className="flex items-center gap-3 md:gap-4 min-w-0">
@@ -467,6 +479,18 @@ const ConfiguratorPage: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setShowMicrositeChat(true);
+              setActiveDept('digital');
+            }}
+            className="flex items-center gap-2 h-9 px-2.5 sm:px-3 bg-petrol/10 text-petrol text-xs font-semibold rounded-lg hover:bg-petrol/20 active:scale-[0.98]"
+            title="Microsite mit Assistent aufbauen"
+          >
+            <Sparkles size={14} />
+            <span className="hidden sm:inline">Seite bauen</span>
+          </button>
           <button type="button" onClick={initiateSave} className="hidden md:flex items-center gap-2 h-9 px-4 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy/90 active:scale-[0.98]">
             <ShoppingCart size={14} />
             Bestellen
