@@ -22,10 +22,16 @@ Kurz:
     <a href="{{ line_item.properties['Microsite-URL'] }}">{{ line_item.properties['Microsite-URL'] }}</a></p>
     <p><strong>Short-ID:</strong> {{ line_item.properties['Config-ID'] }}</p>
   {% endif %}
+  {% if line_item.properties['_CCP-URL'] != blank %}
+    <p><strong>Kunden-Panel (Bearbeiten):</strong><br>
+    <a href="{{ line_item.properties['_CCP-URL'] }}">{{ line_item.properties['_CCP-URL'] }}</a></p>
+    <p style="font-size: 12px; color: #666;">Diesen Link nicht öffentlich teilen – er erlaubt Änderungen an deiner Microsite.</p>
+  {% endif %}
 {% endfor %}
 ```
 
-Dann erhält der Kunde die Microsite und Short-ID in der normalen Bestellbestätigung.
+Dann erhält der Kunde Microsite, Short-ID und optional den CCP-Edit-Link.  
+`_CCP-URL` enthält den Write-Token; die öffentliche `Microsite-URL` enthält ihn **nicht**.
 
 ---
 
@@ -72,13 +78,15 @@ In Supabase: **Edge Functions** → `send-microsite-email` → **Secrets**:
 {
   "to": "kunde@example.com",
   "microsite_url": "https://deine-app.de/?id=ABC123",
-  "short_id": "ABC123"
+  "short_id": "ABC123",
+  "ccp_url": "https://deine-app.de/ccp?id=ABC123&t=WRITE_TOKEN_HEX"
 }
 ```
 
 - **to:** gültige E-Mail-Adresse
-- **microsite_url:** gültige `http(s)`-URL (wird HTML-escaped)
+- **microsite_url:** gültige `https`-URL ohne Write-Token (wird HTML-escaped)
 - **short_id:** Short-ID (max. 64 Zeichen)
+- **ccp_url** (optional): CCP-Edit-URL mit Pfad `/ccp` und Param `t` (Write-Token, mind. 32 Hex). Gleiche Host-Allowlist wie Microsite.
 
 Ohne gültiges Secret → **401 Unauthorized**.
 
@@ -93,8 +101,9 @@ Ohne gültiges Secret → **401 Unauthorized**.
    - Header: `Authorization: Bearer <EMAIL_WEBHOOK_SECRET>`
    - Body (JSON):  
      `to` = E-Mail der Bestellung,  
-     `microsite_url` = erste Line-Item-Property `Microsite-URL`,  
-     `short_id` = erste Line-Item-Property `Config-ID`
+     `microsite_url` = Line-Item-Property `Microsite-URL`,  
+     `short_id` = Line-Item-Property `Config-ID`,  
+     `ccp_url` = Line-Item-Property `_CCP-URL` (optional, für Edit-Link)
 
 **Zapier / Make.com:**
 

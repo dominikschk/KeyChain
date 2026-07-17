@@ -311,7 +311,7 @@ const ConfiguratorPage: React.FC = () => {
       setSavingStep('done');
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
       const variantId = product?.variantId ?? '56564338262361';
-      window.location.href = buildShopifyCartUrl(variantId, shortId, finalImageUrl, baseUrl);
+      window.location.href = buildShopifyCartUrl(variantId, shortId, finalImageUrl, baseUrl, writeToken);
     } catch (err) {
       console.error('Save error:', err);
       setSavingStep('idle');

@@ -31,12 +31,17 @@ Du bist jetzt in der **Liquid-Vorlage** der Bestellbestätigung. Der Inhalt ist 
   ... (Produktname, Menge, Preis) ...
 {% endfor %}
 
-<!-- HIER DEN CODE EINFÜGEN (Microsite + Short-ID) -->
+<!-- HIER DEN CODE EINFÜGEN (Microsite + Short-ID + optional CCP) -->
 {% for line_item in line_items %}
   {% if line_item.properties['Microsite-URL'] != blank %}
     <p><strong>Deine Microsite:</strong><br>
     <a href="{{ line_item.properties['Microsite-URL'] }}">{{ line_item.properties['Microsite-URL'] }}</a></p>
     <p><strong>Short-ID:</strong> {{ line_item.properties['Config-ID'] }}</p>
+  {% endif %}
+  {% if line_item.properties['_CCP-URL'] != blank %}
+    <p><strong>Kunden-Panel (Bearbeiten):</strong><br>
+    <a href="{{ line_item.properties['_CCP-URL'] }}">Microsite bearbeiten</a></p>
+    <p style="font-size: 12px; color: #666;">Diesen Link nicht öffentlich teilen.</p>
   {% endif %}
 {% endfor %}
 
@@ -58,4 +63,4 @@ Du bist jetzt in der **Liquid-Vorlage** der Bestellbestätigung. Der Inhalt ist 
 | 4 | In der **E-Mail-Vorlage** einen Platz suchen (z. B. nach der Produktliste) |
 | 5 | Den **Liquid-Code** (siehe oben) dort einfügen und **Speichern** |
 
-Danach erhält der Kunde in der Bestellbestätigung den Microsite-Link und die Short-ID – aber nur, wenn die Bestellung die Properties **Microsite-URL** und **Config-ID** enthält (wie bei Bestellungen aus dem NUDAIM-Konfigurator).
+Danach erhält der Kunde in der Bestellbestätigung den Microsite-Link und die Short-ID – und bei Konfigurator-Bestellungen zusätzlich den CCP-Edit-Link aus **`_CCP-URL`** (enthält den Write-Token; nicht öffentlich teilen).

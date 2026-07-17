@@ -1,5 +1,5 @@
-// Supabase Edge Function: E-Mail nach Bestellung mit Microsite-Link und Short-ID
-// Aufruf: POST mit Body { "to": "kunde@example.com", "microsite_url": "https://...", "short_id": "ABC123" }
+// Supabase Edge Function: E-Mail nach Bestellung mit Microsite-Link und optional CCP-Edit-Link
+// Aufruf: POST { "to", "microsite_url", "short_id", optional "ccp_url" }
 // Secrets: RESEND_API_KEY, EMAIL_WEBHOOK_SECRET, optional FROM_EMAIL, ALLOWED_MICROSITE_HOSTS
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
@@ -43,16 +43,29 @@ function timingSafeEqualString(a: string, b: string): boolean {
   return diff === 0;
 }
 
-function isAllowedMicrositeUrl(value: string): boolean {
+function isAllowedAppUrl(value: string): boolean {
   try {
     const u = new URL(value);
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
     if (u.username || u.password) return false;
     if (ALLOWED_MICROSITE_HOSTS.length === 0) {
-      // Ohne Allowlist: nur https erzwingen (härter als vorher http+https offen)
       return u.protocol === 'https:';
     }
     return ALLOWED_MICROSITE_HOSTS.includes(u.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+/** CCP-Edit-URL muss /ccp-Pfad und Token-Param t haben (nicht die öffentliche Microsite). */
+function isAllowedCcpUrl(value: string): boolean {
+  if (!isAllowedAppUrl(value)) return false;
+  try {
+    const u = new URL(value);
+    if (!u.pathname.includes('/ccp')) return false;
+    const token = u.searchParams.get('t')?.trim() ?? '';
+    if (token.length < 32 || !/^[a-f0-9]+$/i.test(token)) return false;
+    return true;
   } catch {
     return false;
   }
@@ -73,9 +86,17 @@ function isAuthorized(req: Request): boolean {
   return false;
 }
 
-function htmlMail(micrositeUrl: string, shortId: string): string {
+function htmlMail(micrositeUrl: string, shortId: string, ccpUrl?: string): string {
   const safeUrl = escapeHtml(micrositeUrl);
   const safeId = escapeHtml(shortId);
+  const ccpBlock = ccpUrl
+    ? `
+  <p style="margin-bottom: 12px; margin-top: 28px;">Zum Bearbeiten deiner Microsite (Kunden-Panel):</p>
+  <p style="margin-bottom: 24px;">
+    <a href="${escapeHtml(ccpUrl)}" style="display: inline-block; background: #0D9488; color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600;">Kunden-Panel öffnen</a>
+  </p>
+  <p style="font-size: 0.875rem; color: #666; word-break: break-all;">${escapeHtml(ccpUrl)}</p>`
+    : '';
   return `
 <!DOCTYPE html>
 <html>
@@ -84,13 +105,14 @@ function htmlMail(micrositeUrl: string, shortId: string): string {
   <h1 style="font-size: 1.25rem; margin-bottom: 16px;">Deine digitale Microsite</h1>
   <p style="margin-bottom: 16px;">Vielen Dank für deine Bestellung. Hier ist dein persönlicher Zugang:</p>
   <p style="margin-bottom: 8px;"><strong>Short-ID:</strong> <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">${safeId}</code></p>
-  <p style="margin-bottom: 20px;">Öffne deine Microsite (z. B. zum Teilen oder Bearbeiten im Kunden-Panel) über diesen Link:</p>
+  <p style="margin-bottom: 20px;">Öffne deine Microsite zum Teilen über diesen Link:</p>
   <p style="margin-bottom: 24px;">
     <a href="${safeUrl}" style="display: inline-block; background: #11235A; color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600;">Microsite öffnen</a>
   </p>
-  <p style="font-size: 0.875rem; color: #666;">${safeUrl}</p>
+  <p style="font-size: 0.875rem; color: #666; word-break: break-all;">${safeUrl}</p>
+  ${ccpBlock}
   <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
-  <p style="font-size: 0.75rem; color: #999;">Diese E-Mail wurde nach deiner Bestellung versendet.</p>
+  <p style="font-size: 0.75rem; color: #999;">Diese E-Mail wurde nach deiner Bestellung versendet. Den Bearbeiten-Link bitte nicht öffentlich teilen.</p>
 </body>
 </html>`;
 }
@@ -102,7 +124,7 @@ const handler = async (req: Request): Promise<Response> => {
 
   if (req.method !== 'POST') {
     return new Response(
-      JSON.stringify({ error: 'Method not allowed. Use POST with body: { to, microsite_url, short_id }' }),
+      JSON.stringify({ error: 'Method not allowed. Use POST with body: { to, microsite_url, short_id, ccp_url? }' }),
       { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -128,12 +150,12 @@ const handler = async (req: Request): Promise<Response> => {
     );
   }
 
-  let body: { to?: string; microsite_url?: string; short_id?: string };
+  let body: { to?: string; microsite_url?: string; short_id?: string; ccp_url?: string };
   try {
     body = await req.json();
   } catch {
     return new Response(
-      JSON.stringify({ error: 'Invalid JSON. Body must be: { to, microsite_url, short_id }' }),
+      JSON.stringify({ error: 'Invalid JSON. Body must be: { to, microsite_url, short_id, ccp_url? }' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -141,6 +163,7 @@ const handler = async (req: Request): Promise<Response> => {
   const to = body.to?.trim() ?? '';
   const micrositeUrl = body.microsite_url?.trim() ?? '';
   const shortId = (body.short_id?.trim() ?? '').slice(0, 64);
+  const ccpUrlRaw = body.ccp_url?.trim() ?? '';
 
   if (!to || !micrositeUrl) {
     return new Response(
@@ -156,7 +179,7 @@ const handler = async (req: Request): Promise<Response> => {
     );
   }
 
-  if (!isAllowedMicrositeUrl(micrositeUrl)) {
+  if (!isAllowedAppUrl(micrositeUrl)) {
     return new Response(
       JSON.stringify({
         error: ALLOWED_MICROSITE_HOSTS.length
@@ -165,6 +188,20 @@ const handler = async (req: Request): Promise<Response> => {
       }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+  }
+
+  let ccpUrl: string | undefined;
+  if (ccpUrlRaw) {
+    if (!isAllowedCcpUrl(ccpUrlRaw)) {
+      return new Response(
+        JSON.stringify({
+          error:
+            'ccp_url must be https (or allowed host), path /ccp, and include write token param t (min 32 hex chars)',
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    ccpUrl = ccpUrlRaw;
   }
 
   const res = await fetch('https://api.resend.com/emails', {
@@ -177,7 +214,7 @@ const handler = async (req: Request): Promise<Response> => {
       from: FROM_EMAIL,
       to: [to],
       subject: 'Deine Microsite – Short-ID: ' + (shortId || '—'),
-      html: htmlMail(micrositeUrl, shortId),
+      html: htmlMail(micrositeUrl, shortId, ccpUrl),
     }),
   });
 

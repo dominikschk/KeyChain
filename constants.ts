@@ -19,21 +19,29 @@ export const PRODUCTS: ShopifyProduct[] = [
   { id: 'badge', name: 'Messe-Badge', variantId: '56564338262361', plateWidthMm: 110, plateHeightMm: 150 }, // 150 mm lang, 110 mm breit – echte Variant-ID eintragen
 ];
 
-/** Builds the Shopify cart add URL with variant ID, config ID, preview image and optional Microsite-URL. */
+/** Builds the Shopify cart add URL with variant ID, config ID, preview image and optional Microsite/CCP URLs. */
 export function buildShopifyCartUrl(
   variantId: string,
   shortId: string,
   previewImageUrl: string,
-  baseUrl?: string
+  baseUrl?: string,
+  writeToken?: string
 ): string {
+  const origin = baseUrl ? baseUrl.replace(/\/$/, '') : '';
   const params: Record<string, string> = {
     id: variantId,
     quantity: '1',
     'properties[Config-ID]': shortId,
     'properties[Preview]': previewImageUrl,
   };
-  if (baseUrl) {
-    params['properties[Microsite-URL]'] = `${baseUrl.replace(/\/$/, '')}/?id=${encodeURIComponent(shortId)}`;
+  if (origin) {
+    // Öffentlich: ohne write_token
+    params['properties[Microsite-URL]'] = `${origin}/?id=${encodeURIComponent(shortId)}`;
+    // Edit-Capability: Token nur in _CCP-URL (Unterstrich = im Storefront-Warenkorb typ. versteckt)
+    if (writeToken && writeToken.length >= 32) {
+      params['properties[_CCP-URL]'] =
+        `${origin}/ccp?id=${encodeURIComponent(shortId)}&t=${encodeURIComponent(writeToken)}`;
+    }
   }
   return `${SHOPIFY_CART_URL}?${new URLSearchParams(params).toString()}`;
 }

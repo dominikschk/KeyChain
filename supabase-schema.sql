@@ -130,6 +130,12 @@ GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
 -- 3. Öffentliche RPCs (Microsite / CCP / STL-Update nach Save)
 -- ------------------------------------------------------------
 
+-- RETURN-TYPE-Änderung: CREATE OR REPLACE reicht nicht → zuerst DROP
+DROP FUNCTION IF EXISTS public.get_config_by_short_id(text);
+DROP FUNCTION IF EXISTS public.get_blocks_for_config(uuid);
+DROP FUNCTION IF EXISTS public.get_scan_count(uuid);
+DROP FUNCTION IF EXISTS public.get_scan_count_last_30_days(uuid);
+
 -- Wichtig: write_token wird NICHT zurückgegeben
 CREATE OR REPLACE FUNCTION public.get_config_by_short_id(p_short_id text)
 RETURNS TABLE (
@@ -316,6 +322,148 @@ BEGIN
 END;
 $$;
 
+-- Profil (digital): nur mit write_token; kein short_id / stl / plate / write_token
+CREATE OR REPLACE FUNCTION public.update_nfc_config_profile(
+  p_config_id uuid,
+  p_write_token text,
+  p_profile_title text,
+  p_header_image_url text,
+  p_profile_logo_url text,
+  p_accent_color text,
+  p_theme text,
+  p_font_style text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  updated_count integer;
+  v_title text;
+  v_header text;
+  v_logo text;
+  v_accent text;
+BEGIN
+  IF p_write_token IS NULL OR length(trim(p_write_token)) < 32 THEN
+    RAISE EXCEPTION 'write_token required';
+  END IF;
+
+  v_title := trim(coalesce(p_profile_title, ''));
+  IF char_length(v_title) < 1 OR char_length(v_title) > 200 THEN
+    RAISE EXCEPTION 'invalid profile_title';
+  END IF;
+
+  IF p_theme IS NULL OR p_theme NOT IN ('light', 'dark') THEN
+    RAISE EXCEPTION 'invalid theme';
+  END IF;
+  IF p_font_style IS NULL OR p_font_style NOT IN ('luxury', 'modern', 'elegant') THEN
+    RAISE EXCEPTION 'invalid font_style';
+  END IF;
+
+  v_accent := trim(coalesce(p_accent_color, ''));
+  IF v_accent = '' OR char_length(v_accent) > 32 OR v_accent !~* '^#([0-9A-F]{3}|[0-9A-F]{6}|[0-9A-F]{8})$' THEN
+    RAISE EXCEPTION 'invalid accent_color';
+  END IF;
+
+  v_header := nullif(trim(coalesce(p_header_image_url, '')), '');
+  IF v_header IS NOT NULL THEN
+    IF char_length(v_header) > 2048 OR v_header !~* '^https://' THEN
+      RAISE EXCEPTION 'header_image_url must be https';
+    END IF;
+  END IF;
+
+  v_logo := nullif(trim(coalesce(p_profile_logo_url, '')), '');
+  IF v_logo IS NOT NULL THEN
+    IF char_length(v_logo) > 2048 OR v_logo !~* '^https://' THEN
+      RAISE EXCEPTION 'profile_logo_url must be https';
+    END IF;
+  END IF;
+
+  UPDATE public.nfc_configs
+  SET
+    profile_title = v_title,
+    header_image_url = v_header,
+    profile_logo_url = v_logo,
+    accent_color = v_accent,
+    theme = p_theme,
+    font_style = p_font_style
+  WHERE id = p_config_id
+    AND write_token IS NOT NULL
+    AND write_token = p_write_token;
+
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+  IF updated_count = 0 THEN
+    RAISE EXCEPTION 'not allowed';
+  END IF;
+END;
+$$;
+
+-- Blöcke ersetzen: nur mit write_token; image_url nur https oder leer
+CREATE OR REPLACE FUNCTION public.replace_nfc_blocks(
+  p_config_id uuid,
+  p_write_token text,
+  p_blocks jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  elem jsonb;
+  i integer := 0;
+  v_image text;
+BEGIN
+  IF p_write_token IS NULL OR length(trim(p_write_token)) < 32 THEN
+    RAISE EXCEPTION 'write_token required';
+  END IF;
+  IF p_blocks IS NULL OR jsonb_typeof(p_blocks) <> 'array' THEN
+    RAISE EXCEPTION 'blocks must be a json array';
+  END IF;
+  IF jsonb_array_length(p_blocks) > 40 THEN
+    RAISE EXCEPTION 'too many blocks';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.nfc_configs c
+    WHERE c.id = p_config_id
+      AND c.write_token IS NOT NULL
+      AND c.write_token = p_write_token
+  ) THEN
+    RAISE EXCEPTION 'not allowed';
+  END IF;
+
+  DELETE FROM public.nfc_blocks WHERE config_id = p_config_id;
+
+  FOR elem IN SELECT value FROM jsonb_array_elements(p_blocks)
+  LOOP
+    v_image := nullif(left(nullif(elem->>'image_url', ''), 2048), '');
+    IF v_image IS NOT NULL AND v_image !~* '^https://' THEN
+      RAISE EXCEPTION 'image_url must be https';
+    END IF;
+
+    INSERT INTO public.nfc_blocks (
+      config_id, type, title, content, button_type, image_url, settings, sort_order
+    ) VALUES (
+      p_config_id,
+      left(coalesce(elem->>'type', 'text'), 64),
+      left(nullif(elem->>'title', ''), 200),
+      left(nullif(elem->>'content', ''), 5000),
+      left(nullif(elem->>'button_type', ''), 64),
+      v_image,
+      CASE
+        WHEN elem->'settings' IS NULL OR jsonb_typeof(elem->'settings') = 'null' THEN NULL
+        ELSE elem->'settings'
+      END,
+      i
+    );
+    i := i + 1;
+  END LOOP;
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.get_config_by_short_id(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_blocks_for_config(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_scan_count(uuid) FROM PUBLIC;
@@ -324,6 +472,8 @@ REVOKE ALL ON FUNCTION public.get_scan_count_last_30_days(uuid) FROM PUBLIC;
 DROP FUNCTION IF EXISTS public.set_nfc_config_stl_url(uuid, text);
 REVOKE ALL ON FUNCTION public.set_nfc_config_stl_url(uuid, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.insert_nfc_blocks(uuid, text, jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.update_nfc_config_profile(uuid, text, text, text, text, text, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.replace_nfc_blocks(uuid, text, jsonb) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.get_config_by_short_id(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_blocks_for_config(uuid) TO anon, authenticated;
@@ -331,6 +481,8 @@ GRANT EXECUTE ON FUNCTION public.get_scan_count(uuid) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_scan_count_last_30_days(uuid) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.set_nfc_config_stl_url(uuid, text, text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.insert_nfc_blocks(uuid, text, jsonb) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.update_nfc_config_profile(uuid, text, text, text, text, text, text, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.replace_nfc_blocks(uuid, text, jsonb) TO anon, authenticated;
 
 -- 4. Row Level Security
 -- ------------------------------------------------------------

@@ -149,6 +149,56 @@ export async function insertConfigBlocks(
   return !error;
 }
 
+export interface UpdateProfilePayload {
+  profileTitle: string;
+  headerImageUrl?: string | null;
+  profileLogoUrl?: string | null;
+  accentColor: string;
+  theme: string;
+  fontStyle: string;
+}
+
+/**
+ * Digitale Profilfelder aktualisieren (RPC – write_token; kein plate/STL/short_id).
+ */
+export async function updateConfigProfile(
+  configId: string,
+  writeToken: string,
+  profile: UpdateProfilePayload
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: 'Supabase nicht konfiguriert.' };
+  const { error } = await supabase.rpc('update_nfc_config_profile', {
+    p_config_id: configId,
+    p_write_token: writeToken,
+    p_profile_title: profile.profileTitle,
+    p_header_image_url: profile.headerImageUrl ?? null,
+    p_profile_logo_url: profile.profileLogoUrl ?? null,
+    p_accent_color: profile.accentColor,
+    p_theme: profile.theme,
+    p_font_style: profile.fontStyle,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Alle Blöcke ersetzen (RPC – write_token).
+ */
+export async function replaceConfigBlocks(
+  configId: string,
+  writeToken: string,
+  blocks: InsertBlockPayload[]
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: 'Supabase nicht konfiguriert.' };
+  const { error } = await supabase.rpc('replace_nfc_blocks', {
+    p_config_id: configId,
+    p_write_token: writeToken,
+    p_blocks: blocks,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 /**
  * Scan speichern (anon INSERT erlaubt).
  */

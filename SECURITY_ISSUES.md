@@ -120,7 +120,7 @@ Dieses Dokument listet die gefundenen Sicherheitslücken, den jeweiligen Fix und
 2. [ ] Edge Function `send-microsite-email` neu deployen
 3. [ ] Secret `ALLOWED_MICROSITE_HOSTS` setzen (empfohlen)
 4. [ ] App neu bauen/deployen (Short-ID, write_token, Storage-Pfade)
-5. [ ] Smoke-Test: Konfigurator speichern → Shopify → Microsite → CCP → Admin-Login
+5. [ ] Smoke-Test: Konfigurator speichern → Shopify (`_CCP-URL`) → Microsite → CCP-Edit → Admin-Login
 
 ---
 
@@ -129,13 +129,15 @@ Dieses Dokument listet die gefundenen Sicherheitslücken, den jeweiligen Fix und
 | Thema | Hinweis |
 |-------|---------|
 | Anon darf weiterhin Configs anlegen | Produktflow (Konfigurator ohne Login); Härtung über Constraints + kurze IDs |
-| CCP nur per Short-ID | Capability-URL-Modell; Entropie der Short-ID ist die Absicherung |
+| CCP-Lesen nur per Short-ID | Capability-URL; Scans/Link ohne Token |
+| CCP-Edit per write_token in URL | Token in Shopify `_CCP-URL` / Bestellmail; wer den Link hat, kann digital editieren. Nie in öffentlicher Microsite-URL. Shop-Mitarbeiter sehen die Property in der Order. |
+| Token in Query-String (CCP) | Browser-History / Referer; CCP setzt `Referrer-Policy: no-referrer` |
 | Öffentlicher Storage-Read | Microsite/STL müssen öffentlich lesbar sein |
 | Scan-INSERT | Weiterhin anonym möglich (Statistik); Missbrauch verfälscht Zähler |
 | Kein App-Level-Rate-Limit | Über WAF / Supabase Dashboard absichern |
 
 ---
 
-## Nachprüfung (2026-07-17)
+## CCP-Edit (2026-07-17)
 
-Security-Review der ungecommitten Fixes: **keine medium+/high/critical Findings** mehr mit realistischer Cross-User- oder Privilege-Escalation-Ausnutzung. S2b (Block-Injection) geschlossen. Verbleibendes = dokumentierte Restrisiken oben.
+Neue RPCs `update_nfc_config_profile` / `replace_nfc_blocks` nur mit `write_token`. Kein Update von `short_id`, `stl_url`, `plate_data`, `write_token`. Image-URLs nur `https://`.
