@@ -1,6 +1,7 @@
 /**
  * Auth: ausschließlich Google (Google Identity Services).
  * Kein Supabase – Session wird nur lokal (localStorage) gespeichert.
+ * ID-Tokens werden über Google tokeninfo verifiziert (Aud, Expiry, sub).
  */
 
 const STORAGE_KEY = 'nudaim_google_session';
@@ -37,25 +38,45 @@ function getEnv(name: string): string | undefined {
 /** Google Client ID (Web) aus Google Cloud Console – für „Mit Google anmelden“. */
 export const GOOGLE_CLIENT_ID = getEnv('VITE_GOOGLE_CLIENT_ID') || getEnv('GOOGLE_CLIENT_ID') || '';
 
-/** Payload eines Google ID Tokens (JWT). */
+/** Verifiziertes Payload eines Google ID Tokens. */
 interface GoogleIdTokenPayload {
   sub: string;
   email?: string;
-  email_verified?: boolean;
+  email_verified?: string | boolean;
   name?: string;
   picture?: string;
-  given_name?: string;
-  family_name?: string;
-  exp?: number;
+  aud?: string;
+  exp?: string | number;
+  iss?: string;
 }
 
-function decodeGoogleIdToken(token: string): GoogleIdTokenPayload | null {
+/**
+ * Verifiziert das ID-Token bei Google (Signatur/Aud/Expiry serverseitig bei Google).
+ * Verhindert gefälschte localStorage-Sessions aus frei erfundenen JWTs.
+ */
+async function verifyGoogleIdToken(idToken: string): Promise<GoogleIdTokenPayload | null> {
+  if (!GOOGLE_CLIENT_ID) return null;
+  if (!idToken || idToken.length > 8192 || idToken.split('.').length !== 3) return null;
+
   try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const decoded = atob(payload);
-    return JSON.parse(decoded) as GoogleIdTokenPayload;
+    const res = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
+    );
+    if (!res.ok) return null;
+    const payload = (await res.json()) as GoogleIdTokenPayload;
+    if (!payload?.sub) return null;
+    if (payload.aud !== GOOGLE_CLIENT_ID) return null;
+
+    const exp =
+      typeof payload.exp === 'string' ? Number(payload.exp) : payload.exp;
+    if (exp != null && Number.isFinite(exp) && exp * 1000 < Date.now()) return null;
+
+    const iss = payload.iss ?? '';
+    if (iss && iss !== 'https://accounts.google.com' && iss !== 'accounts.google.com') {
+      return null;
+    }
+
+    return payload;
   } catch {
     return null;
   }
@@ -73,7 +94,7 @@ function readStoredSession(): AuthSession {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw) as { user: AuthUser; exp?: number };
-    if (!data?.user?.id) return null;
+    if (!data?.user?.id || data.user.id === 'guest') return null;
     if (data.exp != null && data.exp * 1000 < Date.now()) {
       storage.removeItem(STORAGE_KEY);
       return null;
@@ -96,13 +117,16 @@ export async function getSession(): Promise<AuthSession> {
 
 /**
  * Anmeldung mit Google-ID-Token (von Google Identity Services).
- * Token wird dekodiert, Nutzerdaten lokal gespeichert – kein Supabase.
+ * Token wird bei Google verifiziert, Nutzerdaten lokal gespeichert – kein Supabase.
  */
 export async function signInWithGoogleIdToken(idToken: string): Promise<{ error: Error | null }> {
-  const payload = decodeGoogleIdToken(idToken);
+  const payload = await verifyGoogleIdToken(idToken);
   if (!payload?.sub) {
-    return { error: new Error('Ungültiges Google-Token') };
+    return { error: new Error('Ungültiges oder nicht verifiziertes Google-Token') };
   }
+  const exp =
+    typeof payload.exp === 'string' ? Number(payload.exp) : payload.exp;
+
   const session: SessionData = {
     user: {
       id: payload.sub,
@@ -118,7 +142,7 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<{ error:
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify({
       user: session.user,
-      exp: payload.exp,
+      exp: Number.isFinite(exp) ? exp : undefined,
     }));
   } catch (e) {
     return { error: e instanceof Error ? e : new Error('Speichern fehlgeschlagen') };

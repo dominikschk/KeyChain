@@ -106,13 +106,45 @@ export async function getConfigsList(): Promise<ConfigRow[]> {
 }
 
 /**
- * STL-URL nach Upload setzen (RPC – kein offenes UPDATE für anon).
+ * STL-URL nach Upload setzen (RPC – write_token + einmalig, kein offenes UPDATE).
  */
-export async function setConfigStlUrl(configId: string, stlUrl: string): Promise<boolean> {
+export async function setConfigStlUrl(
+  configId: string,
+  stlUrl: string,
+  writeToken: string
+): Promise<boolean> {
   if (!supabase) return false;
   const { error } = await supabase.rpc('set_nfc_config_stl_url', {
     p_config_id: configId,
     p_stl_url: stlUrl,
+    p_write_token: writeToken,
+  });
+  return !error;
+}
+
+export interface InsertBlockPayload {
+  type: string;
+  title?: string;
+  content?: string;
+  button_type?: string;
+  image_url?: string;
+  settings?: Record<string, unknown>;
+}
+
+/**
+ * NFC-Blöcke einmalig anlegen (RPC – write_token, verhindert Fremd-Injection).
+ */
+export async function insertConfigBlocks(
+  configId: string,
+  writeToken: string,
+  blocks: InsertBlockPayload[]
+): Promise<boolean> {
+  if (!supabase) return false;
+  if (blocks.length === 0) return true;
+  const { error } = await supabase.rpc('insert_nfc_blocks', {
+    p_config_id: configId,
+    p_write_token: writeToken,
+    p_blocks: blocks,
   });
   return !error;
 }

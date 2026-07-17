@@ -12,9 +12,9 @@ import { ModelConfig, SVGPathData, Department } from '../types';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import * as THREE from 'three';
 import { supabase, getDetailedError } from '../lib/supabase';
-import { generateShortId, showError, resetFileInput } from '../lib/utils';
+import { generateShortId, generateWriteToken, showError, resetFileInput } from '../lib/utils';
 import { validateSvgFile, validateProfileTitle } from '../lib/validation';
-import { uploadAndGetPublicUrl } from '../lib/storage';
+import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
 import { getSession, onAuthStateChange, signOut } from '../lib/auth';
 import type { AuthSession } from '../lib/auth';
 import {
@@ -29,7 +29,7 @@ import {
   setPreviewConfig,
   getPreviewConfig,
 } from '../lib/configStorage';
-import { getConfigByShortId, recordScan, setConfigStlUrl } from '../lib/configApi';
+import { getConfigByShortId, recordScan, setConfigStlUrl, insertConfigBlocks } from '../lib/configApi';
 
 const ConfirmationModal: React.FC<{
   config: ModelConfig;
@@ -235,6 +235,7 @@ const ConfiguratorPage: React.FC = () => {
     setShowConfirmation(false);
     setSavingStep('screenshot');
     const shortId = generateShortId();
+    const writeToken = generateWriteToken();
     try {
       let finalImageUrl = '';
       if (currentScreenshot) {
@@ -242,7 +243,7 @@ const ConfiguratorPage: React.FC = () => {
         const res = await fetch(currentScreenshot);
         if (!res.ok) throw new Error('Screenshot konnte nicht geladen werden');
         const blob = await res.blob();
-        const path = `nudaim_${shortId}.png`;
+        const path = storagePath(`preview_${shortId}_`, 'shot.png');
         const url = await uploadAndGetPublicUrl(supabase, path, blob);
         if (!url) throw new Error('Upload fehlgeschlagen');
         finalImageUrl = url;
@@ -254,6 +255,7 @@ const ConfiguratorPage: React.FC = () => {
       const { error: dbError } = await supabase.from('nfc_configs').insert([{
         id: configId,
         short_id: shortId,
+        write_token: writeToken,
         preview_image: finalImageUrl,
         profile_title: config.profileTitle.trim(),
         header_image_url: config.headerImageUrl,
@@ -278,26 +280,28 @@ const ConfiguratorPage: React.FC = () => {
       }]);
       if (dbError) throw dbError;
       if (config.nfcBlocks.length > 0) {
-        const { error: blockError } = await supabase.from('nfc_blocks').insert(config.nfcBlocks.map((b, i) => ({
-          config_id: configId,
-          type: b.type,
-          title: b.title || '',
-          content: b.content || '',
-          button_type: b.buttonType,
-          image_url: b.imageUrl,
-          settings: b.settings,
-          sort_order: i
-        })));
-        if (blockError) throw blockError;
+        const ok = await insertConfigBlocks(
+          configId,
+          writeToken,
+          config.nfcBlocks.map((b) => ({
+            type: b.type,
+            title: b.title || '',
+            content: b.content || '',
+            button_type: b.buttonType,
+            image_url: b.imageUrl,
+            settings: b.settings,
+          }))
+        );
+        if (!ok) throw new Error('Blöcke konnten nicht gespeichert werden');
       }
       if (viewerRef.current?.exportSTL) {
         try {
           const stlBlob = await viewerRef.current.exportSTL();
           if (stlBlob) {
-            const stlPath = `stl/${shortId}.stl`;
-            const stlUrl = await uploadAndGetPublicUrl(supabase, stlPath, stlBlob, { upsert: true });
+            const stlPath = storagePath(`stl/${shortId}_`, 'model.stl');
+            const stlUrl = await uploadAndGetPublicUrl(supabase, stlPath, stlBlob);
             if (stlUrl) {
-              await setConfigStlUrl(configId, stlUrl);
+              await setConfigStlUrl(configId, stlUrl, writeToken);
             }
           }
         } catch (e) {

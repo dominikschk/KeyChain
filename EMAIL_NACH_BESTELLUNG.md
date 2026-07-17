@@ -53,6 +53,7 @@ In Supabase: **Edge Functions** → `send-microsite-email` → **Secrets**:
 - **RESEND_API_KEY** = dein Resend API Key
 - **EMAIL_WEBHOOK_SECRET** = langes zufälliges Secret (nur für Shopify/Zapier)
 - **FROM_EMAIL** (optional) = z. B. `NUDAIM <noreply@deine-domain.de>`
+- **ALLOWED_MICROSITE_HOSTS** (empfohlen) = z. B. `konfigurator.nudaim3d.de` (Komma-separiert). Ohne Allowlist sind nur `https://`-URLs erlaubt.
 
 ### 3. Function aufrufen (nach Bestellung)
 

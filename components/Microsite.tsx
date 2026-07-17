@@ -4,7 +4,7 @@ import { Smartphone, Wifi, Star, Globe, Link as LinkIcon, AlertTriangle, Award, 
 import { ModelConfig, NFCBlock, ActionIcon } from '../types';
 import jsQR from 'jsqr';
 import { showError } from '../lib/utils';
-import { isValidEmail } from '../lib/validation';
+import { isValidEmail, toSafeHttpUrl } from '../lib/validation';
 
 interface MicrositeProps {
   config: ModelConfig;
@@ -210,29 +210,36 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
         const cleanPhone = content.replace(/[^\d+]/g, '');
         window.open(`https://wa.me/${cleanPhone}`, '_blank');
       } else if (type === 'instagram') {
-        const url = content.startsWith('http') ? content : `https://instagram.com/${content.replace('@', '')}`;
-        window.open(url, '_blank');
+        const raw = content.startsWith('http') ? content : `https://instagram.com/${content.replace('@', '')}`;
+        const url = toSafeHttpUrl(raw);
+        if (!url) { showError('Ungültiger Link'); return; }
+        window.open(url, '_blank', 'noopener,noreferrer');
       } else if (type === 'tiktok') {
-        const url = content.startsWith('http') ? content : `https://tiktok.com/@${content.replace('@', '')}`;
-        window.open(url, '_blank');
+        const raw = content.startsWith('http') ? content : `https://tiktok.com/@${content.replace('@', '')}`;
+        const url = toSafeHttpUrl(raw);
+        if (!url) { showError('Ungültiger Link'); return; }
+        window.open(url, '_blank', 'noopener,noreferrer');
       } else if (type === 'linkedin') {
-        const url = content.startsWith('http') ? content : `https://linkedin.com/in/${content}`;
-        window.open(url, '_blank');
+        const raw = content.startsWith('http') ? content : `https://linkedin.com/in/${content}`;
+        const url = toSafeHttpUrl(raw);
+        if (!url) { showError('Ungültiger Link'); return; }
+        window.open(url, '_blank', 'noopener,noreferrer');
       } else if (type === 'youtube') {
-        const url = content.startsWith('http') ? content : `https://youtube.com/@${content}`;
-        window.open(url, '_blank');
+        const raw = content.startsWith('http') ? content : `https://youtube.com/@${content}`;
+        const url = toSafeHttpUrl(raw);
+        if (!url) { showError('Ungültiger Link'); return; }
+        window.open(url, '_blank', 'noopener,noreferrer');
       } else if (type === 'booking' || type === 'review' || type === 'google_profile' || type === 'custom_link') {
         if (!content) {
           showError('Bitte gib einen Link ein.');
           return;
         }
-        try {
-          const url = content.startsWith('http') ? content : `https://${content}`;
-          const urlObj = new URL(url);
-          window.open(urlObj.toString(), '_blank');
-        } catch {
+        const url = toSafeHttpUrl(content);
+        if (!url) {
           showError('Bitte prüfe die Eingabe.', 'Ungültiger Link');
+          return;
         }
+        window.open(url, '_blank', 'noopener,noreferrer');
       } else if (type === 'email') {
         if (!content || !isValidEmail(content)) {
           showError('Bitte gib eine gültige E-Mail-Adresse ein.');

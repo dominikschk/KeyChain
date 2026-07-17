@@ -2,19 +2,33 @@
  * Shared utilities: ID generation, file handling, user feedback.
  */
 
-/** Generates a short uppercase alphanumeric ID for configs (e.g. cart properties). */
+const ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function randomFromAlphabet(length: number): string {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += ID_ALPHABET.charAt(bytes[i]! % ID_ALPHABET.length);
+  }
+  return result;
+}
+
+/** Generates a cryptographically strong short ID for configs (16 chars). */
 export function generateShortId(): string {
-  return Math.random().toString(36).substring(2, 10).toUpperCase();
+  return randomFromAlphabet(16);
+}
+
+/** One-time write token for STL URL updates (hex, 64 chars). Not exposed via public RPCs. */
+export function generateWriteToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** Generates a secure key for stamp-card validation (ND- prefix, 40 chars). */
 export function generateSecureKey(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let result = 'ND-';
-  for (let i = 0; i < 40; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+  return `ND-${randomFromAlphabet(40)}`;
 }
 
 /** Clears a file input so the same file can be selected again. */

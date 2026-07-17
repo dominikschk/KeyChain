@@ -47,11 +47,14 @@ export function validateImageFile(
   return { valid: true };
 }
 
-/** Validates profile title (required, non-empty after trim). */
+/** Validates profile title (required, 1–200 chars after trim). */
 export function validateProfileTitle(title: string | undefined | null): ValidationResult {
   const t = title?.trim();
   if (!t || t.length === 0) {
     return { valid: false, error: 'Bitte gib einen Profil-Namen ein.' };
+  }
+  if (t.length > 200) {
+    return { valid: false, error: 'Profil-Name darf höchstens 200 Zeichen lang sein.' };
   }
   return { valid: true };
 }
@@ -71,13 +74,35 @@ export function normalizePhoneInput(value: string): string {
 
 /** Returns true if the string looks like a valid URL (http/https or will be prefixed). */
 export function isValidUrl(value: string): boolean {
+  return isSafeHttpUrl(value);
+}
+
+/**
+ * Nur http:/https:-URLs (kein javascript:, data:, …).
+ * Relative Hosts ohne Schema werden als https://… interpretiert.
+ */
+export function isSafeHttpUrl(value: string): boolean {
   const t = value.trim();
-  if (!t) return false;
+  if (!t || t.length > 2048) return false;
   try {
-    const url = t.startsWith('http') ? t : `https://${t}`;
-    new URL(url);
-    return true;
+    const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(t) ? t : `https://${t}`;
+    const url = new URL(withScheme);
+    return url.protocol === 'https:' || url.protocol === 'http:';
   } catch {
     return false;
+  }
+}
+
+/** Normalisiert eine Nutzereingabe zu einer sicheren http(s)-URL oder null. */
+export function toSafeHttpUrl(value: string): string | null {
+  const t = value.trim();
+  if (!t) return null;
+  try {
+    const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(t) ? t : `https://${t}`;
+    const url = new URL(withScheme);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.toString();
+  } catch {
+    return null;
   }
 }

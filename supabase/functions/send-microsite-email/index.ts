@@ -1,10 +1,14 @@
 // Supabase Edge Function: E-Mail nach Bestellung mit Microsite-Link und Short-ID
 // Aufruf: POST mit Body { "to": "kunde@example.com", "microsite_url": "https://...", "short_id": "ABC123" }
-// Secrets: RESEND_API_KEY, EMAIL_WEBHOOK_SECRET, optional FROM_EMAIL
+// Secrets: RESEND_API_KEY, EMAIL_WEBHOOK_SECRET, optional FROM_EMAIL, ALLOWED_MICROSITE_HOSTS
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const EMAIL_WEBHOOK_SECRET = Deno.env.get('EMAIL_WEBHOOK_SECRET');
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') ?? 'NUDAIM <onboarding@resend.dev>';
+const ALLOWED_MICROSITE_HOSTS = (Deno.env.get('ALLOWED_MICROSITE_HOSTS') ?? '')
+  .split(',')
+  .map((h) => h.trim().toLowerCase())
+  .filter(Boolean);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,13 +26,33 @@ function escapeHtml(value: string): string {
 
 function isValidEmail(value: string): boolean {
   const at = value.indexOf('@');
-  return at > 0 && at < value.length - 1 && !/\s/.test(value);
+  return at > 0 && at < value.length - 1 && !/\s/.test(value) && value.length <= 320;
 }
 
-function isValidHttpsUrl(value: string): boolean {
+function timingSafeEqualString(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const bufA = enc.encode(a);
+  const bufB = enc.encode(b);
+  const len = Math.max(bufA.length, bufB.length);
+  let diff = bufA.length === bufB.length ? 0 : 1;
+  for (let i = 0; i < len; i++) {
+    const x = i < bufA.length ? bufA[i]! : 0;
+    const y = i < bufB.length ? bufB[i]! : 0;
+    diff |= x ^ y;
+  }
+  return diff === 0;
+}
+
+function isAllowedMicrositeUrl(value: string): boolean {
   try {
     const u = new URL(value);
-    return u.protocol === 'https:' || u.protocol === 'http:';
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+    if (u.username || u.password) return false;
+    if (ALLOWED_MICROSITE_HOSTS.length === 0) {
+      // Ohne Allowlist: nur https erzwingen (härter als vorher http+https offen)
+      return u.protocol === 'https:';
+    }
+    return ALLOWED_MICROSITE_HOSTS.includes(u.hostname.toLowerCase());
   } catch {
     return false;
   }
@@ -43,9 +67,9 @@ function extractBearer(authHeader: string | null): string | null {
 function isAuthorized(req: Request): boolean {
   if (!EMAIL_WEBHOOK_SECRET) return false;
   const headerSecret = req.headers.get('x-webhook-secret')?.trim();
-  if (headerSecret && headerSecret === EMAIL_WEBHOOK_SECRET) return true;
+  if (headerSecret && timingSafeEqualString(headerSecret, EMAIL_WEBHOOK_SECRET)) return true;
   const bearer = extractBearer(req.headers.get('authorization'));
-  if (bearer && bearer === EMAIL_WEBHOOK_SECRET) return true;
+  if (bearer && timingSafeEqualString(bearer, EMAIL_WEBHOOK_SECRET)) return true;
   return false;
 }
 
@@ -132,9 +156,13 @@ const handler = async (req: Request): Promise<Response> => {
     );
   }
 
-  if (!isValidHttpsUrl(micrositeUrl)) {
+  if (!isAllowedMicrositeUrl(micrositeUrl)) {
     return new Response(
-      JSON.stringify({ error: 'microsite_url must be a valid http(s) URL' }),
+      JSON.stringify({
+        error: ALLOWED_MICROSITE_HOSTS.length
+          ? `microsite_url host must be one of: ${ALLOWED_MICROSITE_HOSTS.join(', ')}`
+          : 'microsite_url must be a valid https URL',
+      }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

@@ -51,7 +51,7 @@ export function getDetailedError(error: unknown): DetailedError {
   if (msgText.includes('new row violates row-level security policy') || status === '403') {
     return {
       title: "Storage Policy Fehler (403)",
-      msg: "Der Bucket existiert, aber du musst in Supabase noch eine 'INSERT' Policy für anonyme Nutzer erstellen. Nutze den SQL Editor für: CREATE POLICY \"Allow Upload\" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'nudaim');",
+      msg: "Der Bucket existiert, aber die INSERT-Policy fehlt oder der Dateityp ist nicht erlaubt (png/jpg/webp/gif/svg/stl). Siehe supabase-schema.sql.",
       code: "STORAGE_RLS_MISSING"
     };
   }

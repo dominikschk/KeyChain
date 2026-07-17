@@ -31,10 +31,13 @@ In Supabase: **SQL Editor** → New query → Inhalt von **`supabase-schema.sql`
 
 Das legt an:
 
-- Tabellen `nfc_configs`, `nfc_blocks`, `nfc_scans`, `orders`, `admin_users`
+- Tabellen `nfc_configs` (inkl. `write_token`), `nfc_blocks`, `nfc_scans`, `orders`, `admin_users`
 - Funktion `is_admin()`
-- Öffentliche RPCs: `get_config_by_short_id`, `get_blocks_for_config`, `get_scan_count`, `get_scan_count_last_30_days`, `set_nfc_config_stl_url`
+- Öffentliche RPCs: `get_config_by_short_id` (ohne `write_token`), `get_blocks_for_config`, `get_scan_count`, `get_scan_count_last_30_days`, `set_nfc_config_stl_url` (Token + einmalig)
 - Enge RLS (kein offenes `SELECT`/`UPDATE` für Bestellungen)
+- Storage: nur INSERT mit erlaubten Endungen, **kein** anon UPDATE
+
+Details zu Fixes: siehe **SECURITY_ISSUES.md**.
 
 ---
 
@@ -60,13 +63,14 @@ Login unter `/admin` mit dieser E-Mail und dem Passwort. Ohne Eintrag in `admin_
 
 | Ressource | Anon | Admin (`is_admin()`) |
 |-----------|------|----------------------|
-| `nfc_configs` / `nfc_blocks` | nur INSERT | SELECT |
+| `nfc_configs` | nur INSERT (mit Checks) | SELECT |
+| `nfc_blocks` | kein direktes INSERT (RPC + `write_token`) | SELECT |
 | Microsite/CCP | RPCs nach `short_id` | – |
 | `nfc_scans` | INSERT | SELECT |
 | `orders` | kein Zugriff | SELECT, INSERT, UPDATE |
-| Storage `nudaim` | INSERT/UPDATE + public SELECT | – |
+| Storage `nudaim` | INSERT (Endungen) + public SELECT | – |
 
-**Wichtig:** Alte Policies mit `USING (true)` / `WITH CHECK (true)` für SELECT/UPDATE auf `orders` entfernen (macht das Schema-Skript über `DROP POLICY IF EXISTS`).
+**Wichtig:** Alte Policies mit `USING (true)` / `WITH CHECK (true)` für SELECT/UPDATE auf `orders` entfernen (macht das Schema-Skript über `DROP POLICY IF EXISTS`). Storage-UPDATE für anon ist absichtlich entfernt.
 
 ---
 
