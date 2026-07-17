@@ -29,7 +29,7 @@ import {
   setPreviewConfig,
   getPreviewConfig,
 } from '../lib/configStorage';
-import { getConfigByShortId, recordScan } from '../lib/configApi';
+import { getConfigByShortId, recordScan, setConfigStlUrl } from '../lib/configApi';
 
 const ConfirmationModal: React.FC<{
   config: ModelConfig;
@@ -249,7 +249,10 @@ const ConfiguratorPage: React.FC = () => {
       }
       setSavingStep('db');
       const product = PRODUCTS.find((p) => p.id === selectedProductId) ?? PRODUCTS[0];
-      const { data: configRow, error: dbError } = await supabase.from('nfc_configs').insert([{
+      // Client-UUID: INSERT ohne SELECT-Policy (RLS erlaubt anon kein SELECT)
+      const configId = crypto.randomUUID();
+      const { error: dbError } = await supabase.from('nfc_configs').insert([{
+        id: configId,
         short_id: shortId,
         preview_image: finalImageUrl,
         profile_title: config.profileTitle.trim(),
@@ -272,11 +275,11 @@ const ConfiguratorPage: React.FC = () => {
           logoRotation: config.logoRotation,
           logo_svg: svgContent || null
         }
-      }]).select().single();
+      }]);
       if (dbError) throw dbError;
       if (config.nfcBlocks.length > 0) {
         const { error: blockError } = await supabase.from('nfc_blocks').insert(config.nfcBlocks.map((b, i) => ({
-          config_id: configRow.id,
+          config_id: configId,
           type: b.type,
           title: b.title || '',
           content: b.content || '',
@@ -287,15 +290,14 @@ const ConfiguratorPage: React.FC = () => {
         })));
         if (blockError) throw blockError;
       }
-      let stlUrl: string | null = null;
       if (viewerRef.current?.exportSTL) {
         try {
           const stlBlob = await viewerRef.current.exportSTL();
           if (stlBlob) {
             const stlPath = `stl/${shortId}.stl`;
-            stlUrl = await uploadAndGetPublicUrl(supabase, stlPath, stlBlob, { upsert: true });
+            const stlUrl = await uploadAndGetPublicUrl(supabase, stlPath, stlBlob, { upsert: true });
             if (stlUrl) {
-              await supabase.from('nfc_configs').update({ stl_url: stlUrl }).eq('id', configRow.id);
+              await setConfigStlUrl(configId, stlUrl);
             }
           }
         } catch (e) {

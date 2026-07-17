@@ -1,6 +1,6 @@
 /**
- * Admin – Panel: Nur per direkter URL /admin erreichbar, mit Passwortschutz.
- * Kein Link in der App; Passwort über VITE_ADMIN_PASSWORD in .env.local.
+ * Admin – Panel: Nur per direkter URL /admin, Login über Supabase Auth.
+ * Zugriff nur für E-Mails in der Tabelle admin_users (RLS).
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { ShoppingCart, ExternalLink, Loader2, Lock, LogOut, Copy, Check, Package, Download } from 'lucide-react';
@@ -8,7 +8,13 @@ import { supabase } from '../lib/supabase';
 import { getConfigsList } from '../lib/configApi';
 import { getOrdersList, createOrder, updateOrderStatus, getOrderStatusOptions } from '../lib/ordersApi';
 import { SHOPIFY_ADMIN_ORDERS_URL } from '../constants';
-import { isAdminAuthenticated, checkAdminPassword, adminLogout, getAdminPassword, isLockedOut, getLockoutRemainingMinutes } from '../lib/adminAuth';
+import {
+  checkIsAdmin,
+  getAdminSession,
+  signInAdmin,
+  signOutAdmin,
+  onAdminAuthStateChange,
+} from '../lib/adminAuth';
 import type { ConfigRow } from '../lib/configApi';
 import type { OrderRow } from '../lib/ordersApi';
 
@@ -25,8 +31,10 @@ function formatDate(iso: string | null | undefined): string {
 export const AdminPage: React.FC = () => {
   const [authenticated, setAuthenticated] = useState(false);
   const [checked, setChecked] = useState(false);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
   const [list, setList] = useState<ConfigRow[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -38,8 +46,41 @@ export const AdminPage: React.FC = () => {
   const statusOptions = getOrderStatusOptions();
 
   useEffect(() => {
-    setAuthenticated(isAdminAuthenticated());
-    setChecked(true);
+    let cancelled = false;
+
+    async function bootstrap() {
+      if (!supabase) {
+        if (!cancelled) {
+          setAuthenticated(false);
+          setChecked(true);
+        }
+        return;
+      }
+      const session = await getAdminSession();
+      if (session) {
+        const ok = await checkIsAdmin();
+        if (!cancelled) setAuthenticated(ok);
+      } else if (!cancelled) {
+        setAuthenticated(false);
+      }
+      if (!cancelled) setChecked(true);
+    }
+
+    bootstrap();
+
+    const unsub = onAdminAuthStateChange(async (session) => {
+      if (!session) {
+        setAuthenticated(false);
+        return;
+      }
+      const ok = await checkIsAdmin();
+      setAuthenticated(ok);
+    });
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, []);
 
   useEffect(() => {
@@ -66,19 +107,25 @@ export const AdminPage: React.FC = () => {
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
-    if (checkAdminPassword(password)) {
+    setLoginLoading(true);
+    try {
+      const { error: loginError } = await signInAdmin(email, password);
+      if (loginError) {
+        setPasswordError(loginError);
+        return;
+      }
       setAuthenticated(true);
       setPassword('');
-    } else {
-      setPasswordError('Falsches Passwort.');
+    } finally {
+      setLoginLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    adminLogout();
+  const handleLogout = async () => {
+    await signOutAdmin();
     setAuthenticated(false);
   };
 
@@ -122,56 +169,31 @@ export const AdminPage: React.FC = () => {
     );
   }
 
+  if (!supabase) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-cream px-4">
+        <div className="w-full max-w-sm bg-white rounded-2xl border border-zinc-200 shadow-sm p-8">
+          <div className="flex justify-center mb-6">
+            <div className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center">
+              <Lock size={24} className="text-amber-700" />
+            </div>
+          </div>
+          <h1 className="text-center font-headline font-extrabold text-lg uppercase tracking-tight text-navy mb-1">
+            Admin nicht konfiguriert
+          </h1>
+          <p className="text-center text-sm text-zinc-600 mb-4">
+            <strong>VITE_SUPABASE_URL</strong> und <strong>VITE_SUPABASE_ANON_KEY</strong> fehlen.
+          </p>
+          <p className="text-center text-xs text-zinc-500">
+            In Vercel/Netlify oder lokal in <code className="bg-zinc-100 px-1 rounded">.env.local</code> setzen und neu starten.
+          </p>
+        </div>
+        <a href="/" className="mt-6 text-sm font-medium text-zinc-500 hover:text-navy">Zur Startseite</a>
+      </div>
+    );
+  }
+
   if (!authenticated) {
-    const hasPassword = !!getAdminPassword();
-    const lockedOut = isLockedOut();
-    const lockoutMins = getLockoutRemainingMinutes();
-
-    if (!hasPassword) {
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-cream px-4">
-          <div className="w-full max-w-sm bg-white rounded-2xl border border-zinc-200 shadow-sm p-8">
-            <div className="flex justify-center mb-6">
-              <div className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center">
-                <Lock size={24} className="text-amber-700" />
-              </div>
-            </div>
-            <h1 className="text-center font-headline font-extrabold text-lg uppercase tracking-tight text-navy mb-1">
-              Admin nicht freigeschaltet
-            </h1>
-            <p className="text-center text-sm text-zinc-600 mb-4">
-              <strong>VITE_ADMIN_PASSWORD</strong> ist nicht gesetzt. Ohne Passwort ist der Admin-Zugang deaktiviert.
-            </p>
-            <p className="text-center text-xs text-zinc-500">
-              In Vercel/Netlify: Umgebungsvariablen → <code className="bg-zinc-100 px-1 rounded">VITE_ADMIN_PASSWORD</code> setzen und neu deployen. Lokal: <code className="bg-zinc-100 px-1 rounded">.env.local</code> anlegen.
-            </p>
-          </div>
-          <a href="/" className="mt-6 text-sm font-medium text-zinc-500 hover:text-navy">Zur Startseite</a>
-        </div>
-      );
-    }
-
-    if (lockedOut) {
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-cream px-4">
-          <div className="w-full max-w-sm bg-white rounded-2xl border border-zinc-200 shadow-sm p-8">
-            <div className="flex justify-center mb-6">
-              <div className="w-14 h-14 rounded-xl bg-red-100 flex items-center justify-center">
-                <Lock size={24} className="text-red-700" />
-              </div>
-            </div>
-            <h1 className="text-center font-headline font-extrabold text-lg uppercase tracking-tight text-navy mb-1">
-              Zugang vorübergehend gesperrt
-            </h1>
-            <p className="text-center text-sm text-zinc-600 mb-4">
-              Zu viele Fehlversuche. Bitte in <strong>{lockoutMins} Minuten</strong> erneut versuchen.
-            </p>
-          </div>
-          <a href="/" className="mt-6 text-sm font-medium text-zinc-500 hover:text-navy">Zur Startseite</a>
-        </div>
-      );
-    }
-
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-cream px-4">
         <div className="w-full max-w-sm bg-white rounded-2xl border border-zinc-200 shadow-sm p-8">
@@ -184,28 +206,47 @@ export const AdminPage: React.FC = () => {
             Admin-Zugang
           </h1>
           <p className="text-center text-sm text-zinc-500 mb-6">
-            Nur mit Berechtigung. Kein Link in der App. Sitzung läuft nach 8 Stunden ab.
+            Anmeldung mit Supabase Auth. Nur freigeschaltete Admin-Konten.
           </p>
           <form onSubmit={handleLogin} className="space-y-4">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">
-              Passwort
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setPasswordError(null); }}
-              placeholder="Admin-Passwort"
-              className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm font-medium text-navy placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-petrol/30 focus:border-transparent"
-              autoFocus
-            />
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+                E-Mail
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setPasswordError(null); }}
+                placeholder="admin@example.com"
+                autoComplete="username"
+                className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm font-medium text-navy placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-petrol/30 focus:border-transparent"
+                autoFocus
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+                Passwort
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setPasswordError(null); }}
+                placeholder="Passwort"
+                autoComplete="current-password"
+                className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm font-medium text-navy placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-petrol/30 focus:border-transparent"
+                required
+              />
+            </div>
             {passwordError && (
               <p className="text-sm text-red-600 font-medium">{passwordError}</p>
             )}
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-navy text-white text-sm font-semibold hover:bg-navy/90 transition-colors"
+              disabled={loginLoading}
+              className="w-full py-3 rounded-xl bg-navy text-white text-sm font-semibold hover:bg-navy/90 transition-colors disabled:opacity-50"
             >
-              Anmelden
+              {loginLoading ? 'Anmelden…' : 'Anmelden'}
             </button>
           </form>
         </div>

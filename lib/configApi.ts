@@ -1,5 +1,6 @@
 /**
  * Supabase-API: Konfigurationen und Scan-Statistiken laden.
+ * Öffentliche Reads laufen über SECURITY DEFINER RPCs (enge RLS).
  */
 import { supabase } from './supabase';
 import { DEFAULT_CONFIG } from '../constants';
@@ -46,24 +47,19 @@ function mapBlockRow(row: BlockRow): NFCBlock {
 }
 
 /**
- * Konfiguration anhand short_id aus Supabase laden (für Microsite-URL ?id=short_id und CCP).
+ * Konfiguration anhand short_id (RPC – für Microsite und CCP).
  */
 export async function getConfigByShortId(shortId: string): Promise<{ config: ModelConfig; configId: string; logoSvg?: string | null } | null> {
   if (!supabase) return null;
 
-  const { data: configRow, error: configError } = await supabase
-    .from('nfc_configs')
-    .select('*')
-    .eq('short_id', shortId)
-    .maybeSingle();
+  const { data: configRows, error: configError } = await supabase
+    .rpc('get_config_by_short_id', { p_short_id: shortId });
 
-  if (configError || !configRow) return null;
+  if (configError || !configRows?.length) return null;
+  const configRow = configRows[0] as ConfigRow;
 
   const { data: blocks, error: blocksError } = await supabase
-    .from('nfc_blocks')
-    .select('*')
-    .eq('config_id', configRow.id)
-    .order('sort_order', { ascending: true });
+    .rpc('get_blocks_for_config', { p_config_id: configRow.id });
 
   const plate = (configRow.plate_data as Record<string, unknown>) || {};
   const base = { ...DEFAULT_CONFIG };
@@ -76,7 +72,7 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     accentColor: configRow.accent_color ?? base.accentColor,
     theme: (configRow.theme as ModelConfig['theme']) ?? base.theme,
     fontStyle: (configRow.font_style as ModelConfig['fontStyle']) ?? base.fontStyle,
-    nfcBlocks: blocksError ? [] : (blocks || []).map((b) => mapBlockRow(b as BlockRow)),
+    nfcBlocks: blocksError ? [] : (blocks || []).map((b: BlockRow) => mapBlockRow(b)),
     baseType: (plate.baseType as ModelConfig['baseType']) ?? base.baseType,
     plateWidth: Number(plate.plateWidth) ?? base.plateWidth,
     plateHeight: Number(plate.plateHeight) ?? base.plateHeight,
@@ -95,7 +91,7 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
 }
 
 /**
- * Liste aller gespeicherten Konfigurationen (für Admin).
+ * Liste aller Konfigurationen (nur Admin-Session + RLS).
  */
 export async function getConfigsList(): Promise<ConfigRow[]> {
   if (!supabase) return [];
@@ -110,7 +106,19 @@ export async function getConfigsList(): Promise<ConfigRow[]> {
 }
 
 /**
- * Einen Scan für eine Konfiguration in Supabase speichern (wird beim Aufruf der Microsite aufgerufen).
+ * STL-URL nach Upload setzen (RPC – kein offenes UPDATE für anon).
+ */
+export async function setConfigStlUrl(configId: string, stlUrl: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.rpc('set_nfc_config_stl_url', {
+    p_config_id: configId,
+    p_stl_url: stlUrl,
+  });
+  return !error;
+}
+
+/**
+ * Scan speichern (anon INSERT erlaubt).
  */
 export async function recordScan(configId: string): Promise<void> {
   if (!supabase) return;
@@ -119,37 +127,25 @@ export async function recordScan(configId: string): Promise<void> {
 }
 
 /**
- * Anzahl Scans für eine Konfiguration (Tabelle nfc_scans: config_id, scanned_at).
- * Wenn die Tabelle fehlt, wird 0 zurückgegeben.
+ * Anzahl Scans (RPC für CCP).
  */
 export async function getScanCount(configId: string): Promise<number> {
   if (!supabase) return 0;
 
-  const { count, error } = await supabase
-    .from('nfc_scans')
-    .select('*', { count: 'exact', head: true })
-    .eq('config_id', configId);
-
+  const { data, error } = await supabase.rpc('get_scan_count', { p_config_id: configId });
   if (error) return 0;
-  return count ?? 0;
+  return Number(data ?? 0);
 }
 
 /**
- * Anzahl Scans der letzten 30 Tage für eine Konfiguration.
+ * Anzahl Scans der letzten 30 Tage (RPC für CCP).
  */
 export async function getScanCountLast30Days(configId: string): Promise<number> {
   if (!supabase) return 0;
 
-  const since = new Date();
-  since.setDate(since.getDate() - 30);
-  const sinceIso = since.toISOString();
-
-  const { count, error } = await supabase
-    .from('nfc_scans')
-    .select('*', { count: 'exact', head: true })
-    .eq('config_id', configId)
-    .gte('scanned_at', sinceIso);
-
+  const { data, error } = await supabase.rpc('get_scan_count_last_30_days', {
+    p_config_id: configId,
+  });
   if (error) return 0;
-  return count ?? 0;
+  return Number(data ?? 0);
 }

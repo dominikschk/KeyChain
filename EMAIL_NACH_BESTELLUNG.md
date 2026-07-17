@@ -8,7 +8,7 @@ Es gibt zwei Wege, dem Kunden nach der Bestellung die Microsite und die Short-ID
 
 Die Microsite-URL und die Short-ID liegen bereits als **Line-Item-Properties** in der Bestellung (`Config-ID`, `Microsite-URL`). Du kannst sie in der **Bestellbestätigungs-E-Mail** anzeigen.
 
-**Wo genau in Shopify?** → Siehe **SHOPIFY_CODE_EINFUEGEN.md** (Schritt-für-Schritt: Einstellungen → Benachrichtigungen → Bestellbestätigung bearbeiten und wo in der Vorlage der Code hinkommt).
+**Wo genau in Shopify?** → Siehe **SHOPIFY_CODE_EINFUEGEN.md**.
 
 Kurz:
 1. In **Shopify Admin**: **Einstellungen → Benachrichtigungen**
@@ -42,15 +42,17 @@ Mit einer **Supabase Edge Function** wird eine **eigene E-Mail** mit Microsite-L
 ### 2. Edge Function deployen
 
 ```bash
-# Im Projektroot (KeyChain)
-cd "d:\Neuer Ordner (3)\KeyChain"
+# JWT-Prüfung der Platform kann bleiben; zusätzlich verlangt die Function EMAIL_WEBHOOK_SECRET
 npx supabase functions deploy send-microsite-email --no-verify-jwt
 ```
+
+`--no-verify-jwt` ist hier ok, **weil** die Function selbst `EMAIL_WEBHOOK_SECRET` prüft (Shopify/Zapier senden kein Supabase-User-JWT). Ohne Secret startet die Function nicht erfolgreich.
 
 In Supabase: **Edge Functions** → `send-microsite-email` → **Secrets**:
 
 - **RESEND_API_KEY** = dein Resend API Key
-- **FROM_EMAIL** (optional) = z. B. `NUDAIM <noreply@deine-domain.de>` (sonst wird Resend-Standard genutzt)
+- **EMAIL_WEBHOOK_SECRET** = langes zufälliges Secret (nur für Shopify/Zapier)
+- **FROM_EMAIL** (optional) = z. B. `NUDAIM <noreply@deine-domain.de>`
 
 ### 3. Function aufrufen (nach Bestellung)
 
@@ -60,7 +62,8 @@ In Supabase: **Edge Functions** → `send-microsite-email` → **Secrets**:
 
 **Header:**  
 `Content-Type: application/json`  
-Optional: `Authorization: Bearer <SUPABASE_ANON_KEY>` (wenn du JWT aktivierst)
+`Authorization: Bearer <EMAIL_WEBHOOK_SECRET>`  
+(oder `X-Webhook-Secret: <EMAIL_WEBHOOK_SECRET>`)
 
 **Body (JSON):**
 
@@ -72,9 +75,11 @@ Optional: `Authorization: Bearer <SUPABASE_ANON_KEY>` (wenn du JWT aktivierst)
 }
 ```
 
-- **to:** E-Mail-Adresse des Kunden (z. B. aus der Bestellung)
-- **microsite_url:** Link zur Microsite (z. B. aus `line_item.properties['Microsite-URL']`)
-- **short_id:** Short-ID (z. B. aus `line_item.properties['Config-ID']`)
+- **to:** gültige E-Mail-Adresse
+- **microsite_url:** gültige `http(s)`-URL (wird HTML-escaped)
+- **short_id:** Short-ID (max. 64 Zeichen)
+
+Ohne gültiges Secret → **401 Unauthorized**.
 
 ### 4. Mit Shopify verbinden
 
@@ -84,6 +89,7 @@ Optional: `Authorization: Bearer <SUPABASE_ANON_KEY>` (wenn du JWT aktivierst)
 2. Aktion: **Send HTTP request**
    - URL: `https://<PROJEKT>.supabase.co/functions/v1/send-microsite-email`
    - Method: POST
+   - Header: `Authorization: Bearer <EMAIL_WEBHOOK_SECRET>`
    - Body (JSON):  
      `to` = E-Mail der Bestellung,  
      `microsite_url` = erste Line-Item-Property `Microsite-URL`,  
@@ -92,7 +98,7 @@ Optional: `Authorization: Bearer <SUPABASE_ANON_KEY>` (wenn du JWT aktivierst)
 **Zapier / Make.com:**
 
 1. Trigger: **Shopify – New Order**
-2. Aktion: **Webhooks by Zapier – POST** (oder **HTTP**) mit der gleichen URL und Body wie oben; Felder aus der Bestellung mappen (E-Mail, Line-Item-Properties).
+2. Aktion: **Webhooks by Zapier – POST** (oder **HTTP**) mit derselben URL, dem Secret-Header und Body wie oben.
 
 ---
 
@@ -101,6 +107,6 @@ Optional: `Authorization: Bearer <SUPABASE_ANON_KEY>` (wenn du JWT aktivierst)
 | Option | Aufwand | Ergebnis |
 |--------|--------|----------|
 | **1 – Shopify-Bestellbestätigung** | Nur E-Mail-Vorlage anpassen | Microsite + Short-ID in der Bestellbestätigung |
-| **2 – Edge Function + Resend** | Resend + Deploy + Shopify Flow/Zapier | Eigene E-Mail mit Microsite + Short-ID nach Bestellung |
+| **2 – Edge Function + Resend** | Resend + Deploy + Secret + Shopify Flow/Zapier | Eigene E-Mail mit Microsite + Short-ID |
 
 Die Edge Function liegt unter `supabase/functions/send-microsite-email/index.ts`.
