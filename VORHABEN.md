@@ -31,9 +31,12 @@ Geführtes Gespräch → Microsite-Config (kein freies HTML).
 - [x] MVP: Chat-UI + Edge Function `microsite-chat`
 - [x] Fragt u. a. nach Logo, Slogan, Wunsch-Funktionen, Branchen-Fit
 - [x] Ausgabe = gültige `ModelConfig`-Felder (Titel, Farben, Theme, Blöcke)
+- [x] Assistent zuerst im **gleichen Fenster** inkl. Vorschau; danach „selbst weiterbauen“
+- [x] Branchen-/Vibe-Paletten (Bäckerei warm, nicht Tech-Dunkel); marken-kohärente Buttons
+- [x] Zwei getrennte Arbeitsphasen: **1) Seite** → **2) Anhänger** (nicht vermischt)
 - [ ] Logo-Upload direkt im Chat (aktuell: URL oder später im Editor)
 - [ ] Brand-Guide-PDF / Website-URL scrapen
-- [ ] Bessere Layout-Freiheit sobald Section-Modell da ist
+- [ ] Freieres Section-Layout (Hero / Spalten) – nächster großer Slice
 
 ### 1. Typografie & Farben (viel Auswahl)
 

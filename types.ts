@@ -67,6 +67,8 @@ export interface ModelConfig {
   profileLogoUrl?: string; // Neues Feld für das digitale Logo
   headerImageUrl?: string;
   accentColor: string;
+  /** Seitenhintergrund der Microsite (Hex), optional */
+  surfaceColor?: string;
   fontStyle: FontStyle;
   theme: ProfileTheme;
 }

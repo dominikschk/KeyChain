@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
 import { ModelConfig, SVGPathData, ActionIcon } from '../types';
 import { BlockRenderer } from './Microsite';
+import { resolveSurface } from '../lib/brandPalette';
 import { Globe, ShoppingCart, Info, Briefcase, User, Star, Mail, Phone, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Link as LinkIcon, Zap, Map as MapIcon, Clock, Calendar, Youtube, Video } from 'lucide-react';
 
 // Fix for JSX intrinsic element type errors for @react-three/fiber
@@ -46,24 +47,28 @@ const PhonePreview: React.FC<{ config: ModelConfig; googleLogoUrl?: string | nul
   const blocks = config.nfcBlocks || [];
   const isDark = config.theme === 'dark';
   const fontClass = config.fontStyle === 'luxury' ? 'font-sans font-medium' : config.fontStyle === 'elegant' ? 'font-headline' : 'font-sans';
+  const surface = resolveSurface(config.theme, config.accentColor, config.surfaceColor);
 
   return (
     <div className="absolute inset-0 z-[300] bg-white/40 backdrop-blur-md overflow-y-auto pt-10 pb-24 md:py-12 px-6 flex flex-col items-center">
       <div className="w-full max-w-[280px] md:max-w-[340px] aspect-[9/18.5] bg-zinc-950 rounded-[3rem] border-[8px] border-zinc-900 shadow-[0_50px_100px_rgba(0,0,0,0.5)] relative flex flex-col ring-1 ring-white/10 shrink-0 overflow-hidden">
         {/* Notch Area */}
-        <div className={`h-7 flex items-center justify-center pt-1 shrink-0 ${isDark ? 'bg-zinc-900' : 'bg-cream'}`}>
+        <div className="h-7 flex items-center justify-center pt-1 shrink-0" style={{ backgroundColor: surface }}>
           <div className="w-16 h-4 bg-zinc-900 rounded-full flex items-center justify-center border border-white/5" />
         </div>
         
         {/* Screen Content */}
-        <div className={`flex-1 overflow-y-auto space-y-4 pb-16 scroll-container min-h-0 ${isDark ? 'bg-zinc-950 text-white' : 'bg-cream text-navy'} ${fontClass}`}>
+        <div
+          className={`flex-1 overflow-y-auto space-y-3 pb-16 scroll-container min-h-0 ${fontClass}`}
+          style={{ backgroundColor: surface, color: isDark ? '#fff' : '#1a1a1a' }}
+        >
            {config.headerImageUrl && (
              <div className="w-full h-28 overflow-hidden mb-[-1.5rem] relative shrink-0">
                 <img src={config.headerImageUrl} className="w-full h-full object-cover" alt="Cover" />
-                <div className={`absolute inset-0 bg-gradient-to-b from-transparent ${isDark ? 'to-zinc-950' : 'to-cream'}`} />
+                <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, transparent, ${surface})` }} />
              </div>
            )}
-           <header className="flex flex-col items-center text-center space-y-3 pt-6 px-5 shrink-0">
+           <header className="flex flex-col items-center text-center space-y-2 pt-6 px-5 shrink-0">
               <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center border border-navy/5 relative z-10 transition-transform overflow-hidden">
                 {(googleLogoUrl || config.profileLogoUrl) ? (
                    <img src={googleLogoUrl || config.profileLogoUrl} alt="" className="w-full h-full object-cover object-center" />
@@ -73,12 +78,11 @@ const PhonePreview: React.FC<{ config: ModelConfig; googleLogoUrl?: string | nul
                   </div>
                 )}
               </div>
-              <h1 className="font-headline text-base md:text-xl font-extrabold uppercase tracking-tight px-4 leading-tight" style={{ color: isDark ? '#fff' : config.accentColor }}>
+              <h1 className="font-headline text-base md:text-xl font-extrabold tracking-tight px-4 leading-tight" style={{ color: isDark ? '#fff' : config.accentColor }}>
                 {config.profileTitle}
               </h1>
-              <div className="w-6 h-0.5 rounded-full bg-current opacity-10" />
            </header>
-           <div className="space-y-4 px-5 pb-8">
+           <div className="space-y-3 px-4 pb-8">
               {blocks.map(block => (
                  <BlockRenderer key={block.id} block={block} configId="preview" accentColor={config.accentColor} theme={config.theme} />
               ))}
@@ -86,7 +90,7 @@ const PhonePreview: React.FC<{ config: ModelConfig; googleLogoUrl?: string | nul
         </div>
         
         {/* Bottom Bar */}
-        <div className={`h-5 flex items-center justify-center shrink-0 ${isDark ? 'bg-zinc-950' : 'bg-cream'}`}>
+        <div className="h-5 flex items-center justify-center shrink-0" style={{ backgroundColor: surface }}>
            <div className={`w-14 h-1 rounded-full ${isDark ? 'bg-white/10' : 'bg-navy/10'}`} />
         </div>
       </div>

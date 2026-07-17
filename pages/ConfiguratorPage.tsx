@@ -2,7 +2,7 @@
  * Konfigurator – Panel zum Konfigurieren von NFeC-Produkten (3D + Microsite).
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, QrCode as QrIcon, X, ArrowRight, RefreshCw, Edit3, Smartphone, Box, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown, Sparkles } from 'lucide-react';
+import { Loader2, QrCode as QrIcon, X, ArrowRight, RefreshCw, Edit3, Smartphone, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown } from 'lucide-react';
 import { Viewer } from '../components/Viewer';
 import { Controls } from '../components/Controls';
 import { Microsite } from '../components/Microsite';
@@ -79,7 +79,10 @@ const ConfiguratorPage: React.FC = () => {
   const [session, setSession] = useState<AuthSession>(null);
   const [authReady, setAuthReady] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [showMicrositeChat, setShowMicrositeChat] = useState(false);
+  /** Assistent zuerst im gleichen Fenster; danach optional manueller Editor */
+  const [digitalMode, setDigitalMode] = useState<'assist' | 'manual'>('assist');
+  /** Zwei getrennte Arbeitsphasen: erst Seite, dann Anhänger */
+  const [workPhase, setWorkPhase] = useState<'site' | 'hardware'>('site');
 
   useEffect(() => {
     getSession().then((s) => {
@@ -126,8 +129,9 @@ const ConfiguratorPage: React.FC = () => {
   const [svgElements, setSvgElements] = useState<SVGPathData[] | null>(null);
   const [svgContent, setSvgContent] = useState<string | null>(() => loadDraftSvg());
   const [selectedProductId, setSelectedProductId] = useState<string>(() => PRODUCTS[0]?.id ?? 'keychain');
-  const [activeDept, setActiveDept] = useState<Department>('3d');
+  const [activeDept, setActiveDept] = useState<Department>('digital');
   const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('editor');
+  const [previewType, setPreviewType] = useState<'3d' | 'digital'>('digital');
   const [savingStep, setSavingStep] = useState('idle');
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [currentScreenshot, setCurrentScreenshot] = useState<string | null>(null);
@@ -136,12 +140,16 @@ const ConfiguratorPage: React.FC = () => {
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const viewerRef = useRef<{ takeScreenshot: () => Promise<string>; exportSTL: () => Promise<Blob | null> }>(null);
-  const [previewType, setPreviewType] = useState<'3d' | 'digital'>('3d');
 
   useEffect(() => {
-    if (activeDept === '3d') setPreviewType('3d');
-    else setPreviewType('digital');
-  }, [activeDept]);
+    if (workPhase === 'hardware') {
+      setActiveDept('3d');
+      setPreviewType('3d');
+    } else {
+      setActiveDept('digital');
+      setPreviewType('digital');
+    }
+  }, [workPhase]);
 
   useEffect(() => {
     if (draftSaveRef.current) clearTimeout(draftSaveRef.current);
@@ -277,7 +285,8 @@ const ConfiguratorPage: React.FC = () => {
           logoPosX: config.logoPosX,
           logoPosY: config.logoPosY,
           logoRotation: config.logoRotation,
-          logo_svg: svgContent || null
+          logo_svg: svgContent || null,
+          surfaceColor: config.surfaceColor || null,
         }
       }]);
       if (dbError) throw dbError;
@@ -458,138 +467,260 @@ const ConfiguratorPage: React.FC = () => {
       {showConfirmation && (
         <ConfirmationModal config={config} onConfirm={executeSave} onCancel={() => setShowConfirmation(false)} screenshot={currentScreenshot} />
       )}
-      {showMicrositeChat && (
-        <MicrositeChat
-          config={config}
-          onApplyConfig={(next) => {
-            setConfig(next);
-            setActiveDept('digital');
-          }}
-          onClose={() => setShowMicrositeChat(false)}
-        />
-      )}
 
-      <header className="shrink-0 h-14 md:h-14 flex items-center justify-between px-4 md:px-5 bg-white border-b border-zinc-200/80 z-30">
-        <div className="flex items-center gap-3 md:gap-4 min-w-0">
-          <span className="font-headline font-extrabold text-lg uppercase tracking-tight text-navy truncate">NUDAIM</span>
-          <span className="hidden sm:inline-block h-4 w-px bg-zinc-200" />
-          <div className="hidden sm:flex bg-zinc-100 p-0.5 rounded-lg">
-            <button type="button" onClick={() => setActiveDept('3d')} className={`px-4 py-2 rounded-md text-xs font-semibold transition-colors ${activeDept === '3d' ? 'bg-white text-navy shadow-sm' : 'text-zinc-500'}`}>3D</button>
-            <button type="button" onClick={() => setActiveDept('digital')} className={`px-4 py-2 rounded-md text-xs font-semibold transition-colors ${activeDept === 'digital' ? 'bg-white text-navy shadow-sm' : 'text-zinc-500'}`}>Microsite</button>
+      <header className="shrink-0 bg-white border-b border-zinc-200/80 z-30">
+        <div className="h-14 flex items-center justify-between px-4 md:px-5 gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="font-headline font-extrabold text-lg uppercase tracking-tight text-navy truncate">NUDAIM</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {workPhase === 'hardware' && (
+              <button
+                type="button"
+                onClick={initiateSave}
+                className="hidden md:flex items-center gap-2 h-9 px-4 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy/90 active:scale-[0.98]"
+              >
+                <ShoppingCart size={14} />
+                Bestellen
+              </button>
+            )}
+            <div className="relative">
+              <button type="button" onClick={() => setUserMenuOpen((o) => !o)} className="flex items-center gap-2 h-9 pl-2 pr-2 md:pl-3 md:pr-3 rounded-lg hover:bg-zinc-100 transition-colors" aria-expanded={userMenuOpen} aria-haspopup="true">
+                <div className="w-8 h-8 rounded-full bg-petrol/20 flex items-center justify-center">
+                  {session?.user?.user_metadata?.avatar_url ? (
+                    <img src={session.user.user_metadata.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                  ) : (
+                    <User size={16} className="text-petrol" />
+                  )}
+                </div>
+                <ChevronDown size={14} className="text-zinc-400 hidden md:block" />
+              </button>
+              {userMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" aria-hidden onClick={() => setUserMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 w-56 py-1 bg-white rounded-xl border border-zinc-200 shadow-lg z-50">
+                    <div className="px-3 py-2 border-b border-zinc-100">
+                      <p className="text-xs font-semibold text-navy truncate">{session?.user?.id === 'guest' ? 'Gast' : (session?.user?.email ?? 'Angemeldet')}</p>
+                    </div>
+                    <a href="/ccp" className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Smartphone size={14} /> Kunden-Panel</a>
+                    <button type="button" onClick={() => { handleExportConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Download size={14} /> Export</button>
+                    <label className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"><Upload size={14} /> Import<input type="file" accept=".json,application/json" onChange={(e) => { handleImportConfig(e); setUserMenuOpen(false); }} className="hidden" /></label>
+                    <button type="button" onClick={() => { handlePreviewInNewTab(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ExternalLink size={14} /> Vorschau (Tab)</button>
+                    <button type="button" onClick={() => { handleResetConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><RotateCcw size={14} /> Zurücksetzen</button>
+                    <div className="border-t border-zinc-100 mt-1 pt-1">
+                      <button type="button" onClick={() => { signOut(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"><LogOut size={14} /> Abmelden</button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setShowMicrositeChat(true);
-              setActiveDept('digital');
-            }}
-            className="flex items-center gap-2 h-9 px-2.5 sm:px-3 bg-petrol/10 text-petrol text-xs font-semibold rounded-lg hover:bg-petrol/20 active:scale-[0.98]"
-            title="Microsite mit Assistent aufbauen"
-          >
-            <Sparkles size={14} />
-            <span className="hidden sm:inline">Seite bauen</span>
-          </button>
-          <button type="button" onClick={initiateSave} className="hidden md:flex items-center gap-2 h-9 px-4 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy/90 active:scale-[0.98]">
-            <ShoppingCart size={14} />
-            Bestellen
-          </button>
-          <div className="relative">
-            <button type="button" onClick={() => setUserMenuOpen((o) => !o)} className="flex items-center gap-2 h-9 pl-2 pr-2 md:pl-3 md:pr-3 rounded-lg hover:bg-zinc-100 transition-colors" aria-expanded={userMenuOpen} aria-haspopup="true">
-              <div className="w-8 h-8 rounded-full bg-petrol/20 flex items-center justify-center">
-                {session?.user?.user_metadata?.avatar_url ? (
-                  <img src={session.user.user_metadata.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
-                ) : (
-                  <User size={16} className="text-petrol" />
-                )}
-              </div>
-              <ChevronDown size={14} className="text-zinc-400 hidden md:block" />
-            </button>
-            {userMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" aria-hidden onClick={() => setUserMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 w-56 py-1 bg-white rounded-xl border border-zinc-200 shadow-lg z-50">
-                  <div className="px-3 py-2 border-b border-zinc-100">
-                    <p className="text-xs font-semibold text-navy truncate">{session?.user?.id === 'guest' ? 'Gast' : (session?.user?.email ?? 'Angemeldet')}</p>
-                  </div>
-                  <a href="/ccp" className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Smartphone size={14} /> Kunden-Panel</a>
-                  <button type="button" onClick={() => { handleExportConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Download size={14} /> Export</button>
-                  <label className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"><Upload size={14} /> Import<input type="file" accept=".json,application/json" onChange={(e) => { handleImportConfig(e); setUserMenuOpen(false); }} className="hidden" /></label>
-                  <button type="button" onClick={() => { handlePreviewInNewTab(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ExternalLink size={14} /> Vorschau (Tab)</button>
-                  <button type="button" onClick={() => { handleResetConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><RotateCcw size={14} /> Zurücksetzen</button>
-                  <div className="border-t border-zinc-100 mt-1 pt-1">
-                    <button type="button" onClick={() => { signOut(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"><LogOut size={14} /> Abmelden</button>
-                  </div>
-                </div>
-              </>
-            )}
+
+        {/* Phasen-Leiste: klar getrennt */}
+        <div className="px-4 md:px-5 pb-3">
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`flex-1 h-1.5 rounded-full ${workPhase === 'site' || workPhase === 'hardware' ? 'bg-petrol' : 'bg-zinc-200'}`} />
+            <div className={`flex-1 h-1.5 rounded-full ${workPhase === 'hardware' ? 'bg-petrol' : 'bg-zinc-200'}`} />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                Schritt {workPhase === 'site' ? '1' : '2'} von 2
+              </p>
+              <p className="text-sm font-extrabold text-navy">
+                {workPhase === 'site' ? 'Deine Handy-Seite (Microsite)' : 'Dein Schlüsselanhänger (3D)'}
+              </p>
+              <p className="text-xs text-zinc-500 mt-0.5 max-w-xl">
+                {workPhase === 'site'
+                  ? 'Hier gestaltest du nur die digitale Seite. Den Anhänger machst du danach.'
+                  : 'Hier gestaltest du nur den physischen Anhänger. Die Seite ist schon fertig.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {workPhase === 'hardware' && (
+                <button
+                  type="button"
+                  onClick={() => setWorkPhase('site')}
+                  className="min-h-[40px] px-3 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                >
+                  ← Zurück zur Seite
+                </button>
+              )}
+              {workPhase === 'site' && (
+                <button
+                  type="button"
+                  onClick={() => setWorkPhase('hardware')}
+                  className="min-h-[40px] px-4 rounded-xl bg-navy text-white text-xs font-semibold hover:bg-navy/90"
+                >
+                  Weiter zum Anhänger →
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="sm:hidden flex border-b border-zinc-200/80 bg-white px-4 py-2">
-        <div className="flex bg-zinc-100 p-0.5 rounded-lg w-full">
-          <button type="button" onClick={() => setActiveDept('3d')} className={`flex-1 py-2.5 rounded-md text-xs font-semibold transition-colors ${activeDept === '3d' ? 'bg-white text-navy shadow-sm' : 'text-zinc-500'}`}>3D Branding</button>
-          <button type="button" onClick={() => setActiveDept('digital')} className={`flex-1 py-2.5 rounded-md text-xs font-semibold transition-colors ${activeDept === 'digital' ? 'bg-white text-navy shadow-sm' : 'text-zinc-500'}`}>Microsite</button>
+      {workPhase === 'site' && (
+        <div className="sm:hidden flex border-b border-zinc-200/80 bg-white px-4 py-2">
+          <div className="flex bg-zinc-100 p-0.5 rounded-lg w-full">
+            <button
+              type="button"
+              onClick={() => setDigitalMode('assist')}
+              className={`flex-1 py-2.5 rounded-md text-[11px] font-semibold transition-colors ${digitalMode === 'assist' ? 'bg-white text-navy shadow-sm' : 'text-zinc-500'}`}
+            >
+              Assistent
+            </button>
+            <button
+              type="button"
+              onClick={() => setDigitalMode('manual')}
+              className={`flex-1 py-2.5 rounded-md text-[11px] font-semibold transition-colors ${digitalMode === 'manual' ? 'bg-white text-navy shadow-sm' : 'text-zinc-500'}`}
+            >
+              Selbst feilen
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
-        <aside className={`flex flex-col bg-zinc-50/50 min-h-0 w-full md:w-[380px] lg:w-[400px] shrink-0 border-r border-zinc-200/80 ${mobileTab === 'editor' ? 'flex' : 'hidden md:flex'}`}>
-          <div className="flex-1 scroll-container technical-grid-fine">
-            <div className="p-4 sm:p-5 pb-28 md:pb-6">
-              {PRODUCTS.length > 1 && (
-                <div className="mb-4">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2">Produkt</label>
-                  <select
-                    value={selectedProductId}
-                    onChange={(e) => setSelectedProductId(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-medium text-navy bg-white focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy"
-                  >
-                    {PRODUCTS.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <Controls
-                activeDept={activeDept}
-                config={config}
-                setConfig={setConfig}
-                svgElements={svgElements}
-                onUpload={handleFileUpload}
-                onUpdateColor={(id, c) => setSvgElements(prev => prev?.map(el => el.id === id ? { ...el, currentColor: c } : el) || null)}
-              />
+        <aside className={`flex flex-col bg-zinc-50/50 min-h-0 w-full md:w-[400px] lg:w-[420px] shrink-0 border-r border-zinc-200/80 ${mobileTab === 'editor' ? 'flex' : 'hidden md:flex'}`}>
+          {workPhase === 'site' && digitalMode === 'assist' ? (
+            <div className="flex-1 min-h-0 flex flex-col">
+              <div className="hidden sm:flex border-b border-zinc-100 bg-white px-3 py-2 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setDigitalMode('assist')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-semibold ${digitalMode === 'assist' ? 'bg-petrol/10 text-petrol' : 'text-zinc-500'}`}
+                >
+                  Assistent
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDigitalMode('manual')}
+                  className="flex-1 py-2 rounded-lg text-xs font-semibold text-zinc-500 hover:bg-zinc-50"
+                >
+                  Selbst feilen
+                </button>
+              </div>
+              <div className="flex-1 min-h-0">
+                <MicrositeChat
+                  variant="panel"
+                  config={config}
+                  onApplyConfig={(next) => {
+                    setConfig(next);
+                    setPreviewType('digital');
+                  }}
+                  onContinueManual={() => setDigitalMode('manual')}
+                  onContinueToHardware={() => setWorkPhase('hardware')}
+                />
+              </div>
             </div>
-          </div>
-          <footer className="hidden md:flex shrink-0 p-4 border-t border-zinc-200/80 bg-white">
-            <button type="button" onClick={initiateSave} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
-              <ShoppingCart size={18} />
-              Konfiguration abschließen
-            </button>
-          </footer>
+          ) : workPhase === 'site' ? (
+            <>
+              <div className="hidden sm:flex border-b border-zinc-100 bg-white px-3 py-2 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setDigitalMode('assist')}
+                  className="flex-1 py-2 rounded-lg text-xs font-semibold text-zinc-500 hover:bg-zinc-50"
+                >
+                  Assistent
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDigitalMode('manual')}
+                  className="flex-1 py-2 rounded-lg text-xs font-semibold bg-petrol/10 text-petrol"
+                >
+                  Selbst feilen
+                </button>
+              </div>
+              <div className="flex-1 scroll-container technical-grid-fine min-h-0">
+                <div className="p-4 sm:p-5 pb-28 md:pb-6">
+                  <Controls
+                    activeDept="digital"
+                    config={config}
+                    setConfig={setConfig}
+                    svgElements={svgElements}
+                    onUpload={handleFileUpload}
+                    onUpdateColor={(id, c) => setSvgElements(prev => prev?.map(el => el.id === id ? { ...el, currentColor: c } : el) || null)}
+                  />
+                </div>
+              </div>
+              <footer className="hidden md:flex shrink-0 p-4 border-t border-zinc-200/80 bg-white flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => setWorkPhase('hardware')}
+                  className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+                >
+                  Weiter zum Anhänger →
+                </button>
+              </footer>
+            </>
+          ) : (
+            <>
+              <div className="flex-1 scroll-container technical-grid-fine min-h-0">
+                <div className="p-4 sm:p-5 pb-28 md:pb-6">
+                  {PRODUCTS.length > 1 && (
+                    <div className="mb-4">
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2">Produkt</label>
+                      <select
+                        value={selectedProductId}
+                        onChange={(e) => setSelectedProductId(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 text-sm font-medium text-navy bg-white focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy"
+                      >
+                        {PRODUCTS.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <Controls
+                    activeDept="3d"
+                    config={config}
+                    setConfig={setConfig}
+                    svgElements={svgElements}
+                    onUpload={handleFileUpload}
+                    onUpdateColor={(id, c) => setSvgElements(prev => prev?.map(el => el.id === id ? { ...el, currentColor: c } : el) || null)}
+                  />
+                </div>
+              </div>
+              <footer className="hidden md:flex shrink-0 p-4 border-t border-zinc-200/80 bg-white">
+                <button type="button" onClick={initiateSave} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
+                  <ShoppingCart size={18} />
+                  Fertig – bestellen
+                </button>
+              </footer>
+            </>
+          )}
         </aside>
 
         <main className={`flex-1 relative z-10 min-h-0 bg-zinc-100 ${mobileTab === 'preview' ? 'flex flex-col' : 'hidden md:flex'}`}>
           <div className="flex-1 relative overflow-hidden min-h-[200px]">
-            <Viewer ref={viewerRef} config={config} svgElements={svgElements} showNFCPreview={previewType === 'digital'} googleLogoUrl={session?.user?.user_metadata?.avatar_url} />
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] flex p-0.5 bg-white rounded-lg border border-zinc-200 shadow-sm">
-              <button type="button" onClick={() => setPreviewType('3d')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-semibold transition-colors min-h-[40px] ${previewType === '3d' ? 'bg-navy text-white' : 'text-zinc-500'}`}>
-                <Box size={16} />
-                Hardware
-              </button>
-              <button type="button" onClick={() => setPreviewType('digital')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-xs font-semibold transition-colors min-h-[40px] ${previewType === 'digital' ? 'bg-navy text-white' : 'text-zinc-500'}`}>
-                <Smartphone size={16} />
-                Digital
-              </button>
+            <Viewer
+              ref={viewerRef}
+              config={config}
+              svgElements={svgElements}
+              showNFCPreview={workPhase === 'site'}
+              googleLogoUrl={session?.user?.user_metadata?.avatar_url}
+            />
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] px-4 py-2 rounded-lg bg-white/95 border border-zinc-200 shadow-sm text-xs font-semibold text-navy">
+              {workPhase === 'site' ? 'Vorschau: Handy-Seite' : 'Vorschau: Schlüsselanhänger'}
             </div>
           </div>
           <div className="md:hidden shrink-0 p-4 bg-white border-t border-zinc-200 safe-bottom">
-            <button type="button" onClick={initiateSave} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
-              <ShoppingCart size={18} />
-              Jetzt bestellen
-            </button>
+            {workPhase === 'site' ? (
+              <button
+                type="button"
+                onClick={() => setWorkPhase('hardware')}
+                className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+              >
+                Weiter zum Anhänger →
+              </button>
+            ) : (
+              <button type="button" onClick={initiateSave} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
+                <ShoppingCart size={18} />
+                Fertig – bestellen
+              </button>
+            )}
           </div>
           {savingStep !== 'idle' && (
             <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-[600] flex flex-col items-center justify-center text-center px-6">

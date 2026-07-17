@@ -5,6 +5,7 @@ import { ModelConfig, NFCBlock, ActionIcon } from '../types';
 import jsQR from 'jsqr';
 import { showError } from '../lib/utils';
 import { isValidEmail, toSafeHttpUrl } from '../lib/validation';
+import { brandButtonStyle, resolveSurface } from '../lib/brandPalette';
 
 interface MicrositeProps {
   config: ModelConfig;
@@ -149,12 +150,17 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
   const isDark = theme === 'dark';
   
   if (block.type === 'headline') {
+    if (!block.title && !block.content) return null;
     return (
-      <div className="py-6 text-center animate-in slide-in-from-bottom-4 duration-700">
-        <h2 className={`font-headline text-4xl font-extrabold uppercase tracking-tight`} style={{ color: isDark ? '#fff' : accentColor }}>
-          {block.content}
-        </h2>
-        {block.title && <p className="text-[10px] font-black uppercase text-zinc-400 mt-2 tracking-[0.3em]">{block.title}</p>}
+      <div className="py-2 text-center animate-in slide-in-from-bottom-2 duration-500">
+        {(block.title || block.content) && (
+          <p className={`text-lg sm:text-xl font-medium leading-snug px-2 ${isDark ? 'text-zinc-200' : 'text-zinc-700'}`}>
+            {block.title || block.content}
+          </p>
+        )}
+        {block.title && block.content && block.content !== block.title && (
+          <p className={`text-sm mt-2 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>{block.content}</p>
+        )}
       </div>
     );
   }
@@ -261,48 +267,39 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
     };
 
     const isSocial = ['instagram', 'tiktok', 'linkedin', 'youtube', 'whatsapp'].includes(block.buttonType || '');
-    const isTool = ['wifi', 'booking', 'email', 'phone', 'action_card', 'review', 'google_profile'].includes(block.buttonType || '');
-
-    const getColors = () => {
-      switch(block.buttonType) {
-        case 'instagram': return 'bg-pink-50 text-pink-500 border-pink-100';
-        case 'tiktok': return 'bg-zinc-900 text-white border-zinc-800';
-        case 'whatsapp': return 'bg-emerald-50 text-emerald-500 border-emerald-100';
-        case 'linkedin': return 'bg-blue-50 text-blue-600 border-blue-100';
-        case 'youtube': return 'bg-red-50 text-red-600 border-red-100';
-        case 'wifi': return 'bg-sky-50 text-sky-500 border-sky-100';
-        case 'review': return 'bg-yellow-50 text-yellow-500 border-yellow-100';
-        case 'action_card': return 'bg-indigo-50 text-indigo-500 border-indigo-100';
-        default: return isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5';
-      }
-    };
+    const brand = brandButtonStyle(accentColor, isDark);
 
     return (
       <button 
         onClick={(e) => { e.stopPropagation(); handleAction(); }}
-        className={`${getColors()} w-full p-6 rounded-[2.5rem] border shadow-sm flex items-center gap-6 hover:scale-[1.02] active:scale-[0.98] transition-all pointer-events-auto animate-in slide-in-from-right duration-500`}
+        className="w-full p-5 rounded-2xl border flex items-center gap-4 hover:scale-[1.01] active:scale-[0.99] transition-all pointer-events-auto animate-in slide-in-from-bottom-2 duration-400 shadow-sm"
+        style={{ backgroundColor: brand.bg, borderColor: brand.border, color: brand.fg }}
       >
-        <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center shadow-sm`}>
-           {block.buttonType === 'instagram' && <Instagram size={32} />}
-           {block.buttonType === 'tiktok' && <Music size={32} />}
-           {block.buttonType === 'whatsapp' && <MessageCircle size={32} />}
-           {block.buttonType === 'linkedin' && <Briefcase size={32} />}
-           {block.buttonType === 'youtube' && <Youtube size={32} />}
-           {block.buttonType === 'wifi' && <Wifi size={32} />}
-           {block.buttonType === 'review' && <Star size={32} fill="currentColor" />}
-           {block.buttonType === 'google_profile' && <MapPin size={32} />}
-           {block.buttonType === 'action_card' && <CreditCard size={32} />}
-           {block.buttonType === 'phone' && <Phone size={32} />}
-           {block.buttonType === 'email' && <Mail size={32} />}
-           {block.buttonType === 'booking' && <Calendar size={32} />}
-           {block.buttonType === 'custom_link' && getLucideIcon(block.settings?.icon, 28)}
+        <div
+          className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+          style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#fff', color: accentColor }}
+        >
+           {block.buttonType === 'instagram' && <Instagram size={24} />}
+           {block.buttonType === 'tiktok' && <Music size={24} />}
+           {block.buttonType === 'whatsapp' && <MessageCircle size={24} />}
+           {block.buttonType === 'linkedin' && <Briefcase size={24} />}
+           {block.buttonType === 'youtube' && <Youtube size={24} />}
+           {block.buttonType === 'wifi' && <Wifi size={24} />}
+           {block.buttonType === 'review' && <Star size={24} fill="currentColor" />}
+           {block.buttonType === 'google_profile' && <MapPin size={24} />}
+           {block.buttonType === 'action_card' && <CreditCard size={24} />}
+           {block.buttonType === 'phone' && <Phone size={24} />}
+           {block.buttonType === 'email' && <Mail size={24} />}
+           {block.buttonType === 'booking' && <Calendar size={24} />}
+           {block.buttonType === 'custom_link' && getLucideIcon(block.settings?.icon, 22)}
+           {!block.buttonType && <LinkIcon size={22} />}
         </div>
         <div className="text-left flex-1 min-w-0">
-          <p className={`${isDark && block.buttonType !== 'tiktok' ? 'text-white' : 'font-black'} text-[12px] uppercase tracking-widest truncate`}>
+          <p className="font-bold text-[15px] tracking-tight truncate" style={{ color: isDark ? '#fff' : '#1a1a1a' }}>
             {block.title || block.buttonType}
           </p>
-          <p className="text-[9px] opacity-60 font-bold uppercase tracking-widest mt-1">
-            {block.buttonType === 'wifi' ? `SSID: ${block.settings?.ssid || '...'}` : 'Antippen zum Öffnen'}
+          <p className="text-[12px] mt-0.5 font-medium" style={{ color: brand.muted }}>
+            {block.buttonType === 'wifi' ? `WLAN: ${block.settings?.ssid || '…'}` : isSocial ? 'Öffnen' : 'Antippen'}
           </p>
         </div>
       </button>
@@ -317,6 +314,7 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
   const isDark = config.theme === 'dark';
   const template = config.nfcTemplate || 'modern';
   const fontClass = config.fontStyle === 'luxury' ? 'font-sans font-medium' : config.fontStyle === 'elegant' ? 'font-headline' : 'font-sans';
+  const surface = resolveSurface(config.theme, config.accentColor, config.surfaceColor);
 
   if (error) {
     return (
@@ -336,51 +334,49 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
   const isMinimal = template === 'minimal';
 
   return (
-    <div className={`min-h-screen w-full ${isDark ? 'bg-zinc-950 text-white' : 'bg-cream text-navy'} selection:bg-petrol pb-40 flex flex-col items-center overflow-y-auto overflow-x-hidden ${fontClass}`}>
-      <header className={`px-8 flex flex-col items-center text-center w-full relative transition-all duration-700 ${isMinimal ? 'pt-12 pb-8' : 'pt-24 pb-16'}`}>
+    <div
+      className={`min-h-screen w-full selection:bg-petrol pb-40 flex flex-col items-center overflow-y-auto overflow-x-hidden ${fontClass}`}
+      style={{ backgroundColor: surface, color: isDark ? '#fff' : '#1a1a1a' }}
+    >
+      <header className={`px-6 flex flex-col items-center text-center w-full relative transition-all duration-700 ${isMinimal ? 'pt-10 pb-6' : 'pt-14 pb-8'}`}>
         {config.headerImageUrl && (
-          <div className="absolute top-0 left-0 w-full h-80 z-0 overflow-hidden">
-             <img src={config.headerImageUrl} className="w-full h-full object-cover opacity-60 blur-2xl scale-125" alt="Header Blur" />
-             <div className={`absolute inset-0 bg-gradient-to-b from-transparent via-transparent ${isDark ? 'to-zinc-950' : 'to-cream'}`} />
+          <div className="absolute top-0 left-0 w-full h-56 z-0 overflow-hidden">
+             <img src={config.headerImageUrl} className="w-full h-full object-cover opacity-50" alt="" />
+             <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, transparent, ${surface})` }} />
           </div>
         )}
         
-        <div className={`bg-white shadow-xl flex items-center justify-center border border-navy/5 relative z-10 animate-in zoom-in duration-1000 overflow-hidden
-          ${isMinimal ? 'w-20 h-20 rounded-2xl' : 'w-28 h-28 rounded-[2.8rem]'}`}>
+        <div className={`bg-white shadow-lg flex items-center justify-center border border-black/5 relative z-10 overflow-hidden
+          ${isMinimal ? 'w-20 h-20 rounded-2xl' : 'w-24 h-24 rounded-3xl'}`}>
            {(googleLogoUrl || config.profileLogoUrl) ? (
              <img src={googleLogoUrl || config.profileLogoUrl} alt="" className="w-full h-full object-cover object-center" />
            ) : (
              <div style={{ color: config.accentColor }}>
-                {getLucideIcon(config.profileIcon, isMinimal ? 32 : 48)}
+                {getLucideIcon(config.profileIcon, isMinimal ? 32 : 40)}
              </div>
            )}
         </div>
         
-        <div className={`space-y-4 relative z-10 ${isMinimal ? 'mt-6' : 'mt-8'}`}>
-           <h1 className={`font-headline font-extrabold uppercase tracking-tight leading-tight px-6 animate-in slide-in-from-top-4 duration-700 transition-all
-             ${isMinimal ? 'text-3xl' : 'text-5xl'}`} style={{ color: isDark ? '#fff' : config.accentColor }}>
+        <div className={`space-y-2 relative z-10 ${isMinimal ? 'mt-5' : 'mt-6'}`}>
+           <h1
+             className={`font-headline font-extrabold tracking-tight leading-tight px-4 ${isMinimal ? 'text-2xl' : 'text-3xl sm:text-4xl'}`}
+             style={{ color: isDark ? '#fff' : config.accentColor }}
+           >
                {config.profileTitle}
            </h1>
-           {!isMinimal && (
-             <div className="flex items-center justify-center gap-2">
-                <span className="w-8 h-[1px] bg-zinc-300" />
-                <span className="text-[9px] font-black uppercase tracking-[0.4em] opacity-40">NFeC Verified</span>
-                <span className="w-8 h-[1px] bg-zinc-300" />
-             </div>
-           )}
         </div>
       </header>
 
-      <main className="max-w-md w-full px-6 flex-1 relative z-10 space-y-6">
+      <main className="max-w-md w-full px-5 flex-1 relative z-10 space-y-4 pb-8">
         {config.nfcBlocks.map(block => (
           <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
         ))}
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 p-8 flex justify-center pointer-events-none z-[200]">
+      <footer className="fixed bottom-0 left-0 right-0 p-6 flex justify-center pointer-events-none z-[200]">
         <button 
           onClick={() => window.location.href = window.location.origin}
-          className="px-10 py-5 rounded-full shadow-2xl flex items-center gap-4 hover:scale-105 transition-all pointer-events-auto font-black text-[11px] uppercase tracking-[0.2em] active:scale-95 group"
+          className="px-8 py-4 rounded-full shadow-xl flex items-center gap-3 hover:scale-105 transition-all pointer-events-auto font-semibold text-sm active:scale-95"
           style={{ backgroundColor: config.accentColor, color: '#fff' }}
         >
           <Smartphone size={18} />

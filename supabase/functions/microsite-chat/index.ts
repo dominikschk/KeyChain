@@ -59,7 +59,9 @@ Regeln für config:
 - buttonType nur: whatsapp, instagram, booking, review, wifi, stamp_card, custom_link, email, phone, action_card, youtube, tiktok, linkedin, google_profile
 - Max 12 blocks.
 - Links nur https oder leer.
-- Zur Branche passend, aber Nutzerwünsche zuerst.`;
+- Zur Branche passend, aber Nutzerwünsche zuerst.
+- WICHTIG Farben: Bäckerei/Café/Restaurant = helles Theme, warme Akzente (#8B5E3C / #9A3412), KEIN dunkles Tech-Schwarz.
+- Fitness = orange/hell. Wellness = sanft grau/hell. Dunkel nur wenn Nutzer explizit „edel/dunkel“ will.`;
 
 type InMsg = { role: string; content: string };
 

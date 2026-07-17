@@ -1,9 +1,8 @@
 /**
- * Microsite-Assistent – große Schrift, Fortschritt, Antippen-Vorschläge („Uwe-tauglich“).
- * ChatGPT/OpenAI nur über Edge-Function-Secret OPENAI_API_KEY (nie im Frontend-Code).
+ * Microsite-Assistent – eingebettet im gleichen Fenster (panel) oder als Overlay (modal).
  */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Sparkles, Send, Loader2, X, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Send, Loader2, X, RotateCcw, CheckCircle2, Wrench } from 'lucide-react';
 import type { ModelConfig, NFCBlock, ActionIcon } from '../types';
 import {
   advanceChat,
@@ -17,7 +16,13 @@ import { generateSecureKey } from '../lib/utils';
 interface MicrositeChatProps {
   config: ModelConfig;
   onApplyConfig: (next: ModelConfig) => void;
-  onClose: () => void;
+  onClose?: () => void;
+  /** Nach dem Assistenten: manuellen Baustein-Editor öffnen */
+  onContinueManual?: () => void;
+  /** Zur Hardware-Phase (Schlüsselanhänger) */
+  onContinueToHardware?: () => void;
+  /** panel = im Layout eingebettet; modal = Vollbild-Overlay */
+  variant?: 'panel' | 'modal';
 }
 
 function applyAiPayload(
@@ -52,16 +57,27 @@ function applyAiPayload(
     fontStyle: payload.fontStyle,
     profileIcon: (payload.profileIcon as ActionIcon) || base.profileIcon,
     profileLogoUrl: payload.profileLogoUrl || base.profileLogoUrl,
+    surfaceColor:
+      payload.theme === 'dark'
+        ? '#0C0A09'
+        : base.surfaceColor || '#F8F5F0',
     nfcBlocks: blocks.length ? blocks : base.nfcBlocks,
   };
 }
 
-export const MicrositeChat: React.FC<MicrositeChatProps> = ({ config, onApplyConfig, onClose }) => {
+export const MicrositeChat: React.FC<MicrositeChatProps> = ({
+  config,
+  onApplyConfig,
+  onClose,
+  onContinueManual,
+  onContinueToHardware,
+  variant = 'panel',
+}) => {
   const [session, setSession] = useState<ChatSession>(() => createChatSession());
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [statusLine, setStatusLine] = useState(
-    'Einfach antworten oder einen blauen Vorschlag antippen.'
+    'Rechts siehst du die Vorschau – sie aktualisiert sich mit.'
   );
   const [appliedOnce, setAppliedOnce] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -77,7 +93,6 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({ config, onApplyCon
   }, [session.messages, busy]);
 
   useEffect(() => {
-    // Fokus auf Eingabe – erleichtert Tastatur-Nutzer
     const t = window.setTimeout(() => inputRef.current?.focus(), 200);
     return () => window.clearTimeout(t);
   }, [session.step]);
@@ -96,7 +111,7 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({ config, onApplyCon
       if (result.config) {
         onApplyConfig(result.config);
         setAppliedOnce(true);
-        setStatusLine('Vorschlag ist fertig – schau in die Vorschau (Digital).');
+        setStatusLine('Vorschlag fertig – Vorschau rechts prüfen.');
       }
     },
     [session, onApplyConfig]
@@ -109,7 +124,6 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({ config, onApplyCon
     setBusy(true);
 
     try {
-      // Zuerst ChatGPT versuchen (Secret nur serverseitig). Bei Fehler: geführter Modus.
       const history = [
         ...session.messages.map((m) => ({
           role: m.role as 'user' | 'assistant',
@@ -140,17 +154,14 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({ config, onApplyCon
             }
             onApplyConfig(next);
             setAppliedOnce(true);
-            setStatusLine('ChatGPT hat einen Vorschlag gebaut – bitte Vorschau prüfen.');
+            setStatusLine('ChatGPT-Vorschlag übernommen.');
           }
-        } else {
-          setStatusLine('ChatGPT antwortet – einfach weiterplaudern.');
         }
         return;
       }
 
-      // Fallback: geführte Schritte mit großen Vorschlägen
       if (ai?.fallback) {
-        setStatusLine('Assistent im einfachen Modus (ohne Cloud-KI) – funktioniert trotzdem.');
+        setStatusLine('Einfacher Assistent (ohne Cloud-KI) – funktioniert trotzdem.');
       }
       runGuided(text);
     } finally {
@@ -158,39 +169,45 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({ config, onApplyCon
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[4000] flex items-end sm:items-center justify-center bg-navy/50 backdrop-blur-sm p-0 sm:p-4">
-      <div
-        className="w-full sm:max-w-xl h-[92vh] sm:h-[min(720px,94vh)] bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-zinc-200"
-        role="dialog"
-        aria-labelledby="microsite-chat-title"
-      >
-        <header className="shrink-0 px-4 pt-4 pb-3 border-b border-zinc-100 bg-cream">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="w-11 h-11 rounded-2xl bg-petrol text-white flex items-center justify-center shrink-0">
-                <Sparkles size={22} />
-              </div>
-              <div className="min-w-0">
-                <h2
-                  id="microsite-chat-title"
-                  className="font-headline font-extrabold text-base sm:text-lg uppercase tracking-tight text-navy"
-                >
-                  Seite gemeinsam bauen
-                </h2>
-                <p className="text-sm text-zinc-600 mt-0.5 leading-snug">{statusLine}</p>
-              </div>
+  const shellClass =
+    variant === 'modal'
+      ? 'fixed inset-0 z-[4000] flex items-end sm:items-center justify-center bg-navy/50 backdrop-blur-sm p-0 sm:p-4'
+      : 'h-full flex flex-col min-h-0';
+
+  const cardClass =
+    variant === 'modal'
+      ? 'w-full sm:max-w-xl h-[92vh] sm:h-[min(720px,94vh)] bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-zinc-200'
+      : 'h-full bg-white flex flex-col overflow-hidden min-h-0';
+
+  const inner = (
+    <div className={cardClass} role="dialog" aria-labelledby="microsite-chat-title">
+      <header className="shrink-0 px-4 pt-4 pb-3 border-b border-zinc-100 bg-cream">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-2xl bg-petrol text-white flex items-center justify-center shrink-0">
+              <Sparkles size={22} />
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={reset}
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl hover:bg-white text-zinc-600"
-                title="Von vorne"
-                aria-label="Von vorne beginnen"
+            <div className="min-w-0">
+              <h2
+                id="microsite-chat-title"
+                className="font-headline font-extrabold text-base uppercase tracking-tight text-navy"
               >
-                <RotateCcw size={20} />
-              </button>
+                Seite gemeinsam bauen
+              </h2>
+              <p className="text-sm text-zinc-600 mt-0.5 leading-snug">{statusLine}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={reset}
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl hover:bg-white text-zinc-600"
+              title="Von vorne"
+              aria-label="Von vorne beginnen"
+            >
+              <RotateCcw size={20} />
+            </button>
+            {variant === 'modal' && onClose && (
               <button
                 type="button"
                 onClick={onClose}
@@ -199,113 +216,132 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({ config, onApplyCon
               >
                 <X size={22} />
               </button>
-            </div>
+            )}
           </div>
-
-          <div className="mt-3">
-            <div className="flex justify-between text-xs font-semibold text-zinc-500 mb-1.5">
-              <span>
-                Schritt {meta.index} von {meta.total}: {meta.title}
-              </span>
-              <span>{progressPct}%</span>
-            </div>
-            <div className="h-2.5 rounded-full bg-zinc-200 overflow-hidden" aria-hidden>
-              <div
-                className="h-full rounded-full bg-petrol transition-all duration-300"
-                style={{ width: `${session.step === 'done' ? 100 : progressPct}%` }}
-              />
-            </div>
-            <p className="text-sm text-zinc-600 mt-2 leading-snug">{meta.hint}</p>
-          </div>
-        </header>
-
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-white">
-          {session.messages.map((m) => (
-            <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-[92%] rounded-2xl px-4 py-3 text-base leading-relaxed whitespace-pre-wrap ${
-                  m.role === 'user'
-                    ? 'bg-navy text-white rounded-br-md'
-                    : 'bg-zinc-100 text-navy rounded-bl-md'
-                }`}
-              >
-                {m.content.replace(/\*\*(.*?)\*\*/g, '$1')}
-              </div>
-            </div>
-          ))}
-          {busy && (
-            <div className="flex items-center gap-2 text-zinc-500 text-sm">
-              <Loader2 size={16} className="animate-spin" />
-              Einen Moment bitte…
-            </div>
-          )}
-          {appliedOnce && session.step === 'done' && (
-            <div className="flex items-start gap-2 rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-sm text-emerald-900">
-              <CheckCircle2 size={20} className="shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold">Vorschlag ist übernommen.</p>
-                <p className="mt-1 leading-snug">
-                  Schließe dieses Fenster. Wechsle oben auf „Microsite“ und „Digital“, um die
-                  Vorschau zu sehen und Links einzutragen.
-                </p>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="mt-3 min-h-[44px] px-4 rounded-xl bg-emerald-700 text-white font-semibold"
-                >
-                  Fenster schließen &amp; Vorschau ansehen
-                </button>
-              </div>
-            </div>
-          )}
-          <div ref={bottomRef} />
         </div>
 
-        {meta.chips.length > 0 && (
-          <div className="shrink-0 px-4 pb-2 flex flex-wrap gap-2 border-t border-zinc-50 pt-3 bg-white">
-            {meta.chips.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                disabled={busy}
-                onClick={() => void handleSend(chip)}
-                className="min-h-[44px] px-4 rounded-full bg-petrol/10 text-petrol text-sm font-semibold hover:bg-petrol/20 disabled:opacity-40 active:scale-[0.98]"
-              >
-                {chip}
-              </button>
-            ))}
+        <div className="mt-3">
+          <div className="flex justify-between text-xs font-semibold text-zinc-500 mb-1.5">
+            <span>
+              Schritt {meta.index} von {meta.total}: {meta.title}
+            </span>
+            <span>{progressPct}%</span>
+          </div>
+          <div className="h-2.5 rounded-full bg-zinc-200 overflow-hidden" aria-hidden>
+            <div
+              className="h-full rounded-full bg-petrol transition-all duration-300"
+              style={{ width: `${session.step === 'done' ? 100 : progressPct}%` }}
+            />
+          </div>
+          <p className="text-sm text-zinc-600 mt-2 leading-snug">{meta.hint}</p>
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-white min-h-0">
+        {session.messages.map((m) => (
+          <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div
+              className={`max-w-[92%] rounded-2xl px-4 py-3 text-base leading-relaxed whitespace-pre-wrap ${
+                m.role === 'user'
+                  ? 'bg-navy text-white rounded-br-md'
+                  : 'bg-zinc-100 text-navy rounded-bl-md'
+              }`}
+            >
+              {m.content.replace(/\*\*(.*?)\*\*/g, '$1')}
+            </div>
+          </div>
+        ))}
+        {busy && (
+          <div className="flex items-center gap-2 text-zinc-500 text-sm">
+            <Loader2 size={16} className="animate-spin" />
+            Einen Moment bitte…
           </div>
         )}
-
-        <form
-          className="shrink-0 p-3 sm:p-4 border-t border-zinc-100 flex gap-2 bg-cream safe-bottom"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void handleSend();
-          }}
-        >
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={meta.placeholder}
-            disabled={busy}
-            className="flex-1 min-h-[52px] px-4 rounded-2xl border border-zinc-200 text-base font-medium text-navy bg-white outline-none focus:ring-2 focus:ring-petrol/30 disabled:opacity-50"
-            autoComplete="off"
-          />
-          <button
-            type="submit"
-            disabled={busy || !input.trim()}
-            className="min-h-[52px] min-w-[52px] px-4 rounded-2xl bg-navy text-white hover:bg-navy/90 disabled:opacity-40 flex items-center justify-center"
-            aria-label="Antwort senden"
-          >
-            <Send size={20} />
-          </button>
-        </form>
+        {appliedOnce && session.step === 'done' && (
+          <div className="rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-sm text-emerald-900 space-y-3">
+            <div className="flex items-start gap-2">
+              <CheckCircle2 size={20} className="shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Erste Version steht.</p>
+                <p className="mt-1 leading-snug">
+                  Die Vorschau rechts zeigt deine Seite. Du kannst jetzt selbst Feinschliff machen
+                  (Texte, Links, Logo) – oder den Assistenten nochmal starten.
+                </p>
+              </div>
+            </div>
+            {onContinueManual && (
+              <button
+                type="button"
+                onClick={onContinueManual}
+                className="w-full min-h-[48px] px-4 rounded-xl bg-navy text-white font-semibold flex items-center justify-center gap-2"
+              >
+                <Wrench size={18} />
+                Ja, selbst weiterbauen
+              </button>
+            )}
+            {onContinueToHardware && (
+              <button
+                type="button"
+                onClick={onContinueToHardware}
+                className="w-full min-h-[48px] px-4 rounded-xl border-2 border-navy text-navy font-semibold flex items-center justify-center gap-2"
+              >
+                Seite passt – weiter zum Anhänger →
+              </button>
+            )}
+          </div>
+        )}
+        <div ref={bottomRef} />
       </div>
+
+      {meta.chips.length > 0 && (
+        <div className="shrink-0 px-4 pb-2 flex flex-wrap gap-2 border-t border-zinc-50 pt-3 bg-white">
+          {meta.chips.map((chip) => (
+            <button
+              key={chip}
+              type="button"
+              disabled={busy}
+              onClick={() => void handleSend(chip)}
+              className="min-h-[44px] px-4 rounded-full bg-petrol/10 text-petrol text-sm font-semibold hover:bg-petrol/20 disabled:opacity-40 active:scale-[0.98]"
+            >
+              {chip}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <form
+        className="shrink-0 p-3 border-t border-zinc-100 flex gap-2 bg-cream"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleSend();
+        }}
+      >
+        <input
+          ref={inputRef}
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={meta.placeholder}
+          disabled={busy}
+          className="flex-1 min-h-[48px] px-4 rounded-2xl border border-zinc-200 text-base font-medium text-navy bg-white outline-none focus:ring-2 focus:ring-petrol/30 disabled:opacity-50"
+          autoComplete="off"
+        />
+        <button
+          type="submit"
+          disabled={busy || !input.trim()}
+          className="min-h-[48px] min-w-[48px] px-4 rounded-2xl bg-navy text-white hover:bg-navy/90 disabled:opacity-40 flex items-center justify-center"
+          aria-label="Antwort senden"
+        >
+          <Send size={18} />
+        </button>
+      </form>
     </div>
   );
+
+  if (variant === 'modal') {
+    return <div className={shellClass}>{inner}</div>;
+  }
+  return <div className={shellClass}>{inner}</div>;
 };
 
 export default MicrositeChat;

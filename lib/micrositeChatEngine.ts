@@ -1,8 +1,9 @@
 /**
  * Geführter Microsite-Chat – einfache Sprache, klare Schritte („Uwe-tauglich“).
  */
-import type { ActionIcon, FontStyle, MagicButtonType, ModelConfig, NFCBlock, ProfileTheme } from '../types';
+import type { ActionIcon, FontStyle, MagicButtonType, ModelConfig, NFCBlock } from '../types';
 import { generateSecureKey } from './utils';
+import { paletteForIndustry, paletteForVibe } from './brandPalette';
 
 export type ChatRole = 'assistant' | 'user';
 
@@ -87,7 +88,7 @@ export function getStepMeta(step: ChatStep): StepMeta {
         title: 'Branche',
         hint: 'Tipp: Auf einen Vorschlag tippen – oder kurz selbst schreiben.',
         placeholder: 'z. B. Restaurant',
-        chips: ['Restaurant / Café', 'Fitness', 'Immobilien', 'Wellness / Beauty', 'Handwerk', 'Sonstiges'],
+        chips: ['Restaurant / Café', 'Bäckerei', 'Fitness', 'Immobilien', 'Wellness / Beauty', 'Handwerk', 'Sonstiges'],
       };
     case 'slogan':
       return {
@@ -127,7 +128,7 @@ export function getStepMeta(step: ChatStep): StepMeta {
         title: 'Farben & Stil',
         hint: 'Wie soll es wirken? Einfach antippen.',
         placeholder: 'z. B. modern und blau',
-        chips: ['Modern & blau', 'Warm & natürlich', 'Dunkel & edel', 'Sportlich', 'Minimal & clean'],
+        chips: ['Warm & gemütlich (Bäckerei)', 'Modern & blau', 'Frisch & grün', 'Dunkel & edel', 'Sportlich', 'Minimal & clean'],
       };
     default:
       return {
@@ -157,7 +158,8 @@ export function createChatSession(): ChatSession {
 
 function detectIndustry(text: string): string {
   const t = text.toLowerCase();
-  if (/gastro|restaurant|café|cafe|bar|hotel|essen|bäck|baeck/.test(t)) return 'gastro';
+  if (/bäck|baeck|brot|backstube|konditor/.test(t)) return 'bakery';
+  if (/gastro|restaurant|café|cafe|bar|hotel|essen/.test(t)) return 'gastro';
   if (/fitness|gym|sport|yoga|trainer/.test(t)) return 'fitness';
   if (/immobil|makler|haus|wohnung/.test(t)) return 'realestate';
   if (/wellness|spa|massage|beauty|friseur|salon/.test(t)) return 'wellness';
@@ -187,61 +189,16 @@ function parseFeatures(text: string): string[] {
   return found.slice(0, 6);
 }
 
-function vibeToStyle(vibe: string): { accent: string; theme: ProfileTheme; font: FontStyle; icon: ActionIcon } {
-  const t = vibe.toLowerCase();
-  if (/dunkel|dark|nacht|schwarz|edel/.test(t)) {
-    return { accent: '#E8D5B7', theme: 'dark', font: 'luxury', icon: 'star' };
-  }
-  if (/warm|holz|natur|beige|terra/.test(t)) {
-    return { accent: '#C2410C', theme: 'light', font: 'elegant', icon: 'heart' };
-  }
-  if (/frisch|grün|öko|bio/.test(t)) {
-    return { accent: '#059669', theme: 'light', font: 'modern', icon: 'zap' };
-  }
-  if (/sport|kraft|orange|energie/.test(t)) {
-    return { accent: '#EA580C', theme: 'light', font: 'modern', icon: 'dumbbell' };
-  }
-  if (/blau|tech|modern|clean|minimal/.test(t)) {
-    return { accent: '#0EA5E9', theme: 'light', font: 'modern', icon: 'globe' };
-  }
-  if (/rosa|pink|beauty|glam/.test(t)) {
-    return { accent: '#DB2777', theme: 'light', font: 'elegant', icon: 'camera' };
-  }
-  return { accent: '#11235A', theme: 'light', font: 'luxury', icon: 'briefcase' };
-}
-
-function industryDefaults(industry: string): { accent: string; icon: ActionIcon; font: FontStyle } {
-  switch (industry) {
-    case 'gastro':
-      return { accent: '#0D9488', icon: 'utensils', font: 'elegant' };
-    case 'fitness':
-      return { accent: '#EA580C', icon: 'dumbbell', font: 'modern' };
-    case 'realestate':
-      return { accent: '#334155', icon: 'home', font: 'luxury' };
-    case 'wellness':
-      return { accent: '#94A3B8', icon: 'heart', font: 'elegant' };
-    case 'creative':
-      return { accent: '#E11D48', icon: 'camera', font: 'modern' };
-    case 'craft':
-      return { accent: '#B45309', icon: 'hammer', font: 'modern' };
-    default:
-      return { accent: '#11235A', icon: 'briefcase', font: 'luxury' };
-  }
-}
-
-function extractHttpsUrl(text: string): string | undefined {
-  const m = text.match(/https:\/\/[^\s<>"']+/i);
-  return m?.[0]?.replace(/[.,;)]+$/, '');
-}
-
 export function buildConfigFromAnswers(base: ModelConfig, answers: ChatAnswers): ModelConfig {
   const industry = answers.industry || 'general';
-  const ind = industryDefaults(industry);
-  const vibe = answers.vibe ? vibeToStyle(answers.vibe) : null;
-  const accent = vibe?.accent ?? ind.accent;
-  const theme = vibe?.theme ?? 'light';
-  const font = vibe?.font ?? ind.font;
-  const icon = vibe?.icon ?? ind.icon;
+  // Firmenname kann Branche überschreiben (z. B. „Bäckerei Müller“)
+  const fromName = answers.company ? detectIndustry(answers.company) : 'general';
+  const effectiveIndustry = fromName !== 'general' ? fromName : industry;
+
+  const ind = paletteForIndustry(effectiveIndustry);
+  const vibePal = answers.vibe ? paletteForVibe(answers.vibe) : null;
+  const pal = vibePal ?? ind;
+
   const title = (answers.company || base.profileTitle || 'Meine Marke').trim().slice(0, 80);
   const slogan = (answers.slogan || 'Willkommen').trim().slice(0, 120);
   const features = answers.features?.length ? answers.features : ['whatsapp', 'web'];
@@ -251,7 +208,7 @@ export function buildConfigFromAnswers(base: ModelConfig, answers: ChatAnswers):
       id: crypto.randomUUID(),
       type: 'headline',
       title: slogan,
-      content: title,
+      content: '', // kein doppelter Firmenname – Titel steht schon im Header
     },
   ];
 
@@ -326,13 +283,20 @@ export function buildConfigFromAnswers(base: ModelConfig, answers: ChatAnswers):
   return {
     ...base,
     profileTitle: title,
-    accentColor: accent,
-    theme,
-    fontStyle: font,
-    profileIcon: icon,
+    accentColor: pal.accent,
+    surfaceColor: pal.surface,
+    theme: pal.theme,
+    fontStyle: pal.font,
+    profileIcon: pal.icon,
     profileLogoUrl: answers.logoUrl || base.profileLogoUrl,
+    nfcTemplate: pal.theme === 'dark' ? 'minimal' : 'modern',
     nfcBlocks: blocks.slice(0, 40),
   };
+}
+
+function extractHttpsUrl(text: string): string | undefined {
+  const m = text.match(/https:\/\/[^\s<>"']+/i);
+  return m?.[0]?.replace(/[.,;)]+$/, '');
 }
 
 export interface StepResult {

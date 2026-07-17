@@ -65,6 +65,7 @@ export const DEFAULT_CONFIG: ModelConfig = {
   profileTitle: 'NUDAIM STUDIO',
   profileIcon: 'briefcase',
   accentColor: '#11235A',
+  surfaceColor: '#F8F5F0',
   fontStyle: 'luxury',
   theme: 'light',
   nfcBlocks: [
