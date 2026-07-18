@@ -131,6 +131,8 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
               ctx.translate(cx + config.logoPosX * 3, ly - config.logoPosY * 3);
               ctx.rotate(((config.logoRotation || 0) * Math.PI) / 180);
               ctx.scale(config.mirrorX ? -1 : 1, 1);
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
               // leichter Präge-Schatten
               ctx.shadowColor = 'rgba(0,0,0,0.18)';
               ctx.shadowBlur = 2;
