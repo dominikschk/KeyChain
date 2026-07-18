@@ -8,8 +8,9 @@ import { processLogoForPrint, compositeOnWhite, toPrintBinary } from './logoProc
 const MAX_LOGO_COLORS = 3;
 
 function maxEdge(): number {
-  if (typeof window !== 'undefined' && window.innerWidth < 768) return 420;
-  return 560;
+  // Höher = weniger Verpixelung in der Vorschau
+  if (typeof window !== 'undefined' && window.innerWidth < 768) return 640;
+  return 900;
 }
 
 const PHOTO_MSG =
@@ -159,14 +160,17 @@ function nearestColor(p: Rgb, palette: Rgb[]): Rgb {
 }
 
 /**
- * Originalfarben behalten, auf max. 3 vereinfachen, Hintergrund transparent.
+ * Originalfarben behalten (max. 3), deckend, entstört, optional hochskaliert.
+ * Ohne Binär-Maske (die machte Treppen) – nur „nahe Weiß = Hintergrund“.
  */
-function toColorLimitedLogo(traceOnWhite: ImageData, printBinary: ImageData, maxColors = MAX_LOGO_COLORS): ImageData {
+function toColorLimitedLogo(traceOnWhite: ImageData, _printBinary: ImageData, maxColors = MAX_LOGO_COLORS): {
+  image: ImageData;
+  palette: Rgb[];
+  dominant: Rgb;
+} {
   const w = traceOnWhite.width;
   const h = traceOnWhite.height;
   const src = traceOnWhite.data;
-  const sameSize = printBinary.width === w && printBinary.height === h;
-  const mask = sameSize ? printBinary.data : null;
 
   const samples: Rgb[] = [];
   const fgFlags = new Uint8Array(w * h);
@@ -175,15 +179,19 @@ function toColorLimitedLogo(traceOnWhite: ImageData, printBinary: ImageData, max
     const r = src[i]!;
     const g = src[i + 1]!;
     const b = src[i + 2]!;
-    const maskBg = mask ? mask[i]! >= 128 : false;
-    if (isBgPixel(r, g, b, maskBg)) continue;
+    if (isBgPixel(r, g, b, false)) continue;
     fgFlags[p] = 1;
-    // AA-helle Ränder nicht in die Palette ziehen (verzerren Farben)
-    if (lum(r, g, b) < 220) samples.push({ r, g, b });
+    const L = lum(r, g, b);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const sat = max === 0 ? 0 : (max - min) / max;
+    // Nur klare Motiv-Pixel in die Palette (kein AA-Grau)
+    if (L < 210 && (sat > 0.06 || L < 160)) {
+      samples.push({ r, g, b });
+    }
   }
 
-  // Zu wenige Samples → alle FG-Pixel
-  if (samples.length < 40) {
+  if (samples.length < 30) {
     samples.length = 0;
     for (let p = 0, i = 0; i < src.length; i += 4, p++) {
       if (!fgFlags[p]) continue;
@@ -192,29 +200,113 @@ function toColorLimitedLogo(traceOnWhite: ImageData, printBinary: ImageData, max
   }
 
   const palette = buildPalette(samples, maxColors);
-  const out = new ImageData(w, h);
-  const d = out.data;
+  const labels = new Int16Array(w * h);
+  labels.fill(-1);
 
   for (let p = 0, i = 0; i < src.length; i += 4, p++) {
-    if (!fgFlags[p]) {
+    if (!fgFlags[p]) continue;
+    const pix = { r: src[i]!, g: src[i + 1]!, b: src[i + 2]! };
+    let best = 0;
+    let bestD = Infinity;
+    for (let c = 0; c < palette.length; c++) {
+      const d = dist2(pix, palette[c]!);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    labels[p] = best;
+  }
+
+  // Sprenkel entfernen: 3×3 Mehrheitsfarbe (2 Durchläufe)
+  const cleaned = new Int16Array(labels);
+  for (let pass = 0; pass < 2; pass++) {
+    const prev = pass === 0 ? labels : cleaned;
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const p = y * w + x;
+        if (prev[p]! < 0) continue;
+        const counts = new Array(palette.length).fill(0);
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const lab = prev[(y + dy) * w + (x + dx)]!;
+            if (lab >= 0) counts[lab]++;
+          }
+        }
+        let maj = prev[p]!;
+        let majN = -1;
+        for (let c = 0; c < counts.length; c++) {
+          if (counts[c]! > majN) {
+            majN = counts[c]!;
+            maj = c;
+          }
+        }
+        cleaned[p] = maj;
+      }
+    }
+  }
+
+  const solid = new ImageData(w, h);
+  const d = solid.data;
+  for (let p = 0, i = 0; i < d.length; i += 4, p++) {
+    const lab = cleaned[p]!;
+    if (lab < 0) {
       d[i] = d[i + 1] = d[i + 2] = 0;
       d[i + 3] = 0;
       continue;
     }
-    const r = src[i]!;
-    const g = src[i + 1]!;
-    const b = src[i + 2]!;
-    const L = lum(r, g, b);
-    const c = nearestColor({ r, g, b }, palette);
-    // Weiche Kante an hellen AA-Pixeln
-    const strength = Math.max(0.45, Math.min(1, (235 - L) / 70 + 0.35));
+    const c = palette[lab]!;
     d[i] = c.r;
     d[i + 1] = c.g;
     d[i + 2] = c.b;
-    d[i + 3] = Math.round(255 * strength);
+    d[i + 3] = 255; // deckend = keine Textur durchscheinend
   }
 
+  // 2× Nearest-Neighbor: schärfer in der Vorschau, ohne Weichzeichner-Matsch
+  const up = upsampleNearest(solid, 2);
+
+  // Dominant = Palette-Farbe mit den meisten Pixeln
+  const hist = new Array(palette.length).fill(0);
+  for (let p = 0; p < cleaned.length; p++) {
+    const lab = cleaned[p]!;
+    if (lab >= 0) hist[lab]!++;
+  }
+  let domIdx = 0;
+  for (let c = 1; c < hist.length; c++) {
+    if (hist[c]! > hist[domIdx]!) domIdx = c;
+  }
+  const dominant = palette[domIdx]!;
+
+  return { image: up, palette, dominant };
+}
+
+function upsampleNearest(img: ImageData, factor: number): ImageData {
+  if (factor <= 1) return img;
+  const w = img.width;
+  const h = img.height;
+  const nw = w * factor;
+  const nh = h * factor;
+  const out = new ImageData(nw, nh);
+  const s = img.data;
+  const d = out.data;
+  for (let y = 0; y < nh; y++) {
+    for (let x = 0; x < nw; x++) {
+      const sx = (x / factor) | 0;
+      const sy = (y / factor) | 0;
+      const si = (sy * w + sx) * 4;
+      const di = (y * nw + x) * 4;
+      d[di] = s[si]!;
+      d[di + 1] = s[si + 1]!;
+      d[di + 2] = s[si + 2]!;
+      d[di + 3] = s[si + 3]!;
+    }
+  }
   return out;
+}
+
+function rgbToHex(c: Rgb): string {
+  const h = (n: number) => n.toString(16).padStart(2, '0');
+  return `#${h(c.r)}${h(c.g)}${h(c.b)}`;
 }
 
 function imageDataToPngDataUrl(img: ImageData): string {
@@ -260,6 +352,8 @@ export type RasterLogoResult = {
   svg: string;
   bgRemoved: boolean;
   printReady: boolean;
+  /** Dominante Originalfarbe (#rrggbb) – für Druckfarbe vorbelegen. */
+  dominantColor?: string;
 };
 
 export async function rasterFileToSvg(file: File): Promise<string> {
@@ -289,13 +383,11 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
     throw new Error(processed.message);
   }
 
-  const binary =
-    processed.image.width === processed.traceImage.width &&
-    processed.image.height === processed.traceImage.height
-      ? processed.image
-      : toPrintBinary(processed.traceImage);
-
-  const rgba = toColorLimitedLogo(processed.traceImage, binary, MAX_LOGO_COLORS);
+  const { image: rgba, dominant } = toColorLimitedLogo(
+    processed.traceImage,
+    processed.image,
+    MAX_LOGO_COLORS
+  );
   const png = imageDataToPngDataUrl(rgba);
   const svg = pngDataUrlToSvg(png, rgba.width, rgba.height, true);
 
@@ -303,6 +395,7 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
     svg,
     bgRemoved: processed.meta.bgRemoved,
     printReady: true,
+    dominantColor: rgbToHex(dominant),
   };
 }
 

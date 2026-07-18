@@ -338,7 +338,7 @@ export const Controls: React.FC<ControlsProps> = ({
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-petrol">Studio · 3D-Druck</p>
           <p className="mt-1 text-sm font-bold text-navy leading-snug">Dein Anhänger, druckfertig vorbereitet</p>
           <p className="mt-1.5 text-[11px] text-zinc-500 leading-relaxed">
-            Hintergrund weg, Originalfarben bleiben (max. 3 – danach werden sie vereinfacht).
+            Bis 3 Originalfarben, dann vereinfacht. Über Druckfarbe färbst du das Logo neu ein.
           </p>
         </div>
 
@@ -436,7 +436,7 @@ export const Controls: React.FC<ControlsProps> = ({
         <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-navy">Farben</h3>
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Druckfarbe</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Druckfarbe (Logo einfärben)</p>
             <div className="flex flex-wrap gap-2">
               {printColors.map((c) => (
                 <button

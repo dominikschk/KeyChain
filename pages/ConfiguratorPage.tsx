@@ -594,6 +594,9 @@ const ConfiguratorPage: React.FC = () => {
         const { rasterFileToSvgDetailed } = await import('../lib/logoFromRaster');
         const result = await rasterFileToSvgDetailed(file);
         content = result.svg;
+        if (result.dominantColor) {
+          setConfig((prev) => ({ ...prev, logoColor: result.dominantColor! }));
+        }
       } else {
         showError('Bitte ein Logo als PNG, JPG oder SVG wählen.');
         return;
