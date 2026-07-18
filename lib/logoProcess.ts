@@ -7,7 +7,10 @@
 
 export type LogoProcessOk = {
   ok: true;
+  /** Druck-/Prüfmaske (binär). */
   image: ImageData;
+  /** Saubere Vorlage fürs Vektorisieren (Logo auf Weiß, ohne Treppen-Maske). */
+  traceImage: ImageData;
   meta: {
     bgRemoved: boolean;
     foregroundRatio: number;
@@ -628,13 +631,8 @@ export function checkPrintability(binary: ImageData): LogoProcessFail | { ok: tr
   const e1 = erode(mask, w, h);
   const survive = countInk(e1) / Math.max(1, ink);
 
-  // Zu dünn → 1–2× verdicken statt ablehnen (besser für FDM)
-  if (survive < 0.18 && ink > 80) {
-    mask = dilate(mask, w, h);
-    mask = dilate(mask, w, h);
-    ink = countInk(mask);
-    ratio = ink / (w * h);
-  } else if (survive < 0.35) {
+  // Zu dünn → einmal verdicken (nicht 2× – sonst Treppen/Rauschen)
+  if (survive < 0.22 && ink > 80) {
     mask = dilate(mask, w, h);
     ink = countInk(mask);
     ratio = ink / (w * h);
@@ -643,20 +641,42 @@ export function checkPrintability(binary: ImageData): LogoProcessFail | { ok: tr
   return { ok: true, image: maskToImageData(mask, w, h), foregroundRatio: ratio };
 }
 
+/** Motiv auf Weiß – behält weiche Kanten für sauberes Tracing. */
+export function compositeOnWhite(img: ImageData): ImageData {
+  const out = new ImageData(img.width, img.height);
+  const s = img.data;
+  const d = out.data;
+  for (let i = 0; i < s.length; i += 4) {
+    const a = s[i + 3]! / 255;
+    d[i] = Math.round(s[i]! * a + 255 * (1 - a));
+    d[i + 1] = Math.round(s[i + 1]! * a + 255 * (1 - a));
+    d[i + 2] = Math.round(s[i + 2]! * a + 255 * (1 - a));
+    d[i + 3] = 255;
+  }
+  return out;
+}
+
 export type ProcessLogoOptions = {
   /** Wenn vecburner Logo/Simple/Lineart empfiehlt: Foto-Reject überspringen. */
   forceLogo?: boolean;
 };
 
+function okResult(
+  printImage: ImageData,
+  traceImage: ImageData,
+  meta: LogoProcessOk['meta']
+): LogoProcessOk {
+  return { ok: true, image: printImage, traceImage, meta };
+}
+
 /**
- * Vollpipeline: RemBg → Logo/Foto → Binär → Druckbarkeit.
+ * Vollpipeline: RemBg → Logo/Foto → Binär-Check → Trace-Vorlage separat.
  */
 export function processLogoForPrint(src: ImageData, options: ProcessLogoOptions = {}): LogoProcessResult {
   const { image: cut, removed, bgUniform } = removeBackground(src);
   let cropped = cropToForeground(cut, 6);
   let cls = classifyLogoOrPhoto(src, cropped, bgUniform);
 
-  // Zweiter Versuch ohne aggressiven Crop, falls Motiv „leer“ wirkt
   if (foregroundRatio(cropped) < 0.008) {
     const soft = removeBackground(src);
     cropped = soft.image;
@@ -667,72 +687,52 @@ export function processLogoForPrint(src: ImageData, options: ProcessLogoOptions 
     return { ok: false, reason: 'photo', message: PHOTO_MSG };
   }
 
+  const baseMeta = {
+    bgRemoved: removed,
+    uniqueColors: cls.uniqueColors,
+    kind: 'logo' as const,
+  };
+
   if (foregroundRatio(cropped) < 0.004) {
-    // Fallback: Original ohne RemBg binarisieren (dunkles Logo auf hell)
-    const fallback = toPrintBinary(
-      (() => {
-        const copy = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
-        const d = copy.data;
-        for (let i = 0; i < d.length; i += 4) d[i + 3] = 255;
-        return copy;
-      })()
-    );
+    const opaque = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
+    const d = opaque.data;
+    for (let i = 0; i < d.length; i += 4) d[i + 3] = 255;
+    const fallback = toPrintBinary(opaque);
     const printFb = checkPrintability(fallback);
     if (!printFb.ok) return { ok: false, reason: 'empty', message: COVERAGE_MSG };
-    return {
-      ok: true,
-      image: printFb.image,
-      meta: {
-        bgRemoved: false,
-        foregroundRatio: printFb.foregroundRatio,
-        uniqueColors: cls.uniqueColors,
-        kind: 'logo',
-      },
-    };
+    return okResult(printFb.image, compositeOnWhite(opaque), {
+      ...baseMeta,
+      bgRemoved: false,
+      foregroundRatio: printFb.foregroundRatio,
+    });
   }
 
+  const traceImage = compositeOnWhite(cropped);
   const binary = toPrintBinary(cropped);
   const print = checkPrintability(binary);
   if (!print.ok) {
-    // Letzter Versuch: Original direkt (manche Logos sind farbig ohne klaren Alpha-Cut)
-    const direct = toPrintBinary(
-      (() => {
-        const copy = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
-        // Weiß als transparent markieren
-        const d = copy.data;
-        for (let i = 0; i < d.length; i += 4) {
-          const L = lum(d[i]!, d[i + 1]!, d[i + 2]!);
-          const max = Math.max(d[i]!, d[i + 1]!, d[i + 2]!);
-          const min = Math.min(d[i]!, d[i + 1]!, d[i + 2]!);
-          const sat = max === 0 ? 0 : (max - min) / max;
-          if (L > 240 && sat < 0.1) d[i + 3] = 0;
-          else d[i + 3] = 255;
-        }
-        return cropToForeground(copy, 4);
-      })()
-    );
+    const copy = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
+    const d = copy.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const L = lum(d[i]!, d[i + 1]!, d[i + 2]!);
+      const max = Math.max(d[i]!, d[i + 1]!, d[i + 2]!);
+      const min = Math.min(d[i]!, d[i + 1]!, d[i + 2]!);
+      const sat = max === 0 ? 0 : (max - min) / max;
+      if (L > 240 && sat < 0.1) d[i + 3] = 0;
+      else d[i + 3] = 255;
+    }
+    const cropped2 = cropToForeground(copy, 4);
+    const direct = toPrintBinary(cropped2);
     const print2 = checkPrintability(direct);
     if (!print2.ok) return print;
-    return {
-      ok: true,
-      image: print2.image,
-      meta: {
-        bgRemoved: removed,
-        foregroundRatio: print2.foregroundRatio,
-        uniqueColors: cls.uniqueColors,
-        kind: 'logo',
-      },
-    };
+    return okResult(print2.image, compositeOnWhite(cropped2), {
+      ...baseMeta,
+      foregroundRatio: print2.foregroundRatio,
+    });
   }
 
-  return {
-    ok: true,
-    image: print.image,
-    meta: {
-      bgRemoved: removed,
-      foregroundRatio: print.foregroundRatio,
-      uniqueColors: cls.uniqueColors,
-      kind: 'logo',
-    },
-  };
+  return okResult(print.image, traceImage, {
+    ...baseMeta,
+    foregroundRatio: print.foregroundRatio,
+  });
 }

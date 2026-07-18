@@ -1,103 +1,63 @@
 /**
  * Logo für den Anhänger (gratis-Stack):
- * 1) Regelbasierte Aufbereitung (Hintergrund, Foto-Check, Druckbarkeit)
- * 2) Vektorisieren mit vecburner (geglättete Kurven)
- * 3) Fallback: imagetracerjs
+ * RemBg + Checks → Trace aus sauberem Logo auf Weiß (nicht aus Binär-Treppen).
  */
 
 import { processLogoForPrint } from './logoProcess';
 
 function maxEdge(): number {
-  if (typeof window !== 'undefined' && window.innerWidth < 768) return 480;
-  return 640;
+  if (typeof window !== 'undefined' && window.innerWidth < 768) return 420;
+  return 560;
 }
 
 const TRACE_OPTS = {
-  ltres: 0.5,
-  qtres: 0.5,
-  pathomit: 12,
+  ltres: 1,
+  qtres: 1,
+  pathomit: 8,
   colorsampling: 0,
   numberofcolors: 2,
   mincolorratio: 0,
   colorquantcycles: 1,
-  blurradius: 1,
+  blurradius: 0,
   blurdelta: 20,
   strokewidth: 0,
   linefilter: true,
   scale: 1,
-  roundcoords: 2,
+  roundcoords: 1,
   viewbox: true,
   desc: false,
-  // false = weniger Treppen an Diagonalen
   rightangleenhance: false,
 };
 
 const PHOTO_MSG =
   'Das sieht nach einem Foto aus, nicht nach einem Logo. Bitte ein Logo mit klarem Motiv und einfachem Hintergrund hochladen (PNG/JPG/SVG).';
 
-/** Soft-Upscale (bilinear) – mehr Punkte für weichere Kurven. */
-function upsampleForTrace(img: ImageData, factor = 2): ImageData {
-  const w = img.width;
-  const h = img.height;
-  const nw = Math.max(1, Math.round(w * factor));
-  const nh = Math.max(1, Math.round(h * factor));
-  if (nw === w && nh === h) return img;
-  const src = document.createElement('canvas');
-  src.width = w;
-  src.height = h;
-  const sctx = src.getContext('2d');
-  if (!sctx) return img;
-  sctx.putImageData(img, 0, 0);
-  const dst = document.createElement('canvas');
-  dst.width = nw;
-  dst.height = nh;
-  const dctx = dst.getContext('2d', { willReadFrequently: true });
-  if (!dctx) return img;
-  dctx.imageSmoothingEnabled = true;
-  dctx.imageSmoothingQuality = 'high';
-  dctx.drawImage(src, 0, 0, nw, nh);
-  // Nach Soft-Scale wieder klar binär (Anti-Alias-Grau → schwarz/weiß)
-  const out = dctx.getImageData(0, 0, nw, nh);
-  const d = out.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const L = 0.299 * d[i]! + 0.587 * d[i + 1]! + 0.114 * d[i + 2]!;
-    const v = L < 160 ? 0 : 255;
-    d[i] = d[i + 1] = d[i + 2] = v;
-    d[i + 3] = 255;
+function isLightFill(fill: string): boolean {
+  const f = fill.trim().toLowerCase().replace(/\s+/g, '');
+  if (!f || f === 'none') return true;
+  if (f === '#fff' || f === '#ffffff' || f === 'white') return true;
+  if (f === 'rgb(255,255,255)' || /^rgba\(255,255,255,/.test(f)) return true;
+  // sehr helle Grautöne (Hintergrundreste)
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(f);
+  if (hex) {
+    let h = hex[1]!;
+    if (h.length === 3) h = h[0]! + h[0] + h[1] + h[1] + h[2] + h[2];
+    const r = parseInt(h.slice(0, 2), 16);
+    const g = parseInt(h.slice(2, 4), 16);
+    const b = parseInt(h.slice(4, 6), 16);
+    if (0.299 * r + 0.587 * g + 0.114 * b > 230) return true;
   }
-  return out;
+  const rgb = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(f);
+  if (rgb) {
+    const r = +rgb[1]!;
+    const g = +rgb[2]!;
+    const b = +rgb[3]!;
+    if (0.299 * r + 0.587 * g + 0.114 * b > 230) return true;
+  }
+  return false;
 }
 
-/** Leichte Kantenrundung vor dem Trace (3×3 Mehrheit). */
-function softenBinaryEdges(img: ImageData): ImageData {
-  const w = img.width;
-  const h = img.height;
-  const src = img.data;
-  const out = new ImageData(w, h);
-  const dst = out.data;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      let ink = 0;
-      let n = 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-          n++;
-          if (src[(ny * w + nx) * 4]! < 128) ink++;
-        }
-      }
-      const i = (y * w + x) * 4;
-      const v = ink >= Math.ceil(n * 0.45) ? 0 : 255;
-      dst[i] = dst[i + 1] = dst[i + 2] = v;
-      dst[i + 3] = 255;
-    }
-  }
-  return out;
-}
-
-/** Vecburner legt oft ein Hintergrund-Rect und helle Fills an – für Prägung entfernen. */
+/** Hintergrund-Rects & helle Fills weg, Motiv einheitlich schwarz. */
 function cleanEngraveSvg(svg: string): string {
   let out = svg
     .replace(/<\?xml[\s\S]*?\?>/gi, '')
@@ -106,15 +66,8 @@ function cleanEngraveSvg(svg: string): string {
 
   out = out.replace(/<path\b[^>]*\/?>/gi, (tag) => {
     const fillMatch = /\sfill="([^"]*)"/i.exec(tag);
-    const fill = (fillMatch?.[1] || '').trim().toLowerCase().replace(/\s+/g, '');
-    const isLight =
-      fill === 'none' ||
-      fill === '#fff' ||
-      fill === '#ffffff' ||
-      fill === 'white' ||
-      fill === 'rgb(255,255,255)' ||
-      /^rgba\(255,255,255,/.test(fill);
-    if (isLight) return '';
+    const fill = fillMatch?.[1] || '';
+    if (isLightFill(fill)) return '';
     let next = tag.replace(/\sfill="[^"]*"/gi, ' fill="#000000"');
     if (!/\sfill=/i.test(next)) next = next.replace(/<path\b/i, '<path fill="#000000"');
     next = next.replace(/\sstroke="[^"]*"/gi, ' stroke="none"');
@@ -135,19 +88,18 @@ function cleanEngraveSvg(svg: string): string {
 
 async function imageDataToSvgVecburner(img: ImageData): Promise<string> {
   const { Vecburner } = await import('vecburner');
-  const prepared = softenBinaryEdges(upsampleForTrace(img, 2));
-  // Mehr Glättung als Stock-Lineart → weniger Treppen an Diagonalen
-  const result = await Vecburner.vectorize(prepared, {
+  // Logo-Preset auf dem farbigen Motiv = glatte Kurven, keine Binär-Treppen
+  const result = await Vecburner.vectorize(img, {
     preset: 'logo',
-    binaryMode: true,
-    numColors: 2,
-    colorTolerance: 50,
-    pathTolerance: 1.35,
-    smoothness: 2.5,
-    minPathLength: 20,
+    numColors: 6,
+    colorTolerance: 40,
+    pathTolerance: 0.9,
+    smoothness: 2,
+    minPathLength: 24,
     mode: 'spline',
-    blurSigma: 1.1,
-    morphology: true,
+    binaryMode: false,
+    blurSigma: 0.45,
+    morphology: false,
     contourMethod: 'marching',
   });
   if (!result?.svg) throw new Error('Vektorisierung fehlgeschlagen.');
@@ -156,8 +108,7 @@ async function imageDataToSvgVecburner(img: ImageData): Promise<string> {
 
 async function imageDataToSvgImageTracer(img: ImageData): Promise<string> {
   const ImageTracer = (await import('imagetracerjs')).default;
-  const prepared = softenBinaryEdges(upsampleForTrace(img, 2));
-  const svg = ImageTracer.imagedataToSVG(prepared, TRACE_OPTS) as string;
+  const svg = ImageTracer.imagedataToSVG(img, TRACE_OPTS) as string;
   if (!svg || !/<svg[\s>]/i.test(svg) || !/<path\b/i.test(svg)) {
     throw new Error(
       'Kein klares Motiv erkannt. Bitte ein Logo mit klarem Kontrast verwenden (dunkles Logo auf hell oder umgekehrt).'
@@ -203,13 +154,11 @@ export type RasterLogoResult = {
   printReady: boolean;
 };
 
-/** PNG/JPG/WebP/GIF → geprüftes, druckbares SVG. */
 export async function rasterFileToSvg(file: File): Promise<string> {
   const result = await rasterFileToSvgDetailed(file);
   return result.svg;
 }
 
-/** Wie rasterFileToSvg, inkl. Meta für die UI. */
 export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoResult> {
   const raw = await fileToRawImageData(file);
 
@@ -233,7 +182,8 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
   if (!processed.ok) {
     throw new Error(processed.message);
   }
-  const svg = await imageDataToSvg(processed.image);
+  // Trace aus sauberer Vorlage, nicht aus der Binär-Maske
+  const svg = await imageDataToSvg(processed.traceImage);
   return {
     svg,
     bgRemoved: processed.meta.bgRemoved,
@@ -241,7 +191,6 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
   };
 }
 
-/** Firmenname als Prägetext (ohne Datei) – schon druckfreundlich (bold sans). */
 export async function textToEngraveSvg(raw: string): Promise<string> {
   const text = raw.trim().replace(/\s+/g, ' ').slice(0, 28);
   if (!text) throw new Error('Bitte einen Namen eingeben.');
@@ -269,12 +218,7 @@ export async function textToEngraveSvg(raw: string): Promise<string> {
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const processed = processLogoForPrint(img, { forceLogo: true });
   if (!processed.ok) {
-    for (let i = 0; i < img.data.length; i += 4) {
-      const v = img.data[i]! < 128 ? 0 : 255;
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
-      img.data[i + 3] = 255;
-    }
     return imageDataToSvg(img);
   }
-  return imageDataToSvg(processed.image);
+  return imageDataToSvg(processed.traceImage);
 }
