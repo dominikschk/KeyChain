@@ -1,8 +1,9 @@
 /**
  * Fertiger Liquid-Schnipsel für die Shopify-Bestellbestätigung (NUDAIM-Stil).
- * Properties: Microsite-URL / Handy-Seite, _CCP-URL / Bearbeiten-Link, Config-ID
+ * Zeigt den Block nur 1× pro Config-ID (keine 7× Wiederholung bei mehreren Line-Items).
  */
-export const SHOPIFY_ORDER_EMAIL_LIQUID = `{% comment %} --- START NUDAIM: Handy-Seite + Bearbeiten-Link --- {% endcomment %}
+export const SHOPIFY_ORDER_EMAIL_LIQUID = `{% comment %} --- START NUDAIM: Handy-Seite + Bearbeiten-Link (max. 1× pro Config) --- {% endcomment %}
+{% assign nudaim_seen = '|' %}
 {% for line in line_items %}
   {% assign nudaim_ms = '' %}
   {% assign nudaim_ccp = '' %}
@@ -20,13 +21,16 @@ export const SHOPIFY_ORDER_EMAIL_LIQUID = `{% comment %} --- START NUDAIM: Handy
   {% if nudaim_ccp == blank and line.properties['_CCP-URL'] != blank %}{% assign nudaim_ccp = line.properties['_CCP-URL'] %}{% endif %}
 
   {% if nudaim_ms != blank or nudaim_ccp != blank %}
+    {% assign nudaim_key = nudaim_cfg %}
+    {% if nudaim_key == blank %}{% assign nudaim_key = nudaim_ms %}{% endif %}
+    {% if nudaim_key == blank %}{% assign nudaim_key = nudaim_ccp %}{% endif %}
+    {% assign nudaim_marker = '|' | append: nudaim_key | append: '|' %}
+    {% unless nudaim_seen contains nudaim_marker %}
+      {% assign nudaim_seen = nudaim_seen | append: nudaim_key | append: '|' %}
     <div style="margin: 20px 0 28px; padding: 22px 20px; background: #FDFCF8; border: 1px solid rgba(17,35,90,0.12); border-radius: 16px; font-family: system-ui, -apple-system, sans-serif;">
       <p style="margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #006699;">NUDAIM</p>
       <p style="margin: 0 0 8px; font-size: 18px; font-weight: 800; color: #11235A; line-height: 1.25;">Deine Handy-Seite ist bereit</p>
-      <p style="margin: 0 0 18px; font-size: 14px; color: #4b5563; line-height: 1.5;">
-        So sehen deine Kunden die Seite, wenn sie den Anhänger ans Handy halten.
-        {% if line.title != blank %}<br><span style="color:#6b7280;font-size:13px;">Zu: {{ line.title }}</span>{% endif %}
-      </p>
+      <p style="margin: 0 0 18px; font-size: 14px; color: #4b5563; line-height: 1.5;">So sehen deine Kunden die Seite, wenn sie den Anhänger ans Handy halten.</p>
       {% if nudaim_ms != blank %}
         <p style="margin: 0 0 10px;">
           <a href="{{ nudaim_ms }}" style="display: inline-block; background: #11235A; color: #ffffff !important; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 14px;">Handy-Seite öffnen</a>
@@ -44,6 +48,7 @@ export const SHOPIFY_ORDER_EMAIL_LIQUID = `{% comment %} --- START NUDAIM: Handy
         <p style="margin: 14px 0 0; font-size: 12px; color: #9ca3af;">Bestell-Code: {{ nudaim_cfg }}</p>
       {% endif %}
     </div>
+    {% endunless %}
   {% endif %}
 {% endfor %}
 {% comment %} --- ENDE NUDAIM --- {% endcomment %}
