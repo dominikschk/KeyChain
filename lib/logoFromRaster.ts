@@ -1,15 +1,14 @@
 /**
- * Logo für den Anhänger:
- * RemBg → weiche Kanten + max. 3 Originalfarben → PNG (kein Pixel-Upscale).
+ * Logo für den Anhänger – Qualität zuerst:
+ * Hintergrund weg, Originalfarben 1:1 behalten (keine Posterize/Upscale-Pixel).
+ * Andere Druckfarbe = sauberes Mono über Alpha.
  */
 
 import { processLogoForPrint, compositeOnWhite } from './logoProcess';
 
-const MAX_LOGO_COLORS = 3;
-
 function maxEdge(): number {
-  if (typeof window !== 'undefined' && window.innerWidth < 768) return 720;
-  return 1000;
+  if (typeof window !== 'undefined' && window.innerWidth < 768) return 800;
+  return 1200;
 }
 
 const PHOTO_MSG =
@@ -49,191 +48,72 @@ function sat(r: number, g: number, b: number): number {
   return max === 0 ? 0 : (max - min) / max;
 }
 
-function dist2(a: Rgb, b: Rgb): number {
-  const dr = a.r - b.r;
-  const dg = a.g - b.g;
-  const db = a.b - b.b;
-  return dr * dr + dg * dg + db * db;
-}
-
-/** Weiche Matte: Weiß/hell = transparent, Motiv = deckend (Anti-Alias bleibt). */
-function alphaFromWhiteBg(r: number, g: number, b: number): number {
-  const L = lum(r, g, b);
-  const S = sat(r, g, b);
-  if (L > 248 && S < 0.06) return 0;
-  if (L > 242 && S < 0.05) return Math.round(((248 - L) / 6) * 40);
-  // Distanz zu Weiß als Deckkraft
-  const dr = 255 - r;
-  const dg = 255 - g;
-  const db = 255 - b;
-  const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-  const a = Math.min(255, Math.round(dist * 1.15 + S * 90));
-  return a < 12 ? 0 : a;
-}
-
-function buildPalette(samples: Rgb[], maxColors: number): Rgb[] {
-  if (!samples.length) return [{ r: 17, g: 17, b: 17 }];
-  if (maxColors < 1) maxColors = 1;
-
-  const buckets = new Map<number, { color: Rgb; count: number }>();
-  for (const p of samples) {
-    const key = ((p.r >> 3) << 10) | ((p.g >> 3) << 5) | (p.b >> 3);
-    const cur = buckets.get(key);
-    if (cur) {
-      const n = cur.count + 1;
-      cur.color = {
-        r: Math.round((cur.color.r * cur.count + p.r) / n),
-        g: Math.round((cur.color.g * cur.count + p.g) / n),
-        b: Math.round((cur.color.b * cur.count + p.b) / n),
-      };
-      cur.count = n;
-    } else {
-      buckets.set(key, { color: { ...p }, count: 1 });
-    }
-  }
-
-  let clusters = [...buckets.values()].sort((a, b) => b.count - a.count);
-  const mergeThr = 42 * 42;
-  const merged: { color: Rgb; count: number }[] = [];
-  for (const c of clusters) {
-    let hit: (typeof merged)[number] | null = null;
-    let best = Infinity;
-    for (const m of merged) {
-      const d = dist2(c.color, m.color);
-      if (d < mergeThr && d < best) {
-        best = d;
-        hit = m;
-      }
-    }
-    if (hit) {
-      const n = hit.count + c.count;
-      hit.color = {
-        r: Math.round((hit.color.r * hit.count + c.color.r * c.count) / n),
-        g: Math.round((hit.color.g * hit.count + c.color.g * c.count) / n),
-        b: Math.round((hit.color.b * hit.count + c.color.b * c.count) / n),
-      };
-      hit.count = n;
-    } else {
-      merged.push({ color: { ...c.color }, count: c.count });
-    }
-  }
-  clusters = merged.sort((a, b) => b.count - a.count);
-
-  while (clusters.length > maxColors) {
-    let bi = 0;
-    let bj = 1;
-    let best = Infinity;
-    for (let i = 0; i < clusters.length; i++) {
-      for (let j = i + 1; j < clusters.length; j++) {
-        const d = dist2(clusters[i]!.color, clusters[j]!.color);
-        if (d < best) {
-          best = d;
-          bi = i;
-          bj = j;
-        }
-      }
-    }
-    const a = clusters[bi]!;
-    const b = clusters[bj]!;
-    const n = a.count + b.count;
-    const next = {
-      color: {
-        r: Math.round((a.color.r * a.count + b.color.r * b.count) / n),
-        g: Math.round((a.color.g * a.count + b.color.g * b.count) / n),
-        b: Math.round((a.color.b * a.count + b.color.b * b.count) / n),
-      },
-      count: n,
-    };
-    clusters = clusters.filter((_, idx) => idx !== bi && idx !== bj);
-    clusters.push(next);
-    clusters.sort((x, y) => y.count - x.count);
-  }
-
-  return clusters.slice(0, maxColors).map((c) => c.color);
-}
-
-function nearest(p: Rgb, palette: Rgb[]): Rgb {
-  let best = palette[0]!;
-  let bestD = Infinity;
-  for (const c of palette) {
-    const d = dist2(p, c);
-    if (d < bestD) {
-      bestD = d;
-      best = c;
-    }
-  }
-  return best;
-}
-
 /**
- * Weiche Kanten + max. 3 Farben. Kein Nearest-Upscale (das verpixelt).
+ * Weiche Freistellung auf Weiß – RGB bleibt original.
+ * Innenflächen voll deckend (kein Durchscheinen der Anhänger-Textur).
  */
-function toColorLimitedLogo(traceOnWhite: ImageData, maxColors = MAX_LOGO_COLORS): {
-  image: ImageData;
-  dominant: Rgb;
-} {
+function toCleanLogoRgba(traceOnWhite: ImageData): { image: ImageData; dominant: Rgb } {
   const w = traceOnWhite.width;
   const h = traceOnWhite.height;
   const src = traceOnWhite.data;
+  const out = new ImageData(w, h);
+  const d = out.data;
 
-  const alphas = new Uint8Array(w * h);
-  const samples: Rgb[] = [];
+  let sumR = 0;
+  let sumG = 0;
+  let sumB = 0;
+  let sumW = 0;
 
-  for (let p = 0, i = 0; i < src.length; i += 4, p++) {
+  for (let i = 0; i < src.length; i += 4) {
     const r = src[i]!;
     const g = src[i + 1]!;
     const b = src[i + 2]!;
-    const a = alphaFromWhiteBg(r, g, b);
-    alphas[p] = a;
-    // Nur solide Motiv-Pixel für Palette (kein AA-Rand → keine Geisterfarben)
-    if (a > 200 && lum(r, g, b) < 230) {
-      samples.push({ r, g, b });
-    }
-  }
+    const L = lum(r, g, b);
+    const S = sat(r, g, b);
 
-  if (samples.length < 20) {
-    for (let p = 0, i = 0; i < src.length; i += 4, p++) {
-      if (alphas[p]! < 80) continue;
-      samples.push({ r: src[i]!, g: src[i + 1]!, b: src[i + 2]! });
-    }
-  }
-
-  const palette = buildPalette(samples, maxColors);
-  const out = new ImageData(w, h);
-  const d = out.data;
-  const hist = new Array(palette.length).fill(0);
-
-  for (let p = 0, i = 0; i < src.length; i += 4, p++) {
-    const a = alphas[p]!;
-    if (a < 8) {
+    // klarer Hintergrund
+    if (L > 246 && S < 0.07) {
       d[i] = d[i + 1] = d[i + 2] = 0;
       d[i + 3] = 0;
       continue;
     }
-    const pix = { r: src[i]!, g: src[i + 1]!, b: src[i + 2]! };
-    const c = nearest(pix, palette);
-    let idx = 0;
-    for (let k = 0; k < palette.length; k++) {
-      if (palette[k] === c || dist2(palette[k]!, c) === 0) {
-        idx = k;
-        break;
-      }
-      if (dist2(palette[k]!, pix) < dist2(palette[idx]!, pix)) idx = k;
+
+    // Distanz zu Weiß → Alpha
+    const dr = 255 - r;
+    const dg = 255 - g;
+    const db = 255 - b;
+    let a = Math.min(255, Math.round(Math.sqrt(dr * dr + dg * dg + db * db) * 1.25 + S * 70));
+    if (a < 10) {
+      d[i] = d[i + 1] = d[i + 2] = 0;
+      d[i + 3] = 0;
+      continue;
     }
-    const col = palette[idx]!;
-    hist[idx]!++;
-    d[i] = col.r;
-    d[i + 1] = col.g;
-    d[i + 2] = col.b;
-    d[i + 3] = a; // weiche Kante behalten
+
+    // Kern voll deckend → keine Textur durch die Vorschau
+    if (a > 140 || (L < 210 && S > 0.05)) {
+      a = 255;
+      sumR += r;
+      sumG += g;
+      sumB += b;
+      sumW += 1;
+    }
+
+    d[i] = r;
+    d[i + 1] = g;
+    d[i + 2] = b;
+    d[i + 3] = a;
   }
 
-  let domIdx = 0;
-  for (let c = 1; c < hist.length; c++) {
-    if (hist[c]! > hist[domIdx]!) domIdx = c;
-  }
+  const dominant: Rgb =
+    sumW > 0
+      ? {
+          r: Math.round(sumR / sumW),
+          g: Math.round(sumG / sumW),
+          b: Math.round(sumB / sumW),
+        }
+      : { r: 18, g: 169, b: 224 };
 
-  return { image: out, dominant: palette[domIdx]! };
+  return { image: out, dominant };
 }
 
 function imageDataToPngDataUrl(img: ImageData): string {
@@ -246,17 +126,29 @@ function imageDataToPngDataUrl(img: ImageData): string {
   return canvas.toDataURL('image/png');
 }
 
-function pngDataUrlToSvg(dataUrl: string, width: number, height: number, dominantHex?: string): string {
+function rgbToHex(c: Rgb): string {
+  const h = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+  return `#${h(c.r)}${h(c.g)}${h(c.b)}`;
+}
+
+function pngDataUrlToSvg(dataUrl: string, width: number, height: number, dominantHex: string): string {
   const w = Math.max(1, width);
   const h = Math.max(1, height);
-  const dom = dominantHex ? ` data-dominant="${dominantHex}"` : '';
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
-    `width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" data-nudaim-logo="raster" data-keep-colors="1"${dom}>` +
+    `width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" data-nudaim-logo="raster" data-keep-colors="1" data-dominant="${dominantHex}">` +
     `<image width="${w}" height="${h}" href="${dataUrl}" xlink:href="${dataUrl}" ` +
     `preserveAspectRatio="xMidYMid meet"/>` +
     `</svg>`
   );
+}
+
+export function isRasterLogoSvg(svg: string | null | undefined): boolean {
+  return !!svg && /data-nudaim-logo="raster"/i.test(svg);
+}
+
+export function keepsOriginalLogoColors(svg: string | null | undefined): boolean {
+  return !!svg && /data-keep-colors="1"/i.test(svg);
 }
 
 export function extractDominantFromSvg(svg: string): string | null {
@@ -264,15 +156,14 @@ export function extractDominantFromSvg(svg: string): string | null {
   return m?.[1] ?? null;
 }
 
-/** Originalfarben zeigen, solange Druckfarbe ≈ Dominantfarbe vom Upload. */
-export function shouldShowOriginalLogoColors(svg: string, printColor: string): boolean {
-  if (!keepsOriginalLogoColors(svg)) return false;
-  const dom = extractDominantFromSvg(svg);
-  if (!dom) return true;
-  return hexClose(dom, printColor);
+export function extractRasterPngFromSvg(svg: string): string | null {
+  const m =
+    /\shref="(data:image\/png;base64,[^"]+)"/i.exec(svg) ||
+    /\sxlink:href="(data:image\/png;base64,[^"]+)"/i.exec(svg);
+  return m?.[1] ?? null;
 }
 
-function hexClose(a: string, b: string, tol = 28): boolean {
+function hexClose(a: string, b: string, tol = 32): boolean {
   const parse = (h: string) => {
     let s = h.replace('#', '');
     if (s.length === 3) s = s[0]! + s[0] + s[1]! + s[1] + s[2]! + s[2];
@@ -291,24 +182,12 @@ function hexClose(a: string, b: string, tol = 28): boolean {
   }
 }
 
-function rgbToHex(c: Rgb): string {
-  const h = (n: number) => n.toString(16).padStart(2, '0');
-  return `#${h(c.r)}${h(c.g)}${h(c.b)}`;
-}
-
-export function isRasterLogoSvg(svg: string | null | undefined): boolean {
-  return !!svg && /data-nudaim-logo="raster"/i.test(svg);
-}
-
-export function keepsOriginalLogoColors(svg: string | null | undefined): boolean {
-  return !!svg && /data-keep-colors="1"/i.test(svg);
-}
-
-export function extractRasterPngFromSvg(svg: string): string | null {
-  const m =
-    /\shref="(data:image\/png;base64,[^"]+)"/i.exec(svg) ||
-    /\sxlink:href="(data:image\/png;base64,[^"]+)"/i.exec(svg);
-  return m?.[1] ?? null;
+/** Originalfarben, solange Druckfarbe ≈ Upload-Dominantfarbe. */
+export function shouldShowOriginalLogoColors(svg: string, printColor: string): boolean {
+  if (!keepsOriginalLogoColors(svg)) return false;
+  const dom = extractDominantFromSvg(svg);
+  if (!dom) return true;
+  return hexClose(dom, printColor);
 }
 
 export type RasterLogoResult = {
@@ -333,9 +212,6 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
     if (analysis.isPhoto) {
       throw new Error(PHOTO_MSG);
     }
-    const preset = String(analysis.recommendedPreset || '').toLowerCase();
-    forceLogo =
-      preset === 'logo' || preset === 'simple' || preset === 'lineart' || preset === 'pixel' || !analysis.isPhoto;
   } catch (err) {
     if (err instanceof Error && err.message === PHOTO_MSG) throw err;
   }
@@ -345,9 +221,10 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
     throw new Error(processed.message);
   }
 
-  const { image: rgba, dominant } = toColorLimitedLogo(processed.traceImage, MAX_LOGO_COLORS);
-  const png = imageDataToPngDataUrl(rgba);
+  // Keine 3-Farben-Posterize – Original sieht am besten aus
+  const { image: rgba, dominant } = toCleanLogoRgba(processed.traceImage);
   const dominantHex = rgbToHex(dominant);
+  const png = imageDataToPngDataUrl(rgba);
   const svg = pngDataUrlToSvg(png, rgba.width, rgba.height, dominantHex);
 
   return {
@@ -393,7 +270,6 @@ export async function textToEngraveSvg(raw: string): Promise<string> {
   }
 
   const png = imageDataToPngDataUrl(img);
-  // Text: Mono, wird mit Druckfarbe eingefärbt
   const w = canvas.width;
   const h = canvas.height;
   return (

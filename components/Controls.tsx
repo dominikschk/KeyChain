@@ -338,7 +338,7 @@ export const Controls: React.FC<ControlsProps> = ({
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-petrol">Studio · 3D-Druck</p>
           <p className="mt-1 text-sm font-bold text-navy leading-snug">Dein Anhänger, druckfertig vorbereitet</p>
           <p className="mt-1.5 text-[11px] text-zinc-500 leading-relaxed">
-            Weiche Kanten, max. 3 Originalfarben. Andere Druckfarbe = einfarbig einfärben.
+            Hintergrund wird entfernt, Farben bleiben original. Andere Druckfarbe = einfarbig.
           </p>
         </div>
 
@@ -357,8 +357,8 @@ export const Controls: React.FC<ControlsProps> = ({
                 <img src={logoPreviewUrl} alt="Logo" className="max-w-[85%] max-h-[85%] object-contain" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-navy">Hintergrund entfernt · bis 3 Farben</p>
-                <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">Originalfarben aus deinem Logo.</p>
+                <p className="text-xs font-semibold text-navy">Hintergrund entfernt</p>
+                <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">Originalqualität aus deiner Datei.</p>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2.5 text-xs">
                   <label className="text-petrol font-bold cursor-pointer hover:underline relative">
                     Ersetzen
