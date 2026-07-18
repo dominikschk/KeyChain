@@ -251,6 +251,7 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
                     style={{
                       transform: `scale(${config.mirrorX ? -config.logoScale : config.logoScale}, ${config.logoScale}) rotate(${config.logoRotation || 0}deg)`,
                       filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.18))',
+                      imageRendering: 'auto',
                     }}
                     draggable={false}
                   />
