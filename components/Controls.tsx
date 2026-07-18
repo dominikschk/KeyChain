@@ -338,7 +338,7 @@ export const Controls: React.FC<ControlsProps> = ({
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-petrol">Studio · 3D-Druck</p>
           <p className="mt-1 text-sm font-bold text-navy leading-snug">Dein Anhänger, druckfertig vorbereitet</p>
           <p className="mt-1.5 text-[11px] text-zinc-500 leading-relaxed">
-            Bis 3 Originalfarben, dann vereinfacht. Über Druckfarbe färbst du das Logo neu ein.
+            Weiche Kanten, max. 3 Originalfarben. Andere Druckfarbe = einfarbig einfärben.
           </p>
         </div>
 

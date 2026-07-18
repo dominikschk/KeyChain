@@ -3,7 +3,7 @@
  */
 import React, { forwardRef, useImperativeHandle, useRef, useEffect, useCallback } from 'react';
 import type { ModelConfig } from '../types';
-import { extractRasterPngFromSvg, isRasterLogoSvg } from '../lib/logoFromRaster';
+import { extractRasterPngFromSvg, isRasterLogoSvg, shouldShowOriginalLogoColors } from '../lib/logoFromRaster';
 
 const BASE_IMG = '/keychain-base.png';
 
@@ -38,9 +38,9 @@ function parseCssColor(color: string): { r: number; g: number; b: number } {
   return { r: 17, g: 17, b: 17 };
 }
 
-/** Schwarzes/farbiges Logo in Druckfarbe einfärben – Helligkeitsstufen bleiben erhalten. */
+/** Nur Alpha behalten, eine Druckfarbe – keine Geisterfarben. */
 async function colorizeLogoPng(pngDataUrl: string, color: string): Promise<string> {
-  const target = parseCssColor(color);
+  const { r, g, b } = parseCssColor(color);
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
     el.onload = () => resolve(el);
@@ -56,65 +56,11 @@ async function colorizeLogoPng(pngDataUrl: string, color: string): Promise<strin
   ctx.drawImage(img, 0, 0);
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const d = data.data;
-
-  // Einzigartige deckende Farben sammeln (max. 3 erwartet)
-  const uniq: { r: number; g: number; b: number; L: number }[] = [];
-  const keySet = new Set<number>();
-  for (let i = 0; i < d.length; i += 4) {
-    if (d[i + 3]! < 200) continue;
-    const r = d[i]!;
-    const g = d[i + 1]!;
-    const b = d[i + 2]!;
-    const key = (r << 16) | (g << 8) | b;
-    if (keySet.has(key)) continue;
-    keySet.add(key);
-    uniq.push({ r, g, b, L: 0.299 * r + 0.587 * g + 0.114 * b });
-  }
-  uniq.sort((a, b) => a.L - b.L);
-
-  const shade = (t: number) => {
-    // t=0 dunkel, t=1 hell → Abtönung der Druckfarbe
-    if (t <= 0.5) {
-      const u = t * 2;
-      return {
-        r: Math.round(target.r * (0.35 + 0.65 * u)),
-        g: Math.round(target.g * (0.35 + 0.65 * u)),
-        b: Math.round(target.b * (0.35 + 0.65 * u)),
-      };
-    }
-    const u = (t - 0.5) * 2;
-    return {
-      r: Math.round(target.r + (255 - target.r) * u * 0.45),
-      g: Math.round(target.g + (255 - target.g) * u * 0.45),
-      b: Math.round(target.b + (255 - target.b) * u * 0.45),
-    };
-  };
-
-  const map = new Map<number, { r: number; g: number; b: number }>();
-  if (uniq.length <= 1) {
-    for (const u of uniq) {
-      map.set((u.r << 16) | (u.g << 8) | u.b, { ...target });
-    }
-  } else {
-    uniq.forEach((u, idx) => {
-      const t = idx / (uniq.length - 1);
-      map.set((u.r << 16) | (u.g << 8) | u.b, shade(t));
-    });
-  }
-
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3]! < 8) continue;
-    const key = (d[i]! << 16) | (d[i + 1]! << 8) | d[i + 2]!;
-    const mapped = map.get(key);
-    if (mapped) {
-      d[i] = mapped.r;
-      d[i + 1] = mapped.g;
-      d[i + 2] = mapped.b;
-    } else {
-      d[i] = target.r;
-      d[i + 1] = target.g;
-      d[i + 2] = target.b;
-    }
+    d[i] = r;
+    d[i + 1] = g;
+    d[i + 2] = b;
   }
   ctx.putImageData(data, 0, 0);
   return canvas.toDataURL('image/png');
@@ -166,7 +112,11 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
               if (!cancelled) setLogoUrl(null);
               return;
             }
-            // Originalstruktur (bis 3 Farben) → auf Druckfarbe abbilden (Stufen bleiben)
+            // Originalfarben (weich), solange Druckfarbe ≈ Upload-Farbe; sonst sauberes Mono
+            if (shouldShowOriginalLogoColors(svgContent, printColor)) {
+              if (!cancelled) setLogoUrl(png);
+              return;
+            }
             const colored = await colorizeLogoPng(png, printColor);
             if (!cancelled) setLogoUrl(colored);
             return;
