@@ -92,6 +92,9 @@ export const DEFAULT_CONFIG: ModelConfig = {
   layoutMode: 'landing',
   landingMode: 'microsite',
   externalUrl: '',
+  engraveText: '',
+  engraveLayout: 'logo_above',
+  engraveGap: 40,
   nfcBlocks: [
     { 
       id: 'sb1', 

@@ -1,13 +1,11 @@
 /**
- * Flache Produktvorschau des Schlüsselanhängers – ohne 3D.
- * Screenshot für Bestellung über Canvas.
+ * Produktvorschau im Shop-Stil (pens.com): weiße Karte, realistischer Anhänger, Logo + Text.
  */
 import React, { forwardRef, useImperativeHandle, useRef, useEffect, useMemo, useCallback } from 'react';
 import type { ModelConfig } from '../types';
 
 function tintSvg(svg: string, color: string): string {
   let out = svg;
-  // ImageTracer / einfache Pfade: Füllungen auf Logo-Farbe
   out = out.replace(/\sfill="(?!none)[^"]*"/gi, ` fill="${color}"`);
   out = out.replace(/\sstroke="(?!none)[^"]*"/gi, ` stroke="${color}"`);
   if (!/\sfill=/i.test(out) && /<path\b/i.test(out)) {
@@ -32,139 +30,103 @@ type Props = {
 
 export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
   ({ config, svgContent }, ref) => {
-    const stageRef = useRef<HTMLDivElement>(null);
+    const cardRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const plate = config.plateColor || '#F8F5F0';
-    const logoColor = config.logoColor || '#12A9E0';
+    const printColor = config.logoColor || '#111111';
     const hasChain = config.hasChain !== false;
-    const w = config.plateWidth || 40;
-    const h = config.plateHeight || 40;
-    const aspect = w / h;
+    const layout = config.engraveLayout || 'logo_above';
+    const text = (config.engraveText || '').trim();
+    const gap = Math.max(0, Math.min(100, config.engraveGap ?? 40));
+    const showLogo = (layout === 'logo_only' || layout === 'logo_above' || layout === 'text_above') && !!svgContent?.trim();
+    const showText = (layout === 'text_only' || layout === 'logo_above' || layout === 'text_above') && !!text;
 
     const logoUrl = useMemo(() => {
       if (!svgContent?.trim()) return null;
       try {
-        return svgToDataUrl(tintSvg(svgContent, logoColor));
+        return svgToDataUrl(tintSvg(svgContent, printColor));
       } catch {
         return null;
       }
-    }, [svgContent, logoColor]);
-
-    const logoStyle = useMemo(() => {
-      // mm-Offsets grob auf % der Platte mappen (±15 mm ≈ ±35 %)
-      const tx = (config.logoPosX / 15) * 32;
-      const ty = (-config.logoPosY / 15) * 32;
-      const s = Math.max(0.25, Math.min(2.2, config.logoScale));
-      const sx = config.mirrorX ? -s : s;
-      const rot = config.logoRotation || 0;
-      return {
-        transform: `translate(-50%, -50%) translate(${tx}%, ${ty}%) scale(${sx}, ${s}) rotate(${rot}deg)`,
-        width: `${48 + config.logoDepth * 4}%`,
-        opacity: 0.92 + Math.min(0.08, config.logoDepth / 50),
-      } as React.CSSProperties;
-    }, [
-      config.logoPosX,
-      config.logoPosY,
-      config.logoScale,
-      config.mirrorX,
-      config.logoRotation,
-      config.logoDepth,
-    ]);
+    }, [svgContent, printColor]);
 
     const paintCanvas = useCallback(async (): Promise<string> => {
       const canvas = canvasRef.current;
       if (!canvas) return '';
-      const size = 720;
-      const pad = 80;
+      const size = 900;
       canvas.width = size;
       canvas.height = size;
       const ctx = canvas.getContext('2d');
       if (!ctx) return '';
 
-      // Hintergrund
-      const grd = ctx.createRadialGradient(size * 0.35, size * 0.25, 40, size / 2, size / 2, size * 0.7);
-      grd.addColorStop(0, '#ffffff');
-      grd.addColorStop(0.55, '#F8F5F0');
-      grd.addColorStop(1, '#E5E0D6');
-      ctx.fillStyle = grd;
+      ctx.fillStyle = '#F3F4F6';
       ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = '#ffffff';
+      roundRect(ctx, 48, 48, size - 96, size - 96, 8);
+      ctx.fill();
 
-      const side = size - pad * 2;
-      const plateW = aspect >= 1 ? side : side * aspect;
-      const plateH = aspect >= 1 ? side / aspect : side;
-      const px = (size - plateW) / 2;
-      const py = (size - plateH) / 2 + (hasChain ? 12 : 0);
-      const radius = Math.min(plateW, plateH) * 0.18;
+      const plateSize = 420;
+      const px = (size - plateSize) / 2;
+      const py = (size - plateSize) / 2 + 10;
+      const radius = 72;
 
-      // Schatten
       ctx.save();
-      ctx.shadowColor = 'rgba(17,35,90,0.18)';
-      ctx.shadowBlur = 36;
-      ctx.shadowOffsetY = 18;
-      roundRect(ctx, px, py, plateW, plateH, radius);
+      ctx.shadowColor = 'rgba(0,0,0,0.14)';
+      ctx.shadowBlur = 40;
+      ctx.shadowOffsetY = 16;
+      roundRect(ctx, px, py, plateSize, plateSize, radius);
       ctx.fillStyle = plate;
       ctx.fill();
       ctx.restore();
 
-      // Rand
-      roundRect(ctx, px, py, plateW, plateH, radius);
-      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-      ctx.lineWidth = 2;
+      roundRect(ctx, px, py, plateSize, plateSize, radius);
+      ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+      ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Öse / Loch
-      const holeR = Math.min(plateW, plateH) * 0.07;
-      const hx = px + holeR * 1.6;
-      const hy = py + holeR * 1.6;
+      const holeR = 28;
+      const hx = px + 52;
+      const hy = py + 52;
       ctx.beginPath();
       ctx.arc(hx, hy, holeR, 0, Math.PI * 2);
-      ctx.fillStyle = '#E5E0D6';
+      ctx.fillStyle = '#F3F4F6';
       ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-      ctx.stroke();
 
-      // Metallring
       if (hasChain) {
         ctx.beginPath();
-        ctx.arc(hx - holeR * 0.2, hy - holeR * 0.2, holeR * 1.55, 0, Math.PI * 2);
-        ctx.strokeStyle = '#B8B8B8';
-        ctx.lineWidth = holeR * 0.35;
+        ctx.arc(hx - 4, hy - 8, 34, 0, Math.PI * 2);
+        ctx.strokeStyle = '#A8A8A8';
+        ctx.lineWidth = 7;
         ctx.stroke();
       }
 
-      // NFC-Scheibe
-      const nfcR = Math.min(plateW, plateH) * 0.22;
-      const nx = px + plateW / 2;
-      const ny = py + plateH * 0.42;
+      // NFC hint (subtle)
       ctx.beginPath();
-      ctx.arc(nx, ny, nfcR, 0, Math.PI * 2);
-      ctx.fillStyle = '#0a0a0a';
+      ctx.arc(px + plateSize / 2, py + plateSize * 0.38, 58, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.06)';
       ctx.fill();
-      for (let i = 0; i < 4; i++) {
-        const r = nfcR * (0.92 - i * 0.12);
-        ctx.beginPath();
-        ctx.arc(nx, ny, r, 0, Math.PI * 2);
-        ctx.strokeStyle = '#CD7F32';
-        ctx.lineWidth = nfcR * 0.04;
-        ctx.stroke();
-      }
 
-      // Logo
-      if (logoUrl) {
+      const contentTop = py + plateSize * 0.52;
+      const cx = px + plateSize / 2;
+      const gapPx = 8 + gap * 0.35;
+
+      if (showLogo && logoUrl) {
         await new Promise<void>((resolve) => {
           const img = new Image();
           img.onload = () => {
-            const base = Math.min(plateW, plateH) * (0.42 * config.logoScale);
-            const lw = base;
-            const lh = base * (img.height / Math.max(1, img.width));
-            const cx = nx + (config.logoPosX / 15) * plateW * 0.28;
-            const cy = ny + plateH * 0.28 - (config.logoPosY / 15) * plateH * 0.28;
+            const maxW = plateSize * 0.42 * config.logoScale;
+            const ratio = img.height / Math.max(1, img.width);
+            const lw = maxW;
+            const lh = maxW * ratio;
+            let ly = contentTop;
+            if (layout === 'logo_above' && showText) ly = contentTop - gapPx / 2 - lh / 2;
+            if (layout === 'text_above' && showText) ly = contentTop + gapPx / 2 + lh / 2;
+            if (layout === 'logo_only') ly = py + plateSize * 0.58;
             ctx.save();
-            ctx.translate(cx, cy);
+            ctx.translate(cx + config.logoPosX * 2, ly - config.logoPosY * 2);
             ctx.rotate(((config.logoRotation || 0) * Math.PI) / 180);
             ctx.scale(config.mirrorX ? -1 : 1, 1);
-            ctx.globalAlpha = 0.95;
             ctx.drawImage(img, -lw / 2, -lh / 2, lw, lh);
             ctx.restore();
             resolve();
@@ -172,15 +134,22 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
           img.onerror = () => resolve();
           img.src = logoUrl;
         });
-      } else {
-        ctx.fillStyle = 'rgba(17,35,90,0.35)';
-        ctx.font = `600 ${Math.round(plateW * 0.06)}px system-ui,sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.fillText('Dein Logo hier', nx, py + plateH * 0.78);
       }
 
-      return canvas.toDataURL('image/jpeg', 0.88);
-    }, [aspect, plate, hasChain, logoUrl, config]);
+      if (showText) {
+        let ty = contentTop;
+        if (layout === 'logo_above' && showLogo) ty = contentTop + gapPx / 2 + 18;
+        if (layout === 'text_above' && showLogo) ty = contentTop - gapPx / 2 - 10;
+        if (layout === 'text_only') ty = py + plateSize * 0.58;
+        ctx.fillStyle = printColor;
+        ctx.font = `700 ${Math.round(28 * config.logoScale)}px Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text.slice(0, 28), cx, ty);
+      }
+
+      return canvas.toDataURL('image/jpeg', 0.9);
+    }, [plate, hasChain, logoUrl, showLogo, showText, text, layout, gap, printColor, config]);
 
     useEffect(() => {
       void paintCanvas();
@@ -191,92 +160,94 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
       exportSTL: async () => null,
     }));
 
-    return (
+    const imprintBlock = (
       <div
-        ref={stageRef}
-        className="w-full h-full relative flex flex-col items-center justify-center px-6 py-10 overflow-hidden"
+        className="absolute left-1/2 flex flex-col items-center w-[70%]"
         style={{
-          background:
-            'radial-gradient(ellipse at 30% 18%, #ffffff 0%, #F8F5F0 42%, #E8E4DC 100%)',
+          top: layout === 'logo_only' || layout === 'text_only' ? '54%' : '48%',
+          transform: 'translate(-50%, -20%)',
+          gap: `${6 + gap * 0.12}px`,
+          flexDirection: layout === 'text_above' ? 'column-reverse' : 'column',
         }}
       >
-        <canvas ref={canvasRef} className="hidden" aria-hidden />
-
-        <div className="relative" style={{ width: `min(72vw, ${aspect >= 1 ? 280 : 240}px)` }}>
-          {hasChain && (
-            <div
-              className="absolute -top-3 left-3 w-10 h-10 rounded-full border-[5px] border-zinc-300 shadow-sm z-10"
-              style={{
-                background: 'transparent',
-                boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.7), 0 2px 6px rgba(0,0,0,0.12)',
-              }}
-              aria-hidden
-            />
-          )}
-
-          <div
-            className="relative shadow-2xl transition-colors duration-300"
+        {showLogo && logoUrl && (
+          <img
+            src={logoUrl}
+            alt=""
+            className="max-w-[78%] max-h-[72px] object-contain pointer-events-none select-none"
             style={{
-              aspectRatio: `${w} / ${h}`,
-              width: '100%',
-              backgroundColor: plate,
-              borderRadius: '22%',
-              boxShadow:
-                '0 24px 48px rgba(17,35,90,0.16), inset 0 1px 0 rgba(255,255,255,0.55)',
+              transform: `scale(${config.mirrorX ? -config.logoScale : config.logoScale}, ${config.logoScale}) rotate(${config.logoRotation || 0}deg)`,
+            }}
+            draggable={false}
+          />
+        )}
+        {showText && (
+          <p
+            className="text-center font-bold leading-tight px-2 break-words max-w-full"
+            style={{
+              color: printColor,
+              fontSize: `${Math.round(15 * Math.min(1.4, config.logoScale))}px`,
             }}
           >
-            {/* Öse */}
-            <div
-              className="absolute rounded-full bg-[#E5E0D6] border border-black/10"
-              style={{ width: '14%', height: '14%', top: '7%', left: '7%' }}
-            />
+            {text}
+          </p>
+        )}
+        {!showLogo && !showText && (
+          <p className="text-[12px] text-zinc-400 font-medium">Logo oder Text wählen</p>
+        )}
+      </div>
+    );
 
-            {/* NFC */}
+    return (
+      <div className="w-full h-full bg-[#F3F4F6] flex items-center justify-center p-4 md:p-8">
+        <canvas ref={canvasRef} className="hidden" aria-hidden />
+        <div
+          ref={cardRef}
+          className="relative w-full max-w-[560px] aspect-square bg-white rounded-sm shadow-sm border border-zinc-200/80 flex items-center justify-center"
+        >
+          <div className="relative w-[72%] max-w-[340px]" style={{ aspectRatio: '1' }}>
+            {hasChain && (
+              <div
+                className="absolute z-10 rounded-full border-[6px] border-zinc-300"
+                style={{
+                  width: 42,
+                  height: 42,
+                  top: -6,
+                  left: 18,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                }}
+                aria-hidden
+              />
+            )}
             <div
-              className="absolute left-1/2 rounded-full bg-zinc-950 shadow-inner"
+              className="relative w-full h-full overflow-hidden transition-colors duration-200"
               style={{
-                width: '44%',
-                aspectRatio: '1',
-                top: '18%',
-                transform: 'translateX(-50%)',
+                backgroundColor: plate,
+                borderRadius: '22%',
+                boxShadow:
+                  '0 18px 40px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.5)',
               }}
             >
-              {[0, 1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="absolute inset-0 m-auto rounded-full border-2"
-                  style={{
-                    width: `${88 - i * 14}%`,
-                    height: `${88 - i * 14}%`,
-                    borderColor: '#CD7F32',
-                    opacity: 0.85,
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* Logo */}
-            <div className="absolute inset-0 overflow-hidden" style={{ borderRadius: '22%' }}>
-              {logoUrl ? (
-                <img
-                  src={logoUrl}
-                  alt=""
-                  className="absolute left-1/2 top-[68%] max-w-none pointer-events-none select-none"
-                  style={logoStyle}
-                  draggable={false}
-                />
-              ) : (
-                <p className="absolute left-1/2 top-[72%] -translate-x-1/2 text-[11px] font-semibold text-navy/40 whitespace-nowrap">
-                  Dein Logo hier
-                </p>
-              )}
+              <div
+                className="absolute rounded-full bg-[#F3F4F6]"
+                style={{ width: '13%', height: '13%', top: '8%', left: '8%' }}
+              />
+              <div
+                className="absolute left-1/2 -translate-x-1/2 rounded-full bg-black/5"
+                style={{ width: '28%', aspectRatio: '1', top: '22%' }}
+              />
+              {imprintBlock}
             </div>
           </div>
+          <button
+            type="button"
+            className="absolute bottom-3 right-3 w-9 h-9 rounded-full bg-white border border-zinc-200 shadow-sm text-zinc-500 text-sm flex items-center justify-center"
+            title="Vorschau"
+            aria-label="Vorschau"
+          >
+            ⌕
+          </button>
         </div>
-
-        <p className="mt-8 text-[10px] font-medium text-zinc-500 bg-white/70 backdrop-blur px-3 py-1.5 rounded-full">
-          So wirkt dein Anhänger · kein 3D-Drehen nötig
-        </p>
       </div>
     );
   }

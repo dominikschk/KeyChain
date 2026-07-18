@@ -84,6 +84,12 @@ export interface ModelConfig {
   landingMode?: LandingMode;
   /** Ziel-URL wenn landingMode === 'external' (http/https) */
   externalUrl?: string;
+  /** Prägetext auf dem Anhänger (live in der Vorschau) */
+  engraveText?: string;
+  /** Anordnung Logo/Text */
+  engraveLayout?: 'logo_only' | 'text_only' | 'logo_above' | 'text_above';
+  /** Abstand Logo ↔ Text (0–100) */
+  engraveGap?: number;
 }
 
 export interface SVGPathData {

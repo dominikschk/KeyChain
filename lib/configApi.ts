@@ -91,6 +91,13 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     logoRotation: Number(plate.logoRotation) ?? base.logoRotation,
     mirrorX: plate.mirrorX === true,
     hasChain: plate.hasChain !== false,
+    engraveText: typeof plate.engraveText === 'string' ? plate.engraveText : '',
+    engraveLayout: (['logo_only', 'text_only', 'logo_above', 'text_above'] as const).includes(
+      plate.engraveLayout as never
+    )
+      ? (plate.engraveLayout as ModelConfig['engraveLayout'])
+      : 'logo_above',
+    engraveGap: Number(plate.engraveGap) || 40,
   };
 
   const logoSvg = (plate.logo_svg as string | undefined) || null;

@@ -1,7 +1,7 @@
 /**
  * Konfigurator – Panel zum Konfigurieren von NFeC-Produkten (3D + Microsite).
  */
-import React, { useState, useRef, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { Loader2, ArrowRight, RefreshCw, Edit3, Smartphone, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown, Copy } from 'lucide-react';
 import { Controls } from '../components/Controls';
 import { SitePreview } from '../components/SitePreview';
@@ -248,6 +248,15 @@ const ConfiguratorPage: React.FC = () => {
   });
   const [svgContent, setSvgContent] = useState<string | null>(() => loadDraftSvg());
   const [logoBusy, setLogoBusy] = useState(false);
+
+  const logoPreviewUrl = useMemo(() => {
+    if (!svgContent?.trim()) return null;
+    try {
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgContent)}`;
+    } catch {
+      return null;
+    }
+  }, [svgContent]);
   const [selectedProductId, setSelectedProductId] = useState<string>(() => PRODUCTS[0]?.id ?? 'keychain');
   const [activeDept, setActiveDept] = useState<Department>('digital');
   const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('preview');
@@ -447,6 +456,9 @@ const ConfiguratorPage: React.FC = () => {
           mirrorX: !!config.mirrorX,
           hasChain: config.hasChain !== false,
           logo_svg: svgContent || null,
+          engraveText: config.engraveText || '',
+          engraveLayout: config.engraveLayout || 'logo_above',
+          engraveGap: config.engraveGap ?? 40,
           surfaceColor: config.surfaceColor || null,
           textColor: config.textColor || null,
           layoutMode: config.layoutMode || 'landing',
@@ -594,21 +606,6 @@ const ConfiguratorPage: React.FC = () => {
     } finally {
       setLogoBusy(false);
       resetFileInput(input);
-    }
-  };
-
-  const handleTextEngrave = async (text: string) => {
-    setLogoBusy(true);
-    try {
-      const { textToEngraveSvg } = await import('../lib/logoFromRaster');
-      const content = await textToEngraveSvg(text);
-      applyEngraveSvg(content);
-    } catch (err) {
-      console.error('Text engrave error:', err);
-      const msg = err instanceof Error ? err.message : 'Bitte erneut versuchen.';
-      showError(msg, 'Text konnte nicht geprägt werden.');
-    } finally {
-      setLogoBusy(false);
     }
   };
 
@@ -776,7 +773,7 @@ const ConfiguratorPage: React.FC = () => {
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 max-w-xl">
                 {workPhase === 'hardware'
-                  ? 'Logo prägen, Farbe wählen – das ist dein Produkt. Den Chip-Link legst du danach fest.'
+                  ? 'Logo und Text auf deinen Anhänger – wie im Onlineshop.'
                   : (config.landingMode === 'external'
                     ? 'Optional: Website, Instagram oder Shop – wohin der Chip nach dem Scannen öffnet.'
                     : 'Optional: kleine Handy-Seite für deine Kunden – oder eigene URL wählen.')}
@@ -985,7 +982,6 @@ const ConfiguratorPage: React.FC = () => {
                     setConfig={setConfig}
                     hasLogo={!!svgContent}
                     onUpload={handleFileUpload}
-                    onApplyTextEngrave={handleTextEngrave}
                     logoBusy={logoBusy}
                   />
                 </div>
@@ -1031,8 +1027,9 @@ const ConfiguratorPage: React.FC = () => {
                     config={config}
                     setConfig={setConfig}
                     hasLogo={!!svgContent}
+                    logoPreviewUrl={logoPreviewUrl}
                     onUpload={handleFileUpload}
-                    onApplyTextEngrave={handleTextEngrave}
+                    onClearLogo={() => setSvgContent(null)}
                     logoBusy={logoBusy}
                   />
                 </div>
@@ -1064,11 +1061,6 @@ const ConfiguratorPage: React.FC = () => {
               />
             ) : (
               <KeychainPreview ref={viewerRef} config={config} svgContent={svgContent} />
-            )}
-            {workPhase === 'hardware' && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] px-4 py-2 rounded-lg bg-white/95 border border-zinc-200 shadow-sm text-xs font-semibold text-navy">
-                Dein Schlüsselanhänger
-              </div>
             )}
           </div>
           <div className="md:hidden shrink-0 p-4 bg-white border-t border-zinc-200 safe-bottom">
