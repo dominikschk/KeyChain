@@ -19,7 +19,19 @@ export const PRODUCTS: ShopifyProduct[] = [
   { id: 'badge', name: 'Messe-Badge', variantId: '56564338262361', plateWidthMm: 110, plateHeightMm: 150 }, // 150 mm lang, 110 mm breit – echte Variant-ID eintragen
 ];
 
-/** Builds the Shopify cart add URL with variant ID, config ID, preview image and optional Microsite/CCP URLs. */
+/** Öffentliche Microsite-URL (ohne Token). */
+export function buildMicrositeUrl(origin: string, shortId: string): string {
+  const base = origin.replace(/\/$/, '');
+  return `${base}/?id=${encodeURIComponent(shortId)}`;
+}
+
+/** CCP-Edit-URL mit Write-Token. */
+export function buildCcpEditUrl(origin: string, shortId: string, writeToken: string): string {
+  const base = origin.replace(/\/$/, '');
+  return `${base}/ccp?id=${encodeURIComponent(shortId)}&t=${encodeURIComponent(writeToken)}`;
+}
+
+/** Builds the Shopify cart add URL with variant ID, config ID, preview image and Microsite/CCP URLs. */
 export function buildShopifyCartUrl(
   variantId: string,
   shortId: string,
@@ -35,12 +47,15 @@ export function buildShopifyCartUrl(
     'properties[Preview]': previewImageUrl,
   };
   if (origin) {
+    const micrositeUrl = buildMicrositeUrl(origin, shortId);
     // Öffentlich: ohne write_token
-    params['properties[Microsite-URL]'] = `${origin}/?id=${encodeURIComponent(shortId)}`;
-    // Edit-Capability: Token nur in _CCP-URL (Unterstrich = im Storefront-Warenkorb typ. versteckt)
+    params['properties[Microsite-URL]'] = micrositeUrl;
+    params['properties[Handy-Seite]'] = micrositeUrl;
+    // Edit-Capability: _CCP-URL (Warenkorb oft versteckt) + Bearbeiten-Link (sichtbar in Order/Mail)
     if (writeToken && writeToken.length >= 32) {
-      params['properties[_CCP-URL]'] =
-        `${origin}/ccp?id=${encodeURIComponent(shortId)}&t=${encodeURIComponent(writeToken)}`;
+      const ccpUrl = buildCcpEditUrl(origin, shortId, writeToken);
+      params['properties[_CCP-URL]'] = ccpUrl;
+      params['properties[Bearbeiten-Link]'] = ccpUrl;
     }
   }
   return `${SHOPIFY_CART_URL}?${new URLSearchParams(params).toString()}`;

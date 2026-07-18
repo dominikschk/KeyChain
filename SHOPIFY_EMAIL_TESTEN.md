@@ -1,57 +1,66 @@
-# Shopify Bestellmail – warum CCP fehlt & wie richtig testen
+# Delivery dichtmachen: Bestellen → Mail → Seite ändern
 
-## Kurz: Warum deine Testmail leer war
-
-Der Button **„Test-E-Mail senden“** in  
-Einstellungen → Benachrichtigungen → Bestellbestätigung  
-nutzt **Dummy-Daten**. Darin gibt es **keine** Line-Item-Properties wie:
-
-- `Microsite-URL`
-- `_CCP-URL`
-- `Config-ID`
-
-Deshalb erscheint der NUDAIM-Block **absichtlich nicht** – der Liquid-Code ist ok, die Testdaten fehlen.
+Checkliste für dich (Dominik) – Reihenfolge einhalten.
 
 ---
 
-## Richtig testen (3 Schritte)
+## A) App (Code) – erledigt im Repo
 
-### 1. Vorlage speichern
-Aktuellen Inhalt aus `Shopify besttel,txt` in die Bestellbestätigung kopieren → **Speichern**.
-
-### 2. Echte Bestellung über den Konfigurator
-1. Konfigurator öffnen → Seite bauen → Anhänger → **Bestellen**
-2. Checkout durchlaufen (auch 0 € / Testgateway ok)
-3. Im Shopify-Admin die Bestellung öffnen
-
-### 3. Properties an der Bestellung prüfen
-Unter dem Produkt müssen u. a. stehen:
-
-| Property | Bedeutung |
-|----------|-----------|
-| `Config-ID` | Short-ID |
-| `Microsite-URL` | Öffentliche Handy-Seite |
-| `_CCP-URL` | Privater Bearbeiten-Link (oft nur in Admin sichtbar, nicht im Warenkorb) |
-| `Preview` | Vorschaubild |
-
-Wenn **diese Properties fehlen**, kann die Mail sie auch nicht anzeigen → Problem liegt vor der Mail (Cart-Add), nicht im Liquid.
-
-Wenn Properties **da** sind: an der Order → **E-Mail erneut senden** (Bestellbestätigung). Dann muss der NUDAIM-Block kommen.
+- [x] Cart sendet: `Microsite-URL`, `Handy-Seite`, `_CCP-URL`, `Bearbeiten-Link`, `Config-ID`
+- [x] Nach Speichern: Dialog „Deine Links sind bereit“ (kopieren) **vor** Shopify-Warenkorb
+- [x] Bestellmail-Vorlage `Shopify besttel,txt` (NUDAIM-Block, doppelte Alt-Blöcke entfernt)
+- [x] Anleitung + Liquid-Schnipsel in der App (Menü → Shopify: Bestellmail)
 
 ---
 
-## Wenn Properties an der Order fehlen
+## B) Shopify Admin – einmalig von dir
 
-Dann kam der Warenkorb **nicht** über `buildShopifyCartUrl` (Konfigurator), z. B.:
-
-- Produkt manuell in den Shop gelegt
-- Alte Variante / anderer Add-to-Cart
-- Bestellung abgebrochen vor Redirect
-
-Nochmal **nur über den Konfigurator** bestellen und im Network-Tab `cart/add` prüfen (Query enthält `properties[Microsite-URL]` und `properties[_CCP-URL]`).
+1. **Einstellungen → Benachrichtigungen → Bestellbestätigung**
+2. Inhalt aus `Shopify besttel,txt` einfügen / ersetzen → **Speichern**
+3. Optional Shop-Akzentfarbe navy/petrol (wirkt auf Standard-Buttons)
 
 ---
 
-## Optional: Preview im Editor
+## C) Live-Test (echte Bestellung)
 
-Die Vorschau in Shopify zeigt Properties oft auch nicht. Verlasse dich auf **echte Order + erneut senden**.
+1. Konfigurator auf Live-URL öffnen (`konfigurator.nudaim3d.de`)
+2. Seite bauen → Anhänger → **Fertig – bestellen**
+3. Dialog: Links kopieren / CCP einmal öffnen → **Weiter zum Warenkorb**
+4. Checkout abschließen (auch Testgateway)
+5. Im Admin die Order öffnen – unter dem Produkt müssen stehen:
+   - `Config-ID`
+   - `Microsite-URL` und/oder `Handy-Seite`
+   - `Bearbeiten-Link` und/oder `_CCP-URL`
+6. An der Order: **Bestellbestätigung erneut senden**
+7. Mail prüfen: Buttons **Handy-Seite öffnen** + **Seite bearbeiten**
+8. Bearbeiten-Link öffnen → Text ändern → Speichern → öffentliche Seite prüfen
+
+---
+
+## Wenn Properties in der Order fehlen
+
+- Bestellung kam **nicht** über den Konfigurator
+- Oder Live-Deploy ist noch alt (ohne `Bearbeiten-Link`) → neu bauen/deployen
+- Network: `cart/add?...properties%5BBearbeiten-Link%5D=...`
+
+---
+
+## Optional später: Edge Function-Mail
+
+Nur nötig, wenn Shopify-Mail nicht reicht:
+
+```bash
+npx supabase functions deploy send-microsite-email
+```
+
+Secrets: `RESEND_API_KEY`, `EMAIL_WEBHOOK_SECRET`, `ALLOWED_MICROSITE_HOSTS=konfigurator.nudaim3d.de`  
+Dann Shopify Flow: Order created → HTTP POST mit `to`, `microsite_url`, `short_id`, `ccp_url`.
+
+---
+
+## Erfolgskriterium
+
+Uwe bekommt **ohne Admin-Hilfe**:
+1. Links direkt nach dem Speichern im Konfigurator  
+2. Dieselben Links in der Bestellmail  
+3. CCP-Edit funktioniert mit dem privaten Link  

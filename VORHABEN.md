@@ -11,13 +11,15 @@ Prioritäten und offene Themen, damit wir nichts verlieren.
 
 CCP-Edit funktioniert. Zustellung über Shopify-Liquid ist vorbereitet.
 
-- [ ] Prüfen, dass `properties[_CCP-URL]` an der Shopify-Bestellung hängt (Admin / Network `cart/add`)
+- [x] Prüfen / absichern: Properties `Microsite-URL`, `Bearbeiten-Link`, `_CCP-URL` am Cart
 - [ ] Optional Property sichtbar machen (`CCP-URL` statt `_CCP-URL`), falls Warenkorb-Anzeige gewünscht
-- [x] Shopify-Bestellbestätigung (Liquid) fertig zum Einfügen (`lib/shopifyOrderEmailLiquid.ts` + App-Menü „Shopify: Bestellmail“)
-- [x] Edge Function `send-microsite-email` Texte Uwe-freundlich inkl. `ccp_url` (Deploy ggf. nachziehen)
+- [x] Shopify-Bestellbestätigung (Liquid) fertig (`Shopify besttel,txt` + App-Menü)
+- [x] Edge Function `send-microsite-email` Texte Uwe-freundlich inkl. `ccp_url` (Deploy optional)
 - [ ] Liquid in Shopify Admin einmalig einfügen / speichern
+- [x] Link-Übergabe im Konfigurator vor Warenkorb (Handy-Seite + Bearbeiten kopieren)
+- [ ] Live-Smoke: echte Order → Properties in Admin → Mail erneut senden → CCP testen
 
-**Warum teilweise offen:** Code & Anleitung sind fertig; einmaliges Einfügen im Shopify-Admin musst du/Dominik machen.
+**Warum teilweise offen:** Code ist fertig; Shopify-Speichern + eine echte Testbestellung musst du/Dominik machen (siehe `SHOPIFY_EMAIL_TESTEN.md`).
 ---
 
 ## Als Nächstes (Fokus): Design-Freiheit & „kleine Website“

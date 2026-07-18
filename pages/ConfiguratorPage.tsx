@@ -2,14 +2,14 @@
  * Konfigurator – Panel zum Konfigurieren von NFeC-Produkten (3D + Microsite).
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, QrCode as QrIcon, X, ArrowRight, RefreshCw, Edit3, Smartphone, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown } from 'lucide-react';
+import { Loader2, QrCode as QrIcon, X, ArrowRight, RefreshCw, Edit3, Smartphone, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown, Copy } from 'lucide-react';
 import { Viewer } from '../components/Viewer';
 import { Controls } from '../components/Controls';
 import { Microsite } from '../components/Microsite';
 import { MicrositeChat } from '../components/MicrositeChat';
 import { LoginScreen } from '../components/LoginScreen';
 import { ShopifyGuide } from '../components/ShopifyGuide';
-import { DEFAULT_CONFIG, buildShopifyCartUrl, PRODUCTS } from '../constants';
+import { DEFAULT_CONFIG, buildShopifyCartUrl, buildMicrositeUrl, buildCcpEditUrl, PRODUCTS } from '../constants';
 import { ModelConfig, SVGPathData, Department } from '../types';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import * as THREE from 'three';
@@ -32,6 +32,15 @@ import {
   getPreviewConfig,
 } from '../lib/configStorage';
 import { getConfigByShortId, recordScan, setConfigStlUrl, insertConfigBlocks } from '../lib/configApi';
+
+const LAST_DELIVERY_KEY = 'nudaim_last_delivery_links';
+
+type DeliveryLinks = {
+  shortId: string;
+  micrositeUrl: string;
+  ccpUrl: string;
+  cartUrl: string;
+};
 
 const ConfirmationModal: React.FC<{
   config: ModelConfig;
@@ -70,6 +79,103 @@ const ConfirmationModal: React.FC<{
   </div>
 );
 
+/** Nach dem Speichern: Links sichern, bevor es zum Shopify-Warenkorb geht. */
+const DeliveryHandoffModal: React.FC<{
+  links: DeliveryLinks;
+  onContinue: () => void;
+}> = ({ links, onContinue }) => {
+  const [copied, setCopied] = useState<'ms' | 'ccp' | null>(null);
+
+  const copy = async (which: 'ms' | 'ccp', value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(which);
+      window.setTimeout(() => setCopied(null), 2000);
+    } catch {
+      showError('Link bitte manuell markieren und kopieren.');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[2500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md">
+      <div className="card w-full max-w-lg flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300">
+        <header className="px-5 py-4 border-b border-navy/5 bg-cream">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-petrol mb-1">Wichtig – kurz speichern</p>
+          <h2 className="font-headline text-lg font-extrabold uppercase tracking-tight text-navy">Deine Links sind bereit</h2>
+          <p className="text-sm text-zinc-600 mt-1 leading-snug">
+            Die kommen später auch in der Bestellmail. Am besten jetzt einmal kopieren oder öffnen.
+          </p>
+        </header>
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="rounded-2xl border border-navy/10 bg-white p-4 space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Für deine Kunden</p>
+            <p className="text-sm font-semibold text-navy">Handy-Seite</p>
+            <p className="text-xs text-zinc-500 break-all">{links.micrositeUrl}</p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <a
+                href={links.micrositeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-h-[44px] px-4 rounded-xl bg-navy text-white text-sm font-semibold inline-flex items-center gap-2"
+              >
+                <ExternalLink size={16} /> Öffnen
+              </a>
+              <button
+                type="button"
+                onClick={() => void copy('ms', links.micrositeUrl)}
+                className="min-h-[44px] px-4 rounded-xl border border-zinc-200 text-sm font-semibold text-navy inline-flex items-center gap-2"
+              >
+                {copied === 'ms' ? <Check size={16} /> : <Copy size={16} />}
+                {copied === 'ms' ? 'Kopiert' : 'Kopieren'}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-petrol/20 bg-petrol/5 p-4 space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wider text-petrol">Nur für dich</p>
+            <p className="text-sm font-semibold text-navy">Seite später ändern</p>
+            <p className="text-xs text-zinc-600 leading-snug">
+              Privater Link – nicht öffentlich teilen. Damit änderst du Texte, Links und Logo.
+            </p>
+            <p className="text-xs text-zinc-500 break-all">{links.ccpUrl}</p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <a
+                href={links.ccpUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-h-[44px] px-4 rounded-xl bg-petrol text-white text-sm font-semibold inline-flex items-center gap-2"
+              >
+                <ExternalLink size={16} /> Bearbeiten öffnen
+              </a>
+              <button
+                type="button"
+                onClick={() => void copy('ccp', links.ccpUrl)}
+                className="min-h-[44px] px-4 rounded-xl border border-petrol/30 text-sm font-semibold text-navy inline-flex items-center gap-2 bg-white"
+              >
+                {copied === 'ccp' ? <Check size={16} /> : <Copy size={16} />}
+                {copied === 'ccp' ? 'Kopiert' : 'Kopieren'}
+              </button>
+            </div>
+          </div>
+
+          <p className="text-xs text-zinc-500 text-center">Bestell-Code: <strong className="text-navy">{links.shortId}</strong></p>
+        </div>
+        <footer className="p-4 border-t border-navy/5 bg-zinc-50/80 safe-bottom">
+          <button
+            type="button"
+            onClick={onContinue}
+            className="w-full min-h-[52px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+          >
+            <ShoppingCart size={18} />
+            Weiter zum Warenkorb
+            <ArrowRight size={18} />
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+};
+
 const ConfiguratorPage: React.FC = () => {
   const [viewMode] = useState<'editor' | 'microsite' | 'preview'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -85,6 +191,7 @@ const ConfiguratorPage: React.FC = () => {
   /** Zwei getrennte Arbeitsphasen: erst Seite, dann Anhänger */
   const [workPhase, setWorkPhase] = useState<'site' | 'hardware'>('site');
   const [shopifyGuideOpen, setShopifyGuideOpen] = useState(false);
+  const [deliveryLinks, setDeliveryLinks] = useState<DeliveryLinks | null>(null);
 
   useEffect(() => {
     getSession().then((s) => {
@@ -326,7 +433,17 @@ const ConfiguratorPage: React.FC = () => {
       setSavingStep('done');
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
       const variantId = product?.variantId ?? '56564338262361';
-      window.location.href = buildShopifyCartUrl(variantId, shortId, finalImageUrl, baseUrl, writeToken);
+      const micrositeUrl = buildMicrositeUrl(baseUrl, shortId);
+      const ccpUrl = buildCcpEditUrl(baseUrl, shortId, writeToken);
+      const cartUrl = buildShopifyCartUrl(variantId, shortId, finalImageUrl, baseUrl, writeToken);
+      const links: DeliveryLinks = { shortId, micrositeUrl, ccpUrl, cartUrl };
+      try {
+        localStorage.setItem(LAST_DELIVERY_KEY, JSON.stringify({ ...links, savedAt: Date.now() }));
+      } catch {
+        /* ignore */
+      }
+      setDeliveryLinks(links);
+      setSavingStep('idle');
     } catch (err) {
       console.error('Save error:', err);
       setSavingStep('idle');
@@ -463,6 +580,16 @@ const ConfiguratorPage: React.FC = () => {
   return (
     <div className="flex flex-col h-full w-full bg-cream text-navy overflow-hidden">
       {shopifyGuideOpen && <ShopifyGuide onClose={() => setShopifyGuideOpen(false)} />}
+      {deliveryLinks && (
+        <DeliveryHandoffModal
+          links={deliveryLinks}
+          onContinue={() => {
+            const url = deliveryLinks.cartUrl;
+            setDeliveryLinks(null);
+            window.location.href = url;
+          }}
+        />
+      )}
       {toastMessage && (
         <div className="fixed bottom-20 sm:bottom-8 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-[3000] flex items-center justify-center gap-2 px-4 py-3 bg-petrol text-white rounded-xl shadow-lg text-[11px] font-bold uppercase tracking-wider animate-in fade-in slide-in-from-bottom-2 max-w-xs sm:max-w-none">
           <Check size={18} />

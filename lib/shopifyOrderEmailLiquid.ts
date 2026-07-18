@@ -1,9 +1,6 @@
 /**
  * Fertiger Liquid-Schnipsel für die Shopify-Bestellbestätigung (NUDAIM-Stil).
- * Farben: Navy #11235A, Petrol #006699, Cream #FDFCF8
- *
- * Hinweis: Shopify „Test-E-Mail“ aus den Einstellungen hat keine echten
- * Line-Item-Properties – nur echte Konfigurator-Bestellung testen.
+ * Properties: Microsite-URL / Handy-Seite, _CCP-URL / Bearbeiten-Link, Config-ID
  */
 export const SHOPIFY_ORDER_EMAIL_LIQUID = `{% comment %} --- START NUDAIM: Handy-Seite + Bearbeiten-Link --- {% endcomment %}
 {% for line in line_items %}
@@ -11,25 +8,16 @@ export const SHOPIFY_ORDER_EMAIL_LIQUID = `{% comment %} --- START NUDAIM: Handy
   {% assign nudaim_ccp = '' %}
   {% assign nudaim_cfg = '' %}
   {% for p in line.properties %}
-    {% if p.first == 'Microsite-URL' and p.last != blank %}
-      {% assign nudaim_ms = p.last %}
-    {% endif %}
-    {% if p.first == '_CCP-URL' and p.last != blank %}
-      {% assign nudaim_ccp = p.last %}
-    {% endif %}
-    {% if p.first == 'CCP-URL' and p.last != blank %}
-      {% assign nudaim_ccp = p.last %}
-    {% endif %}
-    {% if p.first == 'Config-ID' and p.last != blank %}
-      {% assign nudaim_cfg = p.last %}
-    {% endif %}
+    {% if p.first == 'Microsite-URL' and p.last != blank %}{% assign nudaim_ms = p.last %}{% endif %}
+    {% if p.first == 'Handy-Seite' and p.last != blank %}{% assign nudaim_ms = p.last %}{% endif %}
+    {% if p.first == '_CCP-URL' and p.last != blank %}{% assign nudaim_ccp = p.last %}{% endif %}
+    {% if p.first == 'Bearbeiten-Link' and p.last != blank %}{% assign nudaim_ccp = p.last %}{% endif %}
+    {% if p.first == 'CCP-URL' and p.last != blank %}{% assign nudaim_ccp = p.last %}{% endif %}
+    {% if p.first == 'Config-ID' and p.last != blank %}{% assign nudaim_cfg = p.last %}{% endif %}
   {% endfor %}
-  {% if nudaim_ms == blank and line.properties['Microsite-URL'] != blank %}
-    {% assign nudaim_ms = line.properties['Microsite-URL'] %}
-  {% endif %}
-  {% if nudaim_ccp == blank and line.properties['_CCP-URL'] != blank %}
-    {% assign nudaim_ccp = line.properties['_CCP-URL'] %}
-  {% endif %}
+  {% if nudaim_ms == blank and line.properties['Microsite-URL'] != blank %}{% assign nudaim_ms = line.properties['Microsite-URL'] %}{% endif %}
+  {% if nudaim_ccp == blank and line.properties['Bearbeiten-Link'] != blank %}{% assign nudaim_ccp = line.properties['Bearbeiten-Link'] %}{% endif %}
+  {% if nudaim_ccp == blank and line.properties['_CCP-URL'] != blank %}{% assign nudaim_ccp = line.properties['_CCP-URL'] %}{% endif %}
 
   {% if nudaim_ms != blank or nudaim_ccp != blank %}
     <div style="margin: 20px 0 28px; padding: 22px 20px; background: #FDFCF8; border: 1px solid rgba(17,35,90,0.12); border-radius: 16px; font-family: system-ui, -apple-system, sans-serif;">
