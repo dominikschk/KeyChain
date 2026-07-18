@@ -91,7 +91,7 @@ export const LoginScreen: React.FC = () => {
           NUDAIM Studio
         </h1>
         <p className="text-sm text-zinc-500 mb-8 max-w-[260px]">
-          Melde dich an, um deine Konfigurationen zu speichern und fortzusetzen.
+          Melde dich an, um deine Arbeit zu speichern und später weiterzumachen.
         </p>
 
         {loading ? (

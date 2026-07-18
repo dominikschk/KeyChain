@@ -106,8 +106,8 @@ export function getStepMeta(step: ChatStep): StepMeta {
         index: 4,
         total,
         title: 'Logo',
-        hint: 'Kein Link zur Hand? Tippe „Später“ – Logo kannst du danach hochladen.',
-        placeholder: 'https://… oder Später',
+        hint: 'Am einfachsten: Logo-Datei hochladen (Button unten). Oder „Später“ tippen.',
+        placeholder: 'Optional: Link (https://…) einfügen',
         chips: ['Später / kein Logo'],
       };
     case 'features':
@@ -136,7 +136,7 @@ export function getStepMeta(step: ChatStep): StepMeta {
         index: 6,
         total,
         title: 'Fertig',
-        hint: 'Rechts siehst du die Vorschau. Links kannst du alles nachbessern.',
+        hint: 'Rechts siehst du, was deine Kunden sehen. Links kannst du noch nachbessern.',
         placeholder: 'nochmal – für einen neuen Durchlauf',
         chips: ['Nochmal von vorne', 'Passt so'],
       };
@@ -150,7 +150,7 @@ export function createChatSession(): ChatSession {
     messages: [
       msg(
         'assistant',
-        'Hallo! Ich baue mit dir Schritt für Schritt eine kleine Handy-Seite für deinen NFC-Chip.\n\nDu brauchst kein Technik-Wissen – antworte einfach, oder tippe auf die blauen Vorschläge.\n\nSchritt 1 von 6: Wie heißt dein Geschäft oder Projekt?'
+        'Hallo! Ich helfe dir, die Seite zu bauen, die deine Kunden sehen, wenn sie den Anhänger ans Handy halten.\n\nKein Technik-Wissen nötig – antworte einfach, oder tippe auf die Vorschläge.\n\nSchritt 1 von 6: Wie heißt dein Geschäft?'
       ),
     ],
   };
@@ -209,6 +209,12 @@ export function buildConfigFromAnswers(base: ModelConfig, answers: ChatAnswers):
       type: 'headline',
       title: slogan,
       content: '', // kein doppelter Firmenname – Titel steht schon im Header
+    },
+    {
+      id: crypto.randomUUID(),
+      type: 'text',
+      title: 'Über uns',
+      content: `${title} – ${slogan}. Hier findest du alles Wichtige auf einen Blick.`,
     },
   ];
 
@@ -285,6 +291,8 @@ export function buildConfigFromAnswers(base: ModelConfig, answers: ChatAnswers):
     profileTitle: title,
     accentColor: pal.accent,
     surfaceColor: pal.surface,
+    textColor: pal.theme === 'dark' ? '#F5F5F4' : '#1C1917',
+    layoutMode: 'landing',
     theme: pal.theme,
     fontStyle: pal.font,
     profileIcon: pal.icon,
@@ -337,36 +345,35 @@ export function advanceChat(
     }
     step = 'logo';
     reply =
-      'Schritt 4 von 6: Hast du ein Logo?\n\nWenn ja: Link zum Bild (beginnt mit https://) einfügen.\nWenn nein: tippe „Später“ – dann lädst du es nachher im Editor hoch. Ganz entspannt.';
+      'Schritt 4 von 6: Hast du ein Logo?\n\nAm einfachsten: den Button „Logo hochladen“ antippen und eine Bilddatei wählen.\nOder tippe „Später“ – dann kannst du es danach nachholen.';
   } else if (step === 'logo') {
     const url = extractHttpsUrl(text);
     if (url) answers.logoUrl = url;
     step = 'features';
     reply =
-      'Schritt 5 von 6: Was sollen Kunden auf dem Handy besonders gut nutzen können?\n\nTipp ein paar Vorschläge an (z. B. WhatsApp, Instagram) oder schreib „Alles Wichtige“.';
+      'Schritt 5 von 6: Was sollen deine Kunden auf dem Handy besonders gut nutzen können?\n\nTipp ein paar Vorschläge an (z. B. WhatsApp, Instagram) oder schreib „Alles Wichtige“.';
   } else if (step === 'features') {
     answers.features = parseFeatures(text);
     step = 'vibe';
     reply =
-      'Fast geschafft.\n\nSchritt 6 von 6: Welche Stimmung soll die Seite haben?\n\nTipp z. B. „Modern & blau“ oder „Warm & natürlich“.';
+      'Fast geschafft.\n\nSchritt 6 von 6: Welche Stimmung soll die Seite haben?\n\nTipp z. B. „Modern & blau“ oder „Warm & gemütlich“.';
   } else if (step === 'vibe') {
     answers.vibe = text.slice(0, 120);
     config = buildConfigFromAnswers(baseConfig, answers);
     step = 'done';
     applied = true;
     reply =
-      `Fertig! Ich habe eine erste Version für „${answers.company}“ gebaut.\n\n` +
-      `Was du jetzt siehst:\n` +
-      `• Rechts / unter „Digital“: Vorschau wie auf dem Handy\n` +
-      `• Links unter „Microsite“: alles nachträglich ändern\n\n` +
-      `${answers.logoUrl ? 'Logo ist schon gesetzt.' : 'Logo fehlt noch – unter Microsite → Profil-Logo hochladen.'}\n\n` +
-      `Du kannst dieses Fenster schließen. Oder tippe „Nochmal von vorne“.`;
+      `Fertig! Die erste Version für „${answers.company}“ steht.\n\n` +
+      `Rechts siehst du, was deine Kunden sehen.\n` +
+      `Unter „Selbst anpassen“ kannst du Texte, Links und Farben ändern.\n\n` +
+      `${answers.logoUrl ? 'Logo ist schon gesetzt.' : 'Logo fehlt noch? Unter „Selbst anpassen“ einfach hochladen.'}\n\n` +
+      `Wenn es passt: weiter zum Anhänger. Oder tippe „Nochmal von vorne“.`;
   } else if (step === 'done') {
     if (/nochmal|neu|reset|von vorne/i.test(text)) {
       return { session: createChatSession() };
     }
     reply =
-      'Alles gut. Schließe dieses Fenster und schau dir die Vorschau an. Unter „Microsite“ kannst du Texte und Links ändern.';
+      'Alles gut. Schau rechts die Kunden-Ansicht an. Unter „Selbst anpassen“ kannst du Texte und Links ändern.';
   }
 
   return {

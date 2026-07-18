@@ -8,6 +8,7 @@ import { Controls } from '../components/Controls';
 import { Microsite } from '../components/Microsite';
 import { MicrositeChat } from '../components/MicrositeChat';
 import { LoginScreen } from '../components/LoginScreen';
+import { ShopifyGuide } from '../components/ShopifyGuide';
 import { DEFAULT_CONFIG, buildShopifyCartUrl, PRODUCTS } from '../constants';
 import { ModelConfig, SVGPathData, Department } from '../types';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
@@ -41,27 +42,27 @@ const ConfirmationModal: React.FC<{
   <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md">
     <div className="card w-full max-w-2xl flex flex-col max-h-[90dvh] sm:max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300">
       <header className="flex items-center justify-between shrink-0 px-4 py-3 sm:px-5 sm:py-4 border-b border-navy/5">
-        <h2 className="font-headline text-base sm:text-lg font-extrabold uppercase tracking-tight text-navy">Konfiguration bestätigen</h2>
+        <h2 className="font-headline text-base sm:text-lg font-extrabold uppercase tracking-tight text-navy">Bereit zum Bestellen?</h2>
         <button type="button" onClick={onCancel} className="btn-tap flex items-center justify-center rounded-xl text-zinc-400 hover:bg-cream hover:text-navy transition-colors" aria-label="Schließen"><X size={22} /></button>
       </header>
       <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 scroll-container min-h-0">
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <div className="aspect-square bg-cream rounded-xl sm:rounded-2xl flex items-center justify-center p-3 border border-navy/5 overflow-hidden">
-            {screenshot ? <img src={screenshot} className="w-full h-full object-contain" alt="Hardware Preview" /> : <Loader2 className="animate-spin text-petrol/30" size={28} />}
+            {screenshot ? <img src={screenshot} className="w-full h-full object-contain" alt="Dein Anhänger" /> : <Loader2 className="animate-spin text-petrol/30" size={28} />}
           </div>
           <div className="aspect-square bg-navy rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-4 sm:p-6 text-white text-center">
             <QrIcon size={28} className="opacity-30 mb-2 sm:mb-3" />
             <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider truncate w-full px-1">{config.profileTitle}</p>
-            <p className="text-[7px] sm:text-[8px] uppercase tracking-widest mt-1 opacity-60">Digital aktiv</p>
+            <p className="text-[7px] sm:text-[8px] uppercase tracking-widest mt-1 opacity-60">Handy-Seite aktiv</p>
           </div>
         </div>
         <p className="text-[10px] text-zinc-500 leading-relaxed text-center px-2">
-          Dein Unikat wird mit dem gewählten Branding produziert. Das digitale Profil kannst du jederzeit anpassen.
+          Wir fertigen deinen Anhänger mit deinem Logo. Die Seite auf dem Handy kannst du später jederzeit ändern.
         </p>
       </div>
       <footer className="p-4 sm:p-5 border-t border-navy/5 bg-zinc-50/80 shrink-0 safe-bottom">
         <button type="button" onClick={onConfirm} className="w-full min-h-[48px] sm:h-12 bg-navy text-white rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-          <span>Jetzt bestellen</span>
+          <span>Ja, jetzt bestellen</span>
           <ArrowRight size={18} />
         </button>
       </footer>
@@ -83,6 +84,7 @@ const ConfiguratorPage: React.FC = () => {
   const [digitalMode, setDigitalMode] = useState<'assist' | 'manual'>('assist');
   /** Zwei getrennte Arbeitsphasen: erst Seite, dann Anhänger */
   const [workPhase, setWorkPhase] = useState<'site' | 'hardware'>('site');
+  const [shopifyGuideOpen, setShopifyGuideOpen] = useState(false);
 
   useEffect(() => {
     getSession().then((s) => {
@@ -107,7 +109,7 @@ const ConfiguratorPage: React.FC = () => {
     const shortId = params.get('id');
     if (!shortId) {
       setMicrositeLoading(false);
-      setMicrositeError('Keine short_id in der URL (?id=…).');
+      setMicrositeError('Dieser Link ist unvollständig. Bitte den QR-Code oder den Link vom Anhänger erneut öffnen.');
       return;
     }
     setMicrositeError(null);
@@ -116,9 +118,9 @@ const ConfiguratorPage: React.FC = () => {
         if (result) {
           setMicrositeConfig(result.config);
           recordScan(result.configId).catch(() => { /* einmal pro Aufruf; Fehler still */ });
-        } else setMicrositeError('Konfiguration nicht gefunden.');
+        } else setMicrositeError('Diese Seite wurde nicht gefunden. Bitte den Link prüfen oder den Anbieter kontaktieren.');
       })
-      .catch((e) => setMicrositeError(e?.message ?? 'Fehler beim Laden.'))
+      .catch(() => setMicrositeError('Die Seite konnte gerade nicht geladen werden. Bitte später erneut versuchen.'))
       .finally(() => setMicrositeLoading(false));
   }, [viewMode]);
 
@@ -287,6 +289,8 @@ const ConfiguratorPage: React.FC = () => {
           logoRotation: config.logoRotation,
           logo_svg: svgContent || null,
           surfaceColor: config.surfaceColor || null,
+          textColor: config.textColor || null,
+          layoutMode: config.layoutMode || 'landing',
         }
       }]);
       if (dbError) throw dbError;
@@ -424,7 +428,7 @@ const ConfiguratorPage: React.FC = () => {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-cream text-navy">
           <Loader2 className="animate-spin text-petrol" size={32} />
-          <span className="text-sm font-medium text-zinc-600">Microsite wird geladen…</span>
+          <span className="text-sm font-medium text-zinc-600">Seite wird geladen…</span>
         </div>
       );
     }
@@ -458,6 +462,7 @@ const ConfiguratorPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full w-full bg-cream text-navy overflow-hidden">
+      {shopifyGuideOpen && <ShopifyGuide onClose={() => setShopifyGuideOpen(false)} />}
       {toastMessage && (
         <div className="fixed bottom-20 sm:bottom-8 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-[3000] flex items-center justify-center gap-2 px-4 py-3 bg-petrol text-white rounded-xl shadow-lg text-[11px] font-bold uppercase tracking-wider animate-in fade-in slide-in-from-bottom-2 max-w-xs sm:max-w-none">
           <Check size={18} />
@@ -505,7 +510,8 @@ const ConfiguratorPage: React.FC = () => {
                     <a href="/ccp" className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Smartphone size={14} /> Kunden-Panel</a>
                     <button type="button" onClick={() => { handleExportConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Download size={14} /> Export</button>
                     <label className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"><Upload size={14} /> Import<input type="file" accept=".json,application/json" onChange={(e) => { handleImportConfig(e); setUserMenuOpen(false); }} className="hidden" /></label>
-                    <button type="button" onClick={() => { handlePreviewInNewTab(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ExternalLink size={14} /> Vorschau (Tab)</button>
+                    <button type="button" onClick={() => { handlePreviewInNewTab(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ExternalLink size={14} /> So sehen es Kunden</button>
+                    <button type="button" onClick={() => { setShopifyGuideOpen(true); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ShoppingCart size={14} /> Shopify: Bestellmail</button>
                     <button type="button" onClick={() => { handleResetConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><RotateCcw size={14} /> Zurücksetzen</button>
                     <div className="border-t border-zinc-100 mt-1 pt-1">
                       <button type="button" onClick={() => { signOut(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"><LogOut size={14} /> Abmelden</button>
@@ -529,12 +535,12 @@ const ConfiguratorPage: React.FC = () => {
                 Schritt {workPhase === 'site' ? '1' : '2'} von 2
               </p>
               <p className="text-sm font-extrabold text-navy">
-                {workPhase === 'site' ? 'Deine Handy-Seite (Microsite)' : 'Dein Schlüsselanhänger (3D)'}
+                {workPhase === 'site' ? 'Was Kunden auf dem Handy sehen' : 'Dein Schlüsselanhänger'}
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 max-w-xl">
                 {workPhase === 'site'
-                  ? 'Hier gestaltest du nur die digitale Seite. Den Anhänger machst du danach.'
-                  : 'Hier gestaltest du nur den physischen Anhänger. Die Seite ist schon fertig.'}
+                  ? 'Baue zuerst die Seite für deine Kunden. Den Anhänger machst du im nächsten Schritt.'
+                  : 'Jetzt kommt der physische Anhänger. Die Handy-Seite ist schon fertig.'}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -544,7 +550,7 @@ const ConfiguratorPage: React.FC = () => {
                   onClick={() => setWorkPhase('site')}
                   className="min-h-[40px] px-3 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
                 >
-                  ← Zurück zur Seite
+                  ← Zurück zur Handy-Seite
                 </button>
               )}
               {workPhase === 'site' && (
@@ -569,14 +575,14 @@ const ConfiguratorPage: React.FC = () => {
               onClick={() => setDigitalMode('assist')}
               className={`flex-1 py-2.5 rounded-md text-[11px] font-semibold transition-colors ${digitalMode === 'assist' ? 'bg-white text-navy shadow-sm' : 'text-zinc-500'}`}
             >
-              Assistent
+              Mithelfen lassen
             </button>
             <button
               type="button"
               onClick={() => setDigitalMode('manual')}
               className={`flex-1 py-2.5 rounded-md text-[11px] font-semibold transition-colors ${digitalMode === 'manual' ? 'bg-white text-navy shadow-sm' : 'text-zinc-500'}`}
             >
-              Selbst feilen
+              Selbst anpassen
             </button>
           </div>
         </div>
@@ -592,14 +598,14 @@ const ConfiguratorPage: React.FC = () => {
                   onClick={() => setDigitalMode('assist')}
                   className={`flex-1 py-2 rounded-lg text-xs font-semibold ${digitalMode === 'assist' ? 'bg-petrol/10 text-petrol' : 'text-zinc-500'}`}
                 >
-                  Assistent
+                  Mithelfen lassen
                 </button>
                 <button
                   type="button"
                   onClick={() => setDigitalMode('manual')}
                   className="flex-1 py-2 rounded-lg text-xs font-semibold text-zinc-500 hover:bg-zinc-50"
                 >
-                  Selbst feilen
+                  Selbst anpassen
                 </button>
               </div>
               <div className="flex-1 min-h-0">
@@ -623,14 +629,14 @@ const ConfiguratorPage: React.FC = () => {
                   onClick={() => setDigitalMode('assist')}
                   className="flex-1 py-2 rounded-lg text-xs font-semibold text-zinc-500 hover:bg-zinc-50"
                 >
-                  Assistent
+                  Mithelfen lassen
                 </button>
                 <button
                   type="button"
                   onClick={() => setDigitalMode('manual')}
                   className="flex-1 py-2 rounded-lg text-xs font-semibold bg-petrol/10 text-petrol"
                 >
-                  Selbst feilen
+                  Selbst anpassen
                 </button>
               </div>
               <div className="flex-1 scroll-container technical-grid-fine min-h-0">
@@ -703,7 +709,7 @@ const ConfiguratorPage: React.FC = () => {
               googleLogoUrl={session?.user?.user_metadata?.avatar_url}
             />
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] px-4 py-2 rounded-lg bg-white/95 border border-zinc-200 shadow-sm text-xs font-semibold text-navy">
-              {workPhase === 'site' ? 'Vorschau: Handy-Seite' : 'Vorschau: Schlüsselanhänger'}
+              {workPhase === 'site' ? 'So sehen es deine Kunden' : 'Dein Schlüsselanhänger'}
             </div>
           </div>
           <div className="md:hidden shrink-0 p-4 bg-white border-t border-zinc-200 safe-bottom">
@@ -725,8 +731,8 @@ const ConfiguratorPage: React.FC = () => {
           {savingStep !== 'idle' && (
             <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-[600] flex flex-col items-center justify-center text-center px-6">
               <RefreshCw className="text-petrol animate-spin mb-4" size={40} />
-              <p className="font-black uppercase tracking-wider text-navy text-sm">Wird gesichert...</p>
-              <p className="text-[10px] text-zinc-500 mt-1">Weiter zum Warenkorb</p>
+              <p className="font-black uppercase tracking-wider text-navy text-sm">Wird vorbereitet…</p>
+              <p className="text-[10px] text-zinc-500 mt-1">Danach geht’s zur Bestellung</p>
             </div>
           )}
         </main>
@@ -735,11 +741,11 @@ const ConfiguratorPage: React.FC = () => {
       <nav className="md:hidden flex h-16 bg-white border-t border-zinc-200 z-[600] shrink-0 pb-safe pt-1" role="tablist" aria-label="Hauptnavigation">
         <button type="button" role="tab" onClick={() => setMobileTab('editor')} className={`flex-1 flex flex-col items-center justify-center gap-1 min-w-0 transition-colors ${mobileTab === 'editor' ? 'text-navy' : 'text-zinc-400'}`} aria-selected={mobileTab === 'editor'}>
           <Edit3 size={22} strokeWidth={mobileTab === 'editor' ? 2.5 : 2} />
-          <span className="text-[10px] font-semibold">Editor</span>
+          <span className="text-[10px] font-semibold">Bauen</span>
         </button>
         <button type="button" role="tab" onClick={() => setMobileTab('preview')} className={`flex-1 flex flex-col items-center justify-center gap-1 min-w-0 transition-colors ${mobileTab === 'preview' ? 'text-navy' : 'text-zinc-400'}`} aria-selected={mobileTab === 'preview'}>
           <Smartphone size={22} strokeWidth={mobileTab === 'preview' ? 2.5 : 2} />
-          <span className="text-[10px] font-semibold">Vorschau</span>
+          <span className="text-[10px] font-semibold">Kunden-Ansicht</span>
         </button>
       </nav>
     </div>

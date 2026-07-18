@@ -1,66 +1,32 @@
-# Wo du in Shopify den Code einfügst (Microsite + Short-ID in der E-Mail)
+# Wo du in Shopify den Code einfügst (Handy-Seite + Bearbeiten-Link)
+
+Die **komplette** Bestellbestätigung liegt als Vorlage in:
+
+`Shopify besttel,txt`
+
+→ In Shopify: **Einstellungen → Benachrichtigungen → Bestellbestätigung** → Inhalt ersetzen/einfügen → Speichern.
 
 ---
 
-## 1. In Shopify anmelden und zur richtigen Stelle gehen
+## Was darin steckt (NUDAIM-Stil)
 
-1. **Shopify Admin** öffnen (z. B. `https://dein-shop.myshopify.com/admin`).
-2. **Links in der Seitenleiste:** ganz unten auf **Einstellungen** (Zahnrad-Symbol) klicken.
-3. Unter **Einstellungen** im Bereich **Benachrichtigungen** auf **Benachrichtigungen** klicken.  
-   (Direktlink oft: `.../admin/settings/notifications`)
-4. Du siehst eine Liste aller E-Mail-Vorlagen (Bestellbestätigung, Versandbestätigung, etc.).
-5. Bei **„Bestellbestätigung“** (Order confirmation) auf **Bearbeiten** klicken (oder den Namen der Vorlage anklicken).
-
----
-
-## 2. In der E-Mail-Vorlage: wo der Code hinkommt
-
-Du bist jetzt in der **Liquid-Vorlage** der Bestellbestätigung. Der Inhalt ist z. B. in Tabs wie **„E-Mail-Vorlage“** oder **„HTML“** / **„Body“**.
-
-- **Such einen Abschnitt, in dem die Bestellung bzw. die Produkte vorkommen** – z. B.:
-  - `{{ line_items }}` oder
-  - „Produktliste“ / „Bestelldetails“ / „Items“.
-- **Direkt nach diesem Block** (nach der Produktliste) oder **vor dem Abschluss der E-Mail** (z. B. vor „Danke für deine Bestellung“) den folgenden Code einfügen.
-
-**Beispiel – typischer Aufbau der Vorlage:**
-
-```liquid
-... (Begrüßung, Bestellnummer etc.) ...
-
-{% for line in line_items %}
-  ... (Produktname, Menge, Preis) ...
-{% endfor %}
-
-<!-- HIER DEN CODE EINFÜGEN (Microsite + Short-ID + optional CCP) -->
-{% for line_item in line_items %}
-  {% if line_item.properties['Microsite-URL'] != blank %}
-    <p><strong>Deine Microsite:</strong><br>
-    <a href="{{ line_item.properties['Microsite-URL'] }}">{{ line_item.properties['Microsite-URL'] }}</a></p>
-    <p><strong>Short-ID:</strong> {{ line_item.properties['Config-ID'] }}</p>
-  {% endif %}
-  {% if line_item.properties['_CCP-URL'] != blank %}
-    <p><strong>Kunden-Panel (Bearbeiten):</strong><br>
-    <a href="{{ line_item.properties['_CCP-URL'] }}">Microsite bearbeiten</a></p>
-    <p style="font-size: 12px; color: #666;">Diesen Link nicht öffentlich teilen.</p>
-  {% endif %}
-{% endfor %}
-
-... (Rest der E-Mail, z. B. Versandinfos, Danke) ...
-```
-
-- Wenn deine Vorlage **`line_items`** statt **`line`** in der Schleife nutzt, ist das kein Problem – der neue Code verwendet **`line_items`** (die Standardvariable in der Bestellbestätigung).
-- **Speichern** nicht vergessen (Button unten, z. B. „Speichern“ oder „Vorlage aktualisieren“).
+- Begrüßung im NUDAIM-Ton („Danke … bei NUDAIM“, Versandtext zum Anhänger)
+- Karte **vor** der Produktliste (nur wenn Properties da sind):
+  - Navy-Button **Handy-Seite öffnen** (`Microsite-URL`)
+  - Petrol-Button **Seite bearbeiten** (`_CCP-URL`)
+- Kein „keine url gefunden“ mehr bei normalen Produkten
+- Farben: Navy `#11235A`, Petrol `#006699`, Cream `#FDFCF8`
 
 ---
 
-## 3. Kurz zusammengefasst
+## Nur den NUDAIM-Block nachträglich einfügen
 
-| Schritt | Wo |
-|--------|-----|
-| 1 | Shopify Admin → **Einstellungen** (unten links) |
-| 2 | **Benachrichtigungen** |
-| 3 | **Bestellbestätigung** → **Bearbeiten** |
-| 4 | In der **E-Mail-Vorlage** einen Platz suchen (z. B. nach der Produktliste) |
-| 5 | Den **Liquid-Code** (siehe oben) dort einfügen und **Speichern** |
+Falls du die Standard-Vorlage behältst: nach der Überschrift **Bestellübersicht** den Block aus `lib/shopifyOrderEmailLiquid.ts` einfügen (oder App-Menü → **Shopify: Bestellmail** → kopieren).
 
-Danach erhält der Kunde in der Bestellbestätigung den Microsite-Link und die Short-ID – und bei Konfigurator-Bestellungen zusätzlich den CCP-Edit-Link aus **`_CCP-URL`** (enthält den Write-Token; nicht öffentlich teilen).
+---
+
+## Kurz prüfen nach dem Speichern
+
+1. Testbestellung über den Konfigurator
+2. In der Mail müssen beide Buttons erscheinen (wenn `_CCP-URL` an der Order hängt)
+3. Öffentlicher Link ohne `t=`, Bearbeiten-Link mit `t=`

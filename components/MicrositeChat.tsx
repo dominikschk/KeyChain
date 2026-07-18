@@ -2,7 +2,7 @@
  * Microsite-Assistent – eingebettet im gleichen Fenster (panel) oder als Overlay (modal).
  */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Sparkles, Send, Loader2, X, RotateCcw, CheckCircle2, Wrench } from 'lucide-react';
+import { Sparkles, Send, Loader2, X, RotateCcw, CheckCircle2, Wrench, ImagePlus } from 'lucide-react';
 import type { ModelConfig, NFCBlock, ActionIcon } from '../types';
 import {
   advanceChat,
@@ -11,7 +11,11 @@ import {
   type ChatSession,
 } from '../lib/micrositeChatEngine';
 import { sendMicrositeChat } from '../lib/micrositeChatApi';
-import { generateSecureKey } from '../lib/utils';
+import { generateSecureKey, showError, resetFileInput } from '../lib/utils';
+import { SITE_TEMPLATES } from '../lib/siteLayouts';
+import { supabase } from '../lib/supabase';
+import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
+import { validateImageFile } from '../lib/validation';
 
 interface MicrositeChatProps {
   config: ModelConfig;
@@ -49,18 +53,20 @@ function applyAiPayload(
     return block;
   });
 
+  const theme = payload.theme === 'dark' ? 'dark' : 'light';
   return {
     ...base,
     profileTitle: payload.profileTitle,
     accentColor: payload.accentColor,
-    theme: payload.theme,
+    theme,
     fontStyle: payload.fontStyle,
     profileIcon: (payload.profileIcon as ActionIcon) || base.profileIcon,
     profileLogoUrl: payload.profileLogoUrl || base.profileLogoUrl,
+    layoutMode: 'landing',
     surfaceColor:
-      payload.theme === 'dark'
-        ? '#0C0A09'
-        : base.surfaceColor || '#F8F5F0',
+      payload.surfaceColor ||
+      (theme === 'dark' ? '#0C0A09' : base.surfaceColor || '#F8F5F0'),
+    textColor: theme === 'dark' ? '#F5F5F4' : '#1C1917',
     nfcBlocks: blocks.length ? blocks : base.nfcBlocks,
   };
 }
@@ -77,11 +83,13 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [statusLine, setStatusLine] = useState(
-    'Rechts siehst du die Vorschau – sie aktualisiert sich mit.'
+    'Rechts siehst du, was deine Kunden später sehen.'
   );
   const [appliedOnce, setAppliedOnce] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const logoFileRef = useRef<HTMLInputElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
 
@@ -101,7 +109,7 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
     setSession(createChatSession());
     setInput('');
     setAppliedOnce(false);
-    setStatusLine('Neu gestartet – Schritt 1: Firmenname.');
+    setStatusLine('Von vorne – zuerst dein Firmenname.');
   }, []);
 
   const runGuided = useCallback(
@@ -111,10 +119,51 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
       if (result.config) {
         onApplyConfig(result.config);
         setAppliedOnce(true);
-        setStatusLine('Vorschlag fertig – Vorschau rechts prüfen.');
+        setStatusLine('Erste Version fertig – rechts prüfen.');
       }
     },
     [session, onApplyConfig]
+  );
+
+  const handleLogoUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!supabase) {
+        showError('Bitte später erneut versuchen.', 'Upload gerade nicht möglich.');
+        resetFileInput(e.target);
+        return;
+      }
+      const check = validateImageFile(file);
+      if (!check.valid) {
+        showError(check.error!);
+        resetFileInput(e.target);
+        return;
+      }
+      setUploadingLogo(true);
+      setBusy(true);
+      setStatusLine('Logo wird hochgeladen…');
+      try {
+        const path = storagePath('l_', file.name);
+        const url = await uploadAndGetPublicUrl(supabase, path, file);
+        if (!url) {
+          showError('Bitte versuche es erneut.', 'Logo konnte nicht hochgeladen werden.');
+          setStatusLine('Logo-Upload fehlgeschlagen – erneut versuchen oder „Später“.');
+          return;
+        }
+        onApplyConfig({ ...configRef.current, profileLogoUrl: url });
+        setStatusLine('Logo ist drauf – weiter geht’s.');
+        runGuided(url);
+      } catch (err) {
+        console.error(err);
+        showError('Bitte versuche es erneut.', 'Logo konnte nicht hochgeladen werden.');
+      } finally {
+        setUploadingLogo(false);
+        setBusy(false);
+        resetFileInput(e.target);
+      }
+    },
+    [onApplyConfig, runGuided]
   );
 
   const handleSend = async (raw?: string) => {
@@ -154,14 +203,14 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
             }
             onApplyConfig(next);
             setAppliedOnce(true);
-            setStatusLine('ChatGPT-Vorschlag übernommen.');
+            setStatusLine('Vorschlag übernommen – rechts prüfen.');
           }
         }
         return;
       }
 
       if (ai?.fallback) {
-        setStatusLine('Einfacher Assistent (ohne Cloud-KI) – funktioniert trotzdem.');
+        setStatusLine('Wir machen es Schritt für Schritt – ohne Cloud-KI.');
       }
       runGuided(text);
     } finally {
@@ -238,6 +287,39 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-white min-h-0">
+        {!appliedOnce && session.messages.length <= 2 && (
+          <div className="rounded-2xl border border-zinc-100 bg-cream/80 px-3 py-3 space-y-2">
+            <p className="text-xs font-semibold text-zinc-600 px-1">Oder fertige Vorlage wählen</p>
+            <div className="flex flex-wrap gap-2">
+              {SITE_TEMPLATES.slice(0, 4).map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => {
+                    onApplyConfig({ ...configRef.current, ...tpl.apply() });
+                    setAppliedOnce(true);
+                    setStatusLine(`Vorlage „${tpl.name}“ geladen – rechts prüfen.`);
+                    setSession((s) => ({
+                      ...s,
+                      step: 'done',
+                      messages: [
+                        ...s.messages,
+                        {
+                          id: crypto.randomUUID(),
+                          role: 'assistant',
+                          content: `Die Vorlage „${tpl.name}“ ist geladen. Ändere einfach den Firmennamen und die Links – so sieht es schon wie dein Geschäft aus.`,
+                        },
+                      ],
+                    }));
+                  }}
+                  className="min-h-[40px] px-3 rounded-full bg-white border border-zinc-200 text-sm font-medium text-navy hover:border-petrol/40"
+                >
+                  {tpl.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {session.messages.map((m) => (
           <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
@@ -262,10 +344,9 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
             <div className="flex items-start gap-2">
               <CheckCircle2 size={20} className="shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold">Erste Version steht.</p>
+                <p className="font-semibold">Sieht schon gut aus.</p>
                 <p className="mt-1 leading-snug">
-                  Die Vorschau rechts zeigt deine Seite. Du kannst jetzt selbst Feinschliff machen
-                  (Texte, Links, Logo) – oder den Assistenten nochmal starten.
+                  Rechts siehst du, was deine Kunden sehen. Du kannst Texte und Links noch anpassen – oder gleich zum Anhänger weitergehen.
                 </p>
               </div>
             </div>
@@ -276,7 +357,7 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
                 className="w-full min-h-[48px] px-4 rounded-xl bg-navy text-white font-semibold flex items-center justify-center gap-2"
               >
                 <Wrench size={18} />
-                Ja, selbst weiterbauen
+                Texte & Links anpassen
               </button>
             )}
             {onContinueToHardware && (
@@ -285,7 +366,7 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
                 onClick={onContinueToHardware}
                 className="w-full min-h-[48px] px-4 rounded-xl border-2 border-navy text-navy font-semibold flex items-center justify-center gap-2"
               >
-                Seite passt – weiter zum Anhänger →
+                Passt – weiter zum Anhänger →
               </button>
             )}
           </div>
@@ -306,6 +387,37 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
               {chip}
             </button>
           ))}
+        </div>
+      )}
+
+      {session.step === 'logo' && (
+        <div className="shrink-0 px-4 pb-3 bg-white border-t border-zinc-50">
+          <input
+            ref={logoFileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            className="hidden"
+            onChange={(e) => void handleLogoUpload(e)}
+          />
+          <button
+            type="button"
+            disabled={busy || uploadingLogo}
+            onClick={() => logoFileRef.current?.click()}
+            className="w-full min-h-[52px] px-4 rounded-2xl bg-petrol text-white font-semibold flex items-center justify-center gap-2 hover:bg-petrol/90 disabled:opacity-50 active:scale-[0.98]"
+          >
+            {uploadingLogo ? (
+              <>
+                <Loader2 size={20} className="animate-spin" />
+                Wird hochgeladen…
+              </>
+            ) : (
+              <>
+                <ImagePlus size={20} />
+                Logo hochladen
+              </>
+            )}
+          </button>
+          <p className="text-xs text-zinc-500 text-center mt-2">PNG, JPG oder WebP – wird sofort in der Vorschau sichtbar.</p>
         </div>
       )}
 

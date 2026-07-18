@@ -91,28 +91,28 @@ function htmlMail(micrositeUrl: string, shortId: string, ccpUrl?: string): strin
   const safeId = escapeHtml(shortId);
   const ccpBlock = ccpUrl
     ? `
-  <p style="margin-bottom: 12px; margin-top: 28px;">Zum Bearbeiten deiner Microsite (Kunden-Panel):</p>
-  <p style="margin-bottom: 24px;">
-    <a href="${escapeHtml(ccpUrl)}" style="display: inline-block; background: #0D9488; color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600;">Kunden-Panel öffnen</a>
+  <p style="margin-bottom: 12px; margin-top: 28px;"><strong>Seite später ändern?</strong></p>
+  <p style="margin-bottom: 12px; color: #444;">Mit diesem privaten Link kannst du Texte, Links und Logo jederzeit anpassen:</p>
+  <p style="margin-bottom: 16px;">
+    <a href="${escapeHtml(ccpUrl)}" style="display: inline-block; background: #0D9488; color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600;">Seite bearbeiten</a>
   </p>
-  <p style="font-size: 0.875rem; color: #666; word-break: break-all;">${escapeHtml(ccpUrl)}</p>`
+  <p style="font-size: 0.875rem; color: #666;">Diesen Link bitte nicht öffentlich teilen.</p>`
     : '';
   return `
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="font-family: system-ui, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 560px; margin: 0 auto; padding: 24px;">
-  <h1 style="font-size: 1.25rem; margin-bottom: 16px;">Deine digitale Microsite</h1>
-  <p style="margin-bottom: 16px;">Vielen Dank für deine Bestellung. Hier ist dein persönlicher Zugang:</p>
-  <p style="margin-bottom: 8px;"><strong>Short-ID:</strong> <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">${safeId}</code></p>
-  <p style="margin-bottom: 20px;">Öffne deine Microsite zum Teilen über diesen Link:</p>
-  <p style="margin-bottom: 24px;">
-    <a href="${safeUrl}" style="display: inline-block; background: #11235A; color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600;">Microsite öffnen</a>
+  <h1 style="font-size: 1.25rem; margin-bottom: 16px;">Deine Handy-Seite ist bereit</h1>
+  <p style="margin-bottom: 16px;">Danke für deine Bestellung. So sehen deine Kunden die Seite, wenn sie den Anhänger ans Handy halten:</p>
+  <p style="margin-bottom: 20px;">
+    <a href="${safeUrl}" style="display: inline-block; background: #11235A; color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600;">Handy-Seite öffnen</a>
   </p>
-  <p style="font-size: 0.875rem; color: #666; word-break: break-all;">${safeUrl}</p>
+  <p style="font-size: 0.875rem; color: #666; word-break: break-all; margin-bottom: 8px;">${safeUrl}</p>
+  <p style="font-size: 0.875rem; color: #888; margin-bottom: 8px;">Bestell-Code: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">${safeId}</code></p>
   ${ccpBlock}
   <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
-  <p style="font-size: 0.75rem; color: #999;">Diese E-Mail wurde nach deiner Bestellung versendet. Den Bearbeiten-Link bitte nicht öffentlich teilen.</p>
+  <p style="font-size: 0.75rem; color: #999;">Diese E-Mail gehört zu deiner Bestellung. Der Bearbeiten-Link ist nur für dich.</p>
 </body>
 </html>`;
 }
@@ -213,7 +213,7 @@ const handler = async (req: Request): Promise<Response> => {
     body: JSON.stringify({
       from: FROM_EMAIL,
       to: [to],
-      subject: 'Deine Microsite – Short-ID: ' + (shortId || '—'),
+      subject: 'Deine Handy-Seite ist bereit',
       html: htmlMail(micrositeUrl, shortId, ccpUrl),
     }),
   });

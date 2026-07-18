@@ -12,8 +12,9 @@ export interface AiChatMessage {
 export interface AiChatConfigPayload {
   profileTitle: string;
   accentColor: string;
+  surfaceColor?: string;
   theme: 'light' | 'dark';
-  fontStyle: 'luxury' | 'modern' | 'elegant';
+  fontStyle: 'luxury' | 'modern' | 'elegant' | 'display' | 'soft';
   profileIcon: string;
   profileLogoUrl?: string | null;
   slogan?: string;

@@ -16,23 +16,31 @@ Kurz:
 3. In der E-Mail-Vorlage (z. B. nach der Produktliste) den folgenden Code einfügen:
 
 ```liquid
+{% comment %} NUDAIM: Handy-Seite + Bearbeiten-Link nach Bestellung {% endcomment %}
 {% for line_item in line_items %}
   {% if line_item.properties['Microsite-URL'] != blank %}
-    <p><strong>Deine Microsite:</strong><br>
-    <a href="{{ line_item.properties['Microsite-URL'] }}">{{ line_item.properties['Microsite-URL'] }}</a></p>
-    <p><strong>Short-ID:</strong> {{ line_item.properties['Config-ID'] }}</p>
+    <hr style="border:none;border-top:1px solid #eee;margin:28px 0 20px;">
+    <p style="font-size:16px;margin:0 0 8px;"><strong>Deine Handy-Seite ist bereit</strong></p>
+    <p style="margin:0 0 12px;color:#444;">So sehen deine Kunden die Seite, wenn sie den Anhänger ans Handy halten:</p>
+    <p style="margin:0 0 8px;">
+      <a href="{{ line_item.properties['Microsite-URL'] }}" style="display:inline-block;background:#11235A;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;">Handy-Seite öffnen</a>
+    </p>
   {% endif %}
   {% if line_item.properties['_CCP-URL'] != blank %}
-    <p><strong>Kunden-Panel (Bearbeiten):</strong><br>
-    <a href="{{ line_item.properties['_CCP-URL'] }}">{{ line_item.properties['_CCP-URL'] }}</a></p>
-    <p style="font-size: 12px; color: #666;">Diesen Link nicht öffentlich teilen – er erlaubt Änderungen an deiner Microsite.</p>
+    <p style="font-size:16px;margin:24px 0 8px;"><strong>Seite später ändern?</strong></p>
+    <p style="margin:0 0 12px;color:#444;">Mit diesem privaten Link kannst du Texte, Links und Logo jederzeit anpassen:</p>
+    <p style="margin:0 0 8px;">
+      <a href="{{ line_item.properties['_CCP-URL'] }}" style="display:inline-block;background:#0D9488;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;">Seite bearbeiten</a>
+    </p>
+    <p style="font-size:12px;color:#666;margin:0;">Diesen Link bitte nicht öffentlich teilen.</p>
   {% endif %}
 {% endfor %}
 ```
 
-Dann erhält der Kunde Microsite, Short-ID und optional den CCP-Edit-Link.  
+Dann erhält der Kunde die öffentliche Handy-Seite und den privaten Bearbeiten-Link.  
 `_CCP-URL` enthält den Write-Token; die öffentliche `Microsite-URL` enthält ihn **nicht**.
 
+Fertiger Code auch in `lib/shopifyOrderEmailLiquid.ts` und im Shopify-Guide in der App.
 ---
 
 ## Option 2: Eigene E-Mail per Supabase Edge Function (Resend)

@@ -205,8 +205,8 @@ export const CcpPage: React.FC = () => {
         {!shortId && (
           <section className="card p-5">
             <p className="text-sm text-zinc-600">
-              Bitte den Link aus deiner Bestellbestätigung verwenden. Zum Bearbeiten brauchst du den
-              CCP-Link mit Token (Property <code className="text-xs bg-zinc-100 px-1 rounded">_CCP-URL</code>).
+              Bitte den Link aus deiner Bestellbestätigung verwenden („Seite bearbeiten“).
+              Der normale Link zur Handy-Seite reicht zum Anschauen – zum Ändern brauchst du den privaten Bearbeiten-Link.
             </p>
           </section>
         )}
@@ -214,7 +214,7 @@ export const CcpPage: React.FC = () => {
         {shortId && loading && (
           <div className="flex items-center justify-center py-12 gap-2 text-zinc-500">
             <Loader2 size={20} className="animate-spin" />
-            <span className="text-sm font-medium">Lade dein Profil…</span>
+            <span className="text-sm font-medium">Seite wird geladen…</span>
           </div>
         )}
 
@@ -229,10 +229,10 @@ export const CcpPage: React.FC = () => {
             <section className="card p-5">
               <h2 className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy flex items-center gap-2 mb-3">
                 <Smartphone size={18} />
-                Meine Microsite
+                Meine Handy-Seite
               </h2>
               <p className="text-sm text-zinc-500 mb-4">
-                Profil: <strong className="text-navy">{config.profileTitle}</strong>
+                Name: <strong className="text-navy">{config.profileTitle}</strong>
               </p>
               <div className="flex flex-wrap gap-2">
                 <a
@@ -255,9 +255,8 @@ export const CcpPage: React.FC = () => {
               </div>
               {!canEdit && (
                 <p className="mt-4 text-xs text-zinc-500 leading-relaxed">
-                  Zum Bearbeiten öffne den Link aus deiner Bestellmail (
-                  <code className="bg-zinc-100 px-1 rounded">_CCP-URL</code>
-                  ). Der öffentliche Microsite-Link allein reicht nicht.
+                  Zum Bearbeiten öffne den Button „Seite bearbeiten“ aus deiner Bestellmail.
+                  Der normale Handy-Seiten-Link allein reicht nicht.
                 </p>
               )}
             </section>

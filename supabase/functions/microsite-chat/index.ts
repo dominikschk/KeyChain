@@ -44,13 +44,14 @@ Wenn genug Infos da sind, setze ready=true und config:
 {
   "profileTitle": string (max 80),
   "accentColor": "#RRGGBB",
+  "surfaceColor": "#RRGGBB",
   "theme": "light" | "dark",
-  "fontStyle": "luxury" | "modern" | "elegant",
+  "fontStyle": "luxury" | "modern" | "elegant" | "display" | "soft",
   "profileIcon": einer von: briefcase, utensils, camera, dumbbell, heart, home, hammer, star, globe, user,
   "profileLogoUrl": string | null (nur https),
   "slogan": string,
   "blocks": [
-    { "type": "headline"|"magic_button"|"map"|"spacer", "title": string, "content": string, "buttonType"?: string, "settings"?: object }
+    { "type": "headline"|"text"|"magic_button"|"map"|"spacer", "title": string, "content": string, "buttonType"?: string, "settings"?: object }
   ]
 }
 
@@ -80,9 +81,13 @@ function sanitizeConfig(raw: unknown): Record<string, unknown> | null {
   const accent = String(c.accentColor ?? '#11235A');
   if (!/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(accent)) return null;
   const theme = c.theme === 'dark' ? 'dark' : 'light';
-  const fontStyle = ['luxury', 'modern', 'elegant'].includes(String(c.fontStyle))
+  const fontStyle = ['luxury', 'modern', 'elegant', 'display', 'soft'].includes(String(c.fontStyle))
     ? String(c.fontStyle)
     : 'modern';
+  let surface = String(c.surfaceColor ?? (theme === 'dark' ? '#0C0A09' : '#F8F5F0'));
+  if (!/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(surface)) {
+    surface = theme === 'dark' ? '#0C0A09' : '#F8F5F0';
+  }
   let logo: string | null = c.profileLogoUrl ? String(c.profileLogoUrl) : null;
   if (logo && !/^https:\/\//i.test(logo)) logo = null;
   const blocksIn = Array.isArray(c.blocks) ? c.blocks.slice(0, 12) : [];
@@ -105,6 +110,7 @@ function sanitizeConfig(raw: unknown): Record<string, unknown> | null {
   return {
     profileTitle: title,
     accentColor: accent,
+    surfaceColor: surface,
     theme,
     fontStyle,
     profileIcon: String(c.profileIcon ?? 'briefcase').slice(0, 32),

@@ -4,94 +4,29 @@ import { Canvas, useFrame, ThreeElements } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter';
-import { ModelConfig, SVGPathData, ActionIcon } from '../types';
-import { BlockRenderer } from './Microsite';
-import { resolveSurface } from '../lib/brandPalette';
-import { Globe, ShoppingCart, Info, Briefcase, User, Star, Mail, Phone, Instagram, Utensils, Shield, Camera, Dumbbell, Heart, Link as LinkIcon, Zap, Map as MapIcon, Clock, Calendar, Youtube, Video } from 'lucide-react';
+import { ModelConfig, SVGPathData } from '../types';
+import { Microsite } from './Microsite';
 
 // Fix for JSX intrinsic element type errors for @react-three/fiber
-// Correctly augmenting the global JSX namespace for Three.js elements recognition
 declare global {
   namespace JSX {
     interface IntrinsicElements extends ThreeElements {}
   }
 }
-
-const getLucideIcon = (name?: ActionIcon, size = 20) => {
-  switch (name) {
-    case 'globe': return <Globe size={size} />;
-    case 'shopping-cart': return <ShoppingCart size={size} />;
-    case 'info': return <Info size={size} />;
-    case 'briefcase': return <Briefcase size={size} />;
-    case 'user': return <User size={size} />;
-    case 'star': return <Star size={size} />;
-    case 'mail': return <Mail size={size} />;
-    case 'phone': return <Phone size={size} />;
-    case 'instagram': return <Instagram size={size} />;
-    case 'utensils': return <Utensils size={size} />;
-    case 'shield': return <Shield size={size} />;
-    case 'camera': return <Camera size={size} />;
-    case 'dumbbell': return <Dumbbell size={size} />;
-    case 'heart': return <Heart size={size} />;
-    case 'zap': return <Zap size={size} />;
-    case 'map': return <MapIcon size={size} />;
-    case 'clock': return <Clock size={size} />;
-    case 'calendar': return <Calendar size={size} />;
-    case 'youtube': return <Youtube size={size} />;
-    case 'video': return <Video size={size} />;
-    default: return <LinkIcon size={size} />;
-  }
-};
-
 const PhonePreview: React.FC<{ config: ModelConfig; googleLogoUrl?: string | null }> = ({ config, googleLogoUrl }) => {
-  const blocks = config.nfcBlocks || [];
-  const isDark = config.theme === 'dark';
-  const fontClass = config.fontStyle === 'luxury' ? 'font-sans font-medium' : config.fontStyle === 'elegant' ? 'font-headline' : 'font-sans';
-  const surface = resolveSurface(config.theme, config.accentColor, config.surfaceColor);
-
   return (
     <div className="absolute inset-0 z-[300] bg-white/40 backdrop-blur-md overflow-y-auto pt-10 pb-24 md:py-12 px-6 flex flex-col items-center">
-      <div className="w-full max-w-[280px] md:max-w-[340px] aspect-[9/18.5] bg-zinc-950 rounded-[3rem] border-[8px] border-zinc-900 shadow-[0_50px_100px_rgba(0,0,0,0.5)] relative flex flex-col ring-1 ring-white/10 shrink-0 overflow-hidden">
-        {/* Notch Area */}
-        <div className="h-7 flex items-center justify-center pt-1 shrink-0" style={{ backgroundColor: surface }}>
-          <div className="w-16 h-4 bg-zinc-900 rounded-full flex items-center justify-center border border-white/5" />
+      <div className="w-full max-w-[280px] md:max-w-[320px] aspect-[9/18.5] bg-zinc-950 rounded-[2.5rem] border-[8px] border-zinc-900 shadow-xl relative flex flex-col overflow-hidden ring-1 ring-white/10 shrink-0">
+        <div className="h-6 flex items-center justify-center shrink-0 bg-zinc-900">
+          <div className="w-14 h-3.5 bg-black rounded-full" />
         </div>
-        
-        {/* Screen Content */}
-        <div
-          className={`flex-1 overflow-y-auto space-y-3 pb-16 scroll-container min-h-0 ${fontClass}`}
-          style={{ backgroundColor: surface, color: isDark ? '#fff' : '#1a1a1a' }}
-        >
-           {config.headerImageUrl && (
-             <div className="w-full h-28 overflow-hidden mb-[-1.5rem] relative shrink-0">
-                <img src={config.headerImageUrl} className="w-full h-full object-cover" alt="Cover" />
-                <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, transparent, ${surface})` }} />
-             </div>
-           )}
-           <header className="flex flex-col items-center text-center space-y-2 pt-6 px-5 shrink-0">
-              <div className="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center border border-navy/5 relative z-10 transition-transform overflow-hidden">
-                {(googleLogoUrl || config.profileLogoUrl) ? (
-                   <img src={googleLogoUrl || config.profileLogoUrl} alt="" className="w-full h-full object-cover object-center" />
-                ) : (
-                  <div style={{ color: config.accentColor }}>
-                     {getLucideIcon(config.profileIcon, 28)}
-                  </div>
-                )}
-              </div>
-              <h1 className="font-headline text-base md:text-xl font-extrabold tracking-tight px-4 leading-tight" style={{ color: isDark ? '#fff' : config.accentColor }}>
-                {config.profileTitle}
-              </h1>
-           </header>
-           <div className="space-y-3 px-4 pb-8">
-              {blocks.map(block => (
-                 <BlockRenderer key={block.id} block={block} configId="preview" accentColor={config.accentColor} theme={config.theme} />
-              ))}
-           </div>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden bg-white min-h-0">
+          <div className="origin-top scale-[0.92] w-[108%] -ml-[4%]">
+            <Microsite config={config} googleLogoUrl={googleLogoUrl} embedded />
+          </div>
         </div>
-        
-        {/* Bottom Bar */}
-        <div className="h-5 flex items-center justify-center shrink-0" style={{ backgroundColor: surface }}>
-           <div className={`w-14 h-1 rounded-full ${isDark ? 'bg-white/10' : 'bg-navy/10'}`} />
+        <div className="h-4 flex items-center justify-center shrink-0 bg-zinc-900">
+          <div className="w-12 h-1 rounded-full bg-white/20" />
         </div>
       </div>
     </div>

@@ -6,12 +6,15 @@ import jsQR from 'jsqr';
 import { showError } from '../lib/utils';
 import { isValidEmail, toSafeHttpUrl } from '../lib/validation';
 import { brandButtonStyle, resolveSurface } from '../lib/brandPalette';
+import { fontClassFor, splitBlocksForLanding } from '../lib/siteLayouts';
 
 interface MicrositeProps {
   config: ModelConfig;
   error?: { title: string, msg: string } | null;
   /** Logo-URL von Google (Profilbild) – wird verwendet, wenn gesetzt. */
   googleLogoUrl?: string | null;
+  /** In Phone-Vorschau: kein Fullscreen-Footer, kein min-h-screen */
+  embedded?: boolean;
 }
 
 const getLucideIcon = (name?: ActionIcon, size = 20) => {
@@ -308,13 +311,15 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
   return null;
 };
 
-export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoUrl }) => {
+export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoUrl, embedded }) => {
   const params = new URLSearchParams(window.location.search);
   const currentId = params.get('id') || 'preview';
   const isDark = config.theme === 'dark';
-  const template = config.nfcTemplate || 'modern';
-  const fontClass = config.fontStyle === 'luxury' ? 'font-sans font-medium' : config.fontStyle === 'elegant' ? 'font-headline' : 'font-sans';
   const surface = resolveSurface(config.theme, config.accentColor, config.surfaceColor);
+  const textColor = config.textColor || (isDark ? '#F5F5F4' : '#1C1917');
+  const fontClass = fontClassFor(config.fontStyle);
+  const layoutMode = config.layoutMode || 'landing';
+  const { heroLine, stories, actions, extras } = splitBlocksForLanding(config.nfcBlocks || []);
 
   if (error) {
     return (
@@ -322,7 +327,7 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
         <div className="bg-red-50 p-10 rounded-[3rem] border border-red-100 shadow-2xl space-y-6">
            <AlertTriangle size={64} className="text-red-500 mx-auto animate-bounce" />
            <div className="space-y-2">
-              <h2 className="font-headline text-3xl font-extrabold uppercase tracking-tight">Profil inaktiv</h2>
+              <h2 className="font-headline text-3xl font-extrabold uppercase tracking-tight">Seite nicht verfügbar</h2>
               <p className="text-zinc-500 text-sm max-w-xs mx-auto leading-relaxed">{error.msg}</p>
            </div>
            <button onClick={() => window.location.reload()} className="px-8 py-3 bg-navy text-white rounded-xl font-black uppercase text-[10px] tracking-widest">Erneut versuchen</button>
@@ -331,58 +336,141 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
     );
   }
 
-  const isMinimal = template === 'minimal';
+  if (layoutMode === 'stack') {
+    return (
+      <div
+        className={`${embedded ? 'min-h-0 pb-6' : 'min-h-screen pb-40'} w-full selection:bg-petrol flex flex-col items-center overflow-y-auto overflow-x-hidden ${fontClass}`}
+        style={{ backgroundColor: surface, color: textColor }}
+      >
+        <header className="px-6 flex flex-col items-center text-center w-full relative pt-14 pb-8">
+          <div className="w-24 h-24 rounded-3xl bg-white shadow-lg flex items-center justify-center border border-black/5 overflow-hidden relative z-10">
+            {(googleLogoUrl || config.profileLogoUrl) ? (
+              <img src={googleLogoUrl || config.profileLogoUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div style={{ color: config.accentColor }}>{getLucideIcon(config.profileIcon, 40)}</div>
+            )}
+          </div>
+          <h1 className="mt-6 text-3xl font-bold tracking-tight px-4" style={{ color: isDark ? '#fff' : config.accentColor }}>
+            {config.profileTitle}
+          </h1>
+        </header>
+        <main className="max-w-md w-full px-5 flex-1 relative z-10 space-y-4 pb-8">
+          {config.nfcBlocks.map((block) => (
+            <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
+          ))}
+        </main>
+      </div>
+    );
+  }
 
+  // Landing = Mini-Website mit Hero + Sections
   return (
     <div
-      className={`min-h-screen w-full selection:bg-petrol pb-40 flex flex-col items-center overflow-y-auto overflow-x-hidden ${fontClass}`}
-      style={{ backgroundColor: surface, color: isDark ? '#fff' : '#1a1a1a' }}
+      className={`${embedded ? 'min-h-0 pb-8' : 'min-h-screen pb-36'} w-full selection:bg-petrol overflow-y-auto overflow-x-hidden ${fontClass}`}
+      style={{ backgroundColor: surface, color: textColor }}
     >
-      <header className={`px-6 flex flex-col items-center text-center w-full relative transition-all duration-700 ${isMinimal ? 'pt-10 pb-6' : 'pt-14 pb-8'}`}>
+      {/* Hero */}
+      <section className="relative w-full overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-90"
+          style={{
+            background: config.headerImageUrl
+              ? undefined
+              : `linear-gradient(165deg, ${config.accentColor}22 0%, ${surface} 55%, ${surface} 100%)`,
+          }}
+        />
         {config.headerImageUrl && (
-          <div className="absolute top-0 left-0 w-full h-56 z-0 overflow-hidden">
-             <img src={config.headerImageUrl} className="w-full h-full object-cover opacity-50" alt="" />
-             <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, transparent, ${surface})` }} />
-          </div>
+          <>
+            <img src={config.headerImageUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-40" />
+            <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, transparent 20%, ${surface})` }} />
+          </>
         )}
-        
-        <div className={`bg-white shadow-lg flex items-center justify-center border border-black/5 relative z-10 overflow-hidden
-          ${isMinimal ? 'w-20 h-20 rounded-2xl' : 'w-24 h-24 rounded-3xl'}`}>
-           {(googleLogoUrl || config.profileLogoUrl) ? (
-             <img src={googleLogoUrl || config.profileLogoUrl} alt="" className="w-full h-full object-cover object-center" />
-           ) : (
-             <div style={{ color: config.accentColor }}>
-                {getLucideIcon(config.profileIcon, isMinimal ? 32 : 40)}
-             </div>
-           )}
+        <div className="relative z-10 max-w-lg mx-auto px-6 pt-16 pb-10 flex flex-col items-center text-center">
+          <div className="w-28 h-28 rounded-[1.75rem] bg-white shadow-xl flex items-center justify-center overflow-hidden border border-black/5 ring-4 ring-white/40">
+            {(googleLogoUrl || config.profileLogoUrl) ? (
+              <img src={googleLogoUrl || config.profileLogoUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div style={{ color: config.accentColor }}>{getLucideIcon(config.profileIcon, 44)}</div>
+            )}
+          </div>
+          <h1
+            className="mt-7 text-4xl sm:text-[2.75rem] font-bold tracking-tight leading-[1.1] px-2"
+            style={{ color: isDark ? '#fff' : config.accentColor }}
+          >
+            {config.profileTitle}
+          </h1>
+          {(heroLine?.title || heroLine?.content) && (
+            <p className="mt-4 text-lg sm:text-xl leading-snug max-w-sm opacity-90" style={{ color: textColor }}>
+              {heroLine.title || heroLine.content}
+            </p>
+          )}
         </div>
-        
-        <div className={`space-y-2 relative z-10 ${isMinimal ? 'mt-5' : 'mt-6'}`}>
-           <h1
-             className={`font-headline font-extrabold tracking-tight leading-tight px-4 ${isMinimal ? 'text-2xl' : 'text-3xl sm:text-4xl'}`}
-             style={{ color: isDark ? '#fff' : config.accentColor }}
-           >
-               {config.profileTitle}
-           </h1>
-        </div>
-      </header>
+      </section>
 
-      <main className="max-w-md w-full px-5 flex-1 relative z-10 space-y-4 pb-8">
-        {config.nfcBlocks.map(block => (
-          <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
-        ))}
-      </main>
+      <div className="max-w-lg mx-auto px-5 space-y-6 pb-10 relative z-10 -mt-2">
+        {/* Story / Text sections */}
+        {stories.length > 0 && (
+          <section
+            className="rounded-3xl px-5 py-6 space-y-5 shadow-sm border"
+            style={{
+              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+              borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+            }}
+          >
+            {stories.map((block) => (
+              <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
+            ))}
+          </section>
+        )}
 
-      <footer className="fixed bottom-0 left-0 right-0 p-6 flex justify-center pointer-events-none z-[200]">
-        <button 
-          onClick={() => window.location.href = window.location.origin}
-          className="px-8 py-4 rounded-full shadow-xl flex items-center gap-3 hover:scale-105 transition-all pointer-events-auto font-semibold text-sm active:scale-95"
-          style={{ backgroundColor: config.accentColor, color: '#fff' }}
-        >
-          <Smartphone size={18} />
-          <span>Eigene NFeC erstellen</span>
-        </button>
-      </footer>
+        {/* Actions grid */}
+        {actions.length > 0 && (
+          <section
+            className="rounded-3xl px-4 py-5 shadow-sm border"
+            style={{
+              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+              borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+            }}
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.15em] opacity-50 px-2 mb-3">Schnell zu</p>
+            <div className={`grid gap-3 ${actions.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+              {actions.map((block) => (
+                <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Map / extras */}
+        {extras.length > 0 && (
+          <section className="space-y-3">
+            {extras.map((block) => (
+              <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
+            ))}
+          </section>
+        )}
+
+        {/* Fallback if empty */}
+        {!heroLine && stories.length === 0 && actions.length === 0 && extras.length === 0 && (
+          <p className="text-center text-sm opacity-50 py-8">
+            {embedded ? 'Noch leer – links Inhalte hinzufügen.' : 'Bald findest du hier mehr Infos.'}
+          </p>
+        )}
+      </div>
+
+      {!embedded && (
+        <footer className="fixed bottom-0 left-0 right-0 p-5 flex justify-center pointer-events-none z-[200]">
+          <button
+            type="button"
+            onClick={() => { window.location.href = window.location.origin; }}
+            className="px-7 py-3.5 rounded-full shadow-xl flex items-center gap-3 hover:scale-105 transition-all pointer-events-auto font-semibold text-sm active:scale-95"
+            style={{ backgroundColor: config.accentColor, color: '#fff' }}
+          >
+            <Smartphone size={18} />
+            <span>Eigenen Anhänger gestalten</span>
+          </button>
+        </footer>
+      )}
     </div>
   );
 };

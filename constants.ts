@@ -66,8 +66,10 @@ export const DEFAULT_CONFIG: ModelConfig = {
   profileIcon: 'briefcase',
   accentColor: '#11235A',
   surfaceColor: '#F8F5F0',
-  fontStyle: 'luxury',
+  textColor: '#1C1917',
+  fontStyle: 'modern',
   theme: 'light',
+  layoutMode: 'landing',
   nfcBlocks: [
     { 
       id: 'sb1', 

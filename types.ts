@@ -10,8 +10,9 @@ export type SavingStep = 'idle' | 'screenshot' | 'upload' | 'db' | 'done';
 export type StampValidation = 'pattern' | 'long_press' | 'daily_limit' | 'qr_code';
 export type ActionIcon = 'link' | 'globe' | 'shopping-cart' | 'info' | 'briefcase' | 'user' | 'star' | 'mail' | 'phone' | 'instagram' | 'utensils' | 'shield' | 'camera' | 'dumbbell' | 'heart' | 'cross' | 'zap' | 'map' | 'clock' | 'calendar' | 'home' | 'music' | 'hammer' | 'stethoscope' | 'youtube' | 'video';
 
-export type FontStyle = 'luxury' | 'modern' | 'elegant';
+export type FontStyle = 'luxury' | 'modern' | 'elegant' | 'display' | 'soft';
 export type ProfileTheme = 'light' | 'dark';
+export type LayoutMode = 'stack' | 'landing';
 
 export interface NFCBlock {
   id: string;
@@ -64,13 +65,17 @@ export interface ModelConfig {
   // Digital Profile Customization
   profileTitle: string;
   profileIcon: ActionIcon;
-  profileLogoUrl?: string; // Neues Feld für das digitale Logo
+  profileLogoUrl?: string;
   headerImageUrl?: string;
   accentColor: string;
   /** Seitenhintergrund der Microsite (Hex), optional */
   surfaceColor?: string;
+  /** Fließtext-Farbe */
+  textColor?: string;
   fontStyle: FontStyle;
   theme: ProfileTheme;
+  /** stack = klassische Kacheln, landing = Mini-Website mit Hero/Sections */
+  layoutMode?: LayoutMode;
 }
 
 export interface SVGPathData {

@@ -73,6 +73,8 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     theme: (configRow.theme as ModelConfig['theme']) ?? base.theme,
     fontStyle: (configRow.font_style as ModelConfig['fontStyle']) ?? base.fontStyle,
     surfaceColor: (plate.surfaceColor as string | undefined) ?? base.surfaceColor,
+    textColor: (plate.textColor as string | undefined) ?? base.textColor,
+    layoutMode: (plate.layoutMode as ModelConfig['layoutMode']) ?? base.layoutMode ?? 'landing',
     nfcBlocks: blocksError ? [] : (blocks || []).map((b: BlockRow) => mapBlockRow(b)),
     baseType: (plate.baseType as ModelConfig['baseType']) ?? base.baseType,
     plateWidth: Number(plate.plateWidth) ?? base.plateWidth,
