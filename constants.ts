@@ -37,7 +37,9 @@ export function buildShopifyCartUrl(
   shortId: string,
   previewImageUrl: string,
   baseUrl?: string,
-  writeToken?: string
+  writeToken?: string,
+  /** Optional: echte Ziel-URL bei „eigene Website“ (Chip bleibt trotzdem NUDAIM-Shortlink). */
+  destinationUrl?: string
 ): string {
   const origin = baseUrl ? baseUrl.replace(/\/$/, '') : '';
   const params: Record<string, string> = {
@@ -50,6 +52,9 @@ export function buildShopifyCartUrl(
     const micrositeUrl = buildMicrositeUrl(origin, shortId);
     // Eine sichtbare Property (deutsch) – kein zweites Synonym im Checkout
     params['properties[Handy-Seite]'] = micrositeUrl;
+    if (destinationUrl?.trim()) {
+      params['properties[Ziel-URL]'] = destinationUrl.trim();
+    }
     // Edit: _CCP-URL oft im Warenkorb versteckt; Bearbeiten-Link sichtbar in Order/Mail
     if (writeToken && writeToken.length >= 32) {
       const ccpUrl = buildCcpEditUrl(origin, shortId, writeToken);
@@ -71,6 +76,7 @@ export const DEFAULT_CONFIG: ModelConfig = {
   logoPosY: -2,
   logoRotation: 0,
   logoColor: '#12A9E0',
+  plateColor: '#F8F5F0',
   mirrorX: false,
   hasChain: true,
   eyeletPosX: -20,
@@ -84,6 +90,8 @@ export const DEFAULT_CONFIG: ModelConfig = {
   fontStyle: 'modern',
   theme: 'light',
   layoutMode: 'landing',
+  landingMode: 'microsite',
+  externalUrl: '',
   nfcBlocks: [
     { 
       id: 'sb1', 

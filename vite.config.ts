@@ -8,6 +8,17 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: 'index.html',
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/three') || id.includes('@react-three')) {
+            return 'three';
+          }
+          if (id.includes('imagetracerjs')) {
+            return 'imagetracer';
+          }
+        },
+      },
     },
+    chunkSizeWarningLimit: 900,
   },
 });

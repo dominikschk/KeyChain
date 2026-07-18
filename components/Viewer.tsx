@@ -14,6 +14,9 @@ declare global {
   }
 }
 const PhonePreview: React.FC<{ config: ModelConfig; googleLogoUrl?: string | null }> = ({ config, googleLogoUrl }) => {
+  const isExternal = config.landingMode === 'external';
+  const dest = (config.externalUrl || '').trim();
+
   return (
     <div className="absolute inset-0 z-[300] bg-white/40 backdrop-blur-md overflow-y-auto pt-10 pb-24 md:py-12 px-6 flex flex-col items-center">
       <div className="w-full max-w-[280px] md:max-w-[320px] aspect-[9/18.5] bg-zinc-950 rounded-[2.5rem] border-[8px] border-zinc-900 shadow-xl relative flex flex-col overflow-hidden ring-1 ring-white/10 shrink-0">
@@ -21,9 +24,21 @@ const PhonePreview: React.FC<{ config: ModelConfig; googleLogoUrl?: string | nul
           <div className="w-14 h-3.5 bg-black rounded-full" />
         </div>
         <div className="flex-1 overflow-y-auto overflow-x-hidden bg-white min-h-0">
-          <div className="origin-top scale-[0.92] w-[108%] -ml-[4%]">
-            <Microsite config={config} googleLogoUrl={googleLogoUrl} embedded />
-          </div>
+          {isExternal ? (
+            <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center bg-cream">
+              <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Kunden landen hier</p>
+              <p className="text-sm font-bold text-navy break-all leading-snug">
+                {dest || 'Noch keine Adresse'}
+              </p>
+              <p className="text-[10px] text-zinc-500 leading-snug">
+                Website, Instagram, Google-Profil oder Shop – was du verlinkst.
+              </p>
+            </div>
+          ) : (
+            <div className="origin-top scale-[0.92] w-[108%] -ml-[4%]">
+              <Microsite config={config} googleLogoUrl={googleLogoUrl} embedded />
+            </div>
+          )}
         </div>
         <div className="h-4 flex items-center justify-center shrink-0 bg-zinc-900">
           <div className="w-12 h-1 rounded-full bg-white/20" />
@@ -63,8 +78,18 @@ const BaseModel = forwardRef<THREE.Mesh, { config: ModelConfig, showNFC?: boolea
   return (
     <group>
       <mesh ref={ref} geometry={geometry} castShadow receiveShadow>
-        <meshStandardMaterial color="#ffffff" roughness={0.15} metalness={0.05} />
+        <meshStandardMaterial
+          color={config.plateColor || '#F8F5F0'}
+          roughness={0.22}
+          metalness={0.08}
+        />
       </mesh>
+      {config.hasChain !== false && (
+        <mesh position={[-20, config.plateDepth / 2, 20]} castShadow>
+          <torusGeometry args={[3.2, 0.55, 16, 48]} />
+          <meshStandardMaterial color="#C0C0C0" metalness={0.95} roughness={0.18} />
+        </mesh>
+      )}
       <group position={[0, config.plateDepth + 0.12, 0]}>
         <mesh rotation={[-Math.PI/2, 0, 0]}>
           <circleGeometry args={[11, 64]} />
@@ -127,7 +152,7 @@ const LogoGroup: React.FC<{ elements: SVGPathData[]; config: ModelConfig; plateR
   return (
     <group 
       position={[config.logoPosX, 0, config.logoPosY]} 
-      scale={[config.logoScale, 1, config.logoScale]} 
+      scale={[config.mirrorX ? -config.logoScale : config.logoScale, 1, config.logoScale]} 
       rotation={[0, THREE.MathUtils.degToRad(config.logoRotation), 0]} 
       ref={groupRef}
     >
@@ -175,7 +200,22 @@ export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string>; export
         cam.position.set(px, py, pz);
         cam.lookAt(new THREE.Vector3(tx, ty, tz));
         gl.render(scene, camera);
-        const dataUrl = gl.domElement.toDataURL('image/png');
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          gl.domElement.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('Screenshot generation failed'));
+                return;
+              }
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result || ''));
+              reader.onerror = () => reject(new Error('Screenshot lesen fehlgeschlagen'));
+              reader.readAsDataURL(blob);
+            },
+            'image/jpeg',
+            0.82
+          );
+        });
         cam.position.copy(savedPosition);
         cam.quaternion.copy(savedQuaternion);
         if (!dataUrl || dataUrl === 'data:,') {
@@ -212,17 +252,27 @@ export const Viewer = forwardRef<{ takeScreenshot: () => Promise<string>; export
   }));
 
   return (
-    <div className="w-full h-full relative bg-cream overflow-hidden">
+    <div
+      className="w-full h-full relative overflow-hidden"
+      style={{
+        background:
+          'radial-gradient(ellipse at 30% 20%, #ffffff 0%, #F8F5F0 45%, #E8E4DC 100%)',
+      }}
+    >
       <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true }} onCreated={(state) => { r3fState.current = { gl: state.gl, scene: state.scene, camera: state.camera }; }}>
         <PerspectiveCamera makeDefault position={[50, 38, 50]} fov={40} />
         <OrbitControls makeDefault enableDamping minDistance={30} maxDistance={150} maxPolarAngle={Math.PI/2.1} target={[0, 8, 0]} />
-        <ambientLight intensity={1.8} />
-        <spotLight position={[50, 100, 50]} angle={0.3} penumbra={1} intensity={4} castShadow />
+        <ambientLight intensity={1.6} />
+        <spotLight position={[50, 100, 50]} angle={0.35} penumbra={1} intensity={3.6} castShadow />
+        <directionalLight position={[-40, 60, -20]} intensity={0.45} />
         <BaseModel ref={plateRef} config={config} />
         {svgElements && <LogoGroup elements={svgElements} config={config} plateRef={plateRef} />}
-        <ContactShadows position={[0, -0.01, 0]} opacity={0.4} scale={100} blur={2} far={20} />
+        <ContactShadows position={[0, -0.01, 0]} opacity={0.35} scale={100} blur={2.2} far={20} />
       </Canvas>
       {showNFCPreview && <PhonePreview config={config} googleLogoUrl={googleLogoUrl} />}
+      <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-[10px] font-medium text-zinc-500/80 bg-white/70 backdrop-blur px-3 py-1.5 rounded-full">
+        Drehen · Zoomen · Anfassen
+      </p>
     </div>
   );
 });

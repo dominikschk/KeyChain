@@ -75,6 +75,8 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     surfaceColor: (plate.surfaceColor as string | undefined) ?? base.surfaceColor,
     textColor: (plate.textColor as string | undefined) ?? base.textColor,
     layoutMode: (plate.layoutMode as ModelConfig['layoutMode']) ?? base.layoutMode ?? 'landing',
+    landingMode: (plate.landingMode as ModelConfig['landingMode']) === 'external' ? 'external' : 'microsite',
+    externalUrl: typeof plate.externalUrl === 'string' ? plate.externalUrl : '',
     nfcBlocks: blocksError ? [] : (blocks || []).map((b: BlockRow) => mapBlockRow(b)),
     baseType: (plate.baseType as ModelConfig['baseType']) ?? base.baseType,
     plateWidth: Number(plate.plateWidth) ?? base.plateWidth,
@@ -82,10 +84,13 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     plateDepth: Number(plate.plateDepth) ?? base.plateDepth,
     logoScale: Number(plate.logoScale) ?? base.logoScale,
     logoColor: (plate.logoColor as string) ?? base.logoColor,
+    plateColor: (plate.plateColor as string) ?? base.plateColor ?? '#F8F5F0',
     logoDepth: Number(plate.logoDepth) ?? base.logoDepth,
     logoPosX: Number(plate.logoPosX) ?? base.logoPosX,
     logoPosY: Number(plate.logoPosY) ?? base.logoPosY,
     logoRotation: Number(plate.logoRotation) ?? base.logoRotation,
+    mirrorX: plate.mirrorX === true,
+    hasChain: plate.hasChain !== false,
   };
 
   const logoSvg = (plate.logo_svg as string | undefined) || null;
@@ -197,6 +202,26 @@ export async function replaceConfigBlocks(
     p_config_id: configId,
     p_write_token: writeToken,
     p_blocks: blocks,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Landing-Ziel setzen (RPC – write_token; nur plate_data.landingMode/externalUrl).
+ */
+export async function updateLandingTarget(
+  configId: string,
+  writeToken: string,
+  landingMode: 'microsite' | 'external',
+  externalUrl: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: 'Supabase nicht konfiguriert.' };
+  const { error } = await supabase.rpc('update_nfc_landing_target', {
+    p_config_id: configId,
+    p_write_token: writeToken,
+    p_landing_mode: landingMode,
+    p_external_url: externalUrl,
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true };

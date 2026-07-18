@@ -3,15 +3,14 @@
  */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Sparkles, Send, Loader2, X, RotateCcw, CheckCircle2, Wrench, ImagePlus } from 'lucide-react';
-import type { ModelConfig, NFCBlock, ActionIcon } from '../types';
+import type { ModelConfig } from '../types';
 import {
   advanceChat,
   createChatSession,
   getStepMeta,
   type ChatSession,
 } from '../lib/micrositeChatEngine';
-import { sendMicrositeChat } from '../lib/micrositeChatApi';
-import { generateSecureKey, showError, resetFileInput } from '../lib/utils';
+import { showError, resetFileInput } from '../lib/utils';
 import { SITE_TEMPLATES } from '../lib/siteLayouts';
 import { supabase } from '../lib/supabase';
 import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
@@ -25,50 +24,10 @@ interface MicrositeChatProps {
   onContinueManual?: () => void;
   /** Zur Hardware-Phase (Schlüsselanhänger) */
   onContinueToHardware?: () => void;
+  /** Direkt bestellen (nach Chip-Link) */
+  onContinueToOrder?: () => void;
   /** panel = im Layout eingebettet; modal = Vollbild-Overlay */
   variant?: 'panel' | 'modal';
-}
-
-function applyAiPayload(
-  base: ModelConfig,
-  payload: NonNullable<Awaited<ReturnType<typeof sendMicrositeChat>>>['config']
-): ModelConfig | null {
-  if (!payload) return null;
-  const blocks: NFCBlock[] = (payload.blocks || []).map((b) => {
-    const block: NFCBlock = {
-      id: crypto.randomUUID(),
-      type: (b.type as NFCBlock['type']) || 'magic_button',
-      title: b.title || '',
-      content: b.content || '',
-      buttonType: b.buttonType as NFCBlock['buttonType'],
-      settings: b.settings as NFCBlock['settings'],
-    };
-    if (block.buttonType === 'stamp_card' && !block.settings?.secretKey) {
-      block.settings = {
-        ...block.settings,
-        slots: block.settings?.slots ?? 10,
-        secretKey: generateSecureKey(),
-      };
-    }
-    return block;
-  });
-
-  const theme = payload.theme === 'dark' ? 'dark' : 'light';
-  return {
-    ...base,
-    profileTitle: payload.profileTitle,
-    accentColor: payload.accentColor,
-    theme,
-    fontStyle: payload.fontStyle,
-    profileIcon: (payload.profileIcon as ActionIcon) || base.profileIcon,
-    profileLogoUrl: payload.profileLogoUrl || base.profileLogoUrl,
-    layoutMode: 'landing',
-    surfaceColor:
-      payload.surfaceColor ||
-      (theme === 'dark' ? '#0C0A09' : base.surfaceColor || '#F8F5F0'),
-    textColor: theme === 'dark' ? '#F5F5F4' : '#1C1917',
-    nfcBlocks: blocks.length ? blocks : base.nfcBlocks,
-  };
 }
 
 export const MicrositeChat: React.FC<MicrositeChatProps> = ({
@@ -77,6 +36,7 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
   onClose,
   onContinueManual,
   onContinueToHardware,
+  onContinueToOrder,
   variant = 'panel',
 }) => {
   const [session, setSession] = useState<ChatSession>(() => createChatSession());
@@ -171,48 +131,19 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
     if (!text || busy) return;
     setInput('');
     setBusy(true);
-
     try {
-      const history = [
-        ...session.messages.map((m) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        })),
-        { role: 'user' as const, content: text },
-      ];
-      const ai = await sendMicrositeChat(history);
-
-      if (ai && !ai.fallback && ai.message) {
-        const nextMessages = [
-          ...session.messages,
-          { id: crypto.randomUUID(), role: 'user' as const, content: text },
-          { id: crypto.randomUUID(), role: 'assistant' as const, content: ai.message },
-        ];
-        setSession((s) => ({
-          ...s,
-          step: ai.ready ? 'done' : s.step,
-          messages: nextMessages,
-        }));
-        if (ai.ready && ai.config) {
-          const next = applyAiPayload(configRef.current, ai.config);
-          if (next) {
-            if (ai.config.slogan && next.nfcBlocks[0]?.type === 'headline') {
-              next.nfcBlocks = next.nfcBlocks.map((b, i) =>
-                i === 0 ? { ...b, title: ai.config!.slogan || b.title } : b
-              );
-            }
-            onApplyConfig(next);
-            setAppliedOnce(true);
-            setStatusLine('Vorschlag übernommen – rechts prüfen.');
-          }
-        }
-        return;
-      }
-
-      if (ai?.fallback) {
-        setStatusLine('Wir machen es Schritt für Schritt – ohne Cloud-KI.');
-      }
+      // Instant: geführter Flow lokal – kein Warten auf Cloud-KI
       runGuided(text);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleChip = (chip: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      runGuided(chip);
     } finally {
       setBusy(false);
     }
@@ -350,23 +281,41 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
                 </p>
               </div>
             </div>
+            {onContinueToOrder && (
+              <button
+                type="button"
+                onClick={onContinueToOrder}
+                className="w-full min-h-[48px] px-4 rounded-xl bg-navy text-white font-semibold flex items-center justify-center gap-2"
+              >
+                Passt – bestellen
+              </button>
+            )}
+            {!onContinueToOrder && onContinueToHardware && (
+              <button
+                type="button"
+                onClick={onContinueToHardware}
+                className="w-full min-h-[48px] px-4 rounded-xl bg-navy text-white font-semibold flex items-center justify-center gap-2"
+              >
+                Passt – weiter zum Anhänger →
+              </button>
+            )}
             {onContinueManual && (
               <button
                 type="button"
                 onClick={onContinueManual}
-                className="w-full min-h-[48px] px-4 rounded-xl bg-navy text-white font-semibold flex items-center justify-center gap-2"
+                className="w-full min-h-[48px] px-4 rounded-xl border-2 border-navy text-navy font-semibold flex items-center justify-center gap-2"
               >
                 <Wrench size={18} />
                 Texte & Links anpassen
               </button>
             )}
-            {onContinueToHardware && (
+            {onContinueToOrder && onContinueToHardware && (
               <button
                 type="button"
                 onClick={onContinueToHardware}
-                className="w-full min-h-[48px] px-4 rounded-xl border-2 border-navy text-navy font-semibold flex items-center justify-center gap-2"
+                className="w-full min-h-[44px] px-4 rounded-xl border border-zinc-200 text-navy font-semibold text-sm"
               >
-                Passt – weiter zum Anhänger →
+                ← Zurück zum Anhänger
               </button>
             )}
           </div>
@@ -381,7 +330,7 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
               key={chip}
               type="button"
               disabled={busy}
-              onClick={() => void handleSend(chip)}
+              onClick={() => handleChip(chip)}
               className="min-h-[44px] px-4 rounded-full bg-petrol/10 text-petrol text-sm font-semibold hover:bg-petrol/20 disabled:opacity-40 active:scale-[0.98]"
             >
               {chip}

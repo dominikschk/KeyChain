@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { ModelConfig, SVGPathData, NFCBlock, Department, ActionIcon, MagicButtonType, FontStyle } from '../types';
-import { Box, Trash2, Edit3, Link as LinkIcon, Image as ImageIcon, Sliders, Award, MessageCircle, Globe, ShoppingCart, Info, User, Mail, Phone, Loader2, Instagram, Utensils, Shield, Layout, Camera, Dumbbell, Heart, ArrowLeft, RefreshCw, Star, MapPin, Wifi, CreditCard, Briefcase, Sparkles, Home, Music, Hammer, Stethoscope, Calendar, Youtube, Video, Building2, Copy, ChevronUp, ChevronDown, Sun, Moon } from 'lucide-react';
+import { ModelConfig, NFCBlock, Department, ActionIcon, MagicButtonType, FontStyle } from '../types';
+import { Box, Trash2, Edit3, Link as LinkIcon, Image as ImageIcon, Sliders, Award, MessageCircle, Globe, ShoppingCart, Info, User, Mail, Phone, Loader2, Instagram, Utensils, Shield, Layout, Camera, Dumbbell, Heart, ArrowLeft, RefreshCw, Star, MapPin, Wifi, CreditCard, Briefcase, Sparkles, Home, Music, Hammer, Stethoscope, Calendar, Youtube, Video, Building2, Copy, ChevronUp, ChevronDown, Sun, Moon, RotateCw, FlipHorizontal2, Link2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { generateSecureKey, showError, resetFileInput } from '../lib/utils';
 import { validateImageFile, isValidEmail, normalizePhoneInput } from '../lib/validation';
@@ -12,9 +12,11 @@ interface ControlsProps {
   activeDept: Department;
   config: ModelConfig;
   setConfig: React.Dispatch<React.SetStateAction<ModelConfig>>;
-  svgElements: SVGPathData[] | null;
+  hasLogo?: boolean;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onUpdateColor: (id: string, color: string) => void;
+  onApplyTextEngrave?: (text: string) => Promise<void>;
+  logoBusy?: boolean;
+  onUpdateColor?: (id: string, color: string) => void;
 }
 
 const IconSelector: React.FC<{ selected: ActionIcon; onSelect: (i: ActionIcon) => void }> = ({ selected, onSelect }) => {
@@ -205,7 +207,9 @@ const PropertyPanel: React.FC<{ block: NFCBlock; onUpdate: (u: Partial<NFCBlock>
   );
 };
 
-export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfig, svgElements, onUpload, onUpdateColor }) => {
+export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfig, hasLogo = false, onUpload, onApplyTextEngrave, logoBusy = false }) => {
+  const [engraveText, setEngraveText] = useState('');
+  const [showFineTune, setShowFineTune] = useState(false);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -308,53 +312,239 @@ export const Controls: React.FC<ControlsProps> = ({ activeDept, config, setConfi
   };
 
   if (activeDept === '3d') {
+    const plateMaterials: { id: string; name: string; color: string }[] = [
+      { id: 'snow', name: 'Schnee', color: '#F8F5F0' },
+      { id: 'graphite', name: 'Graphit', color: '#2A2A2A' },
+      { id: 'navy', name: 'Navy', color: '#11235A' },
+      { id: 'sand', name: 'Sand', color: '#D6C3A8' },
+      { id: 'forest', name: 'Forest', color: '#1F4D3A' },
+    ];
+    const logoSwatches: { name: string; color: string }[] = [
+      { name: 'Petrol', color: '#12A9E0' },
+      { name: 'Navy', color: '#11235A' },
+      { name: 'Gold', color: '#d4af37' },
+      { name: 'Rot', color: '#ff4d4d' },
+      { name: 'Grün', color: '#2ecc71' },
+      { name: 'Schwarz', color: '#111111' },
+      { name: 'Weiß', color: '#fdfcf8' },
+    ];
+    const looks: { id: string; label: string; hint: string; scale: number; depth: number }[] = [
+      { id: 'flat', label: 'Flach', hint: 'dezent', scale: 0.85, depth: 0.6 },
+      { id: 'classic', label: 'Klassisch', hint: 'Standard', scale: 1, depth: 1.5 },
+      { id: 'bold', label: 'Kräftig', hint: 'tief', scale: 1.15, depth: 2.4 },
+    ];
+    const activeLook =
+      looks.find(
+        (l) =>
+          Math.abs(l.scale - config.logoScale) < 0.05 &&
+          Math.abs(l.depth - config.logoDepth) < 0.2
+      )?.id ?? null;
+
     return (
-      <div className="space-y-6">
-        <div className="card p-4 sm:p-5 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-petrol/15 flex items-center justify-center shrink-0"><Box size={24} className="text-petrol" /></div>
-          <div className="min-w-0">
-            <p className="text-[9px] font-black uppercase text-petrol tracking-wider">3D Branding</p>
-            <p className="text-[10px] font-medium text-zinc-500 mt-0.5">Logo & Material</p>
+      <div className="space-y-5">
+        <div className="relative overflow-hidden rounded-2xl border border-navy/10 bg-gradient-to-br from-navy via-[#16306F] to-petrol p-4 sm:p-5 text-white shadow-sm">
+          <div className="absolute -right-6 -top-8 w-28 h-28 rounded-full bg-white/10 blur-2xl" aria-hidden />
+          <div className="relative flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center shrink-0 backdrop-blur">
+              <Box size={22} className="text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/70">Dein Produkt</p>
+              <p className="text-base font-extrabold leading-tight mt-0.5">Schlüsselanhänger</p>
+              <p className="text-[11px] text-white/75 mt-1 leading-snug">
+                Logo drauf · Farben tippen · fertig – ganz ohne 3D
+              </p>
+            </div>
+          </div>
+          <div className="relative mt-4 flex gap-2">
+            <span className={`flex-1 text-center text-[9px] font-bold uppercase tracking-wider py-2 rounded-lg ${hasLogo ? 'bg-white text-navy' : 'bg-white/15 text-white'}`}>
+              {hasLogo ? 'Logo ✓' : '1 Logo'}
+            </span>
+            <span className="flex-1 text-center text-[9px] font-bold uppercase tracking-wider py-2 rounded-lg bg-white/15 text-white">
+              2 Look
+            </span>
+            <span className="flex-1 text-center text-[9px] font-bold uppercase tracking-wider py-2 rounded-lg bg-white/15 text-white">
+              3 Fertig
+            </span>
           </div>
         </div>
 
         <div className="space-y-2">
-          <label className="text-[9px] font-black uppercase text-zinc-500 px-1 block">Branding (SVG)</label>
-          <div className="card relative min-h-[120px] sm:min-h-[128px] rounded-xl border-2 border-dashed border-navy/10 flex flex-col items-center justify-center gap-2 overflow-hidden cursor-pointer hover:border-petrol/25 transition-colors">
-            <ImageIcon size={28} className="text-zinc-300" />
-            <span className="text-[8px] font-bold text-zinc-400 uppercase">SVG hochladen</span>
-            <input type="file" accept=".svg" onChange={onUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" aria-label="SVG hochladen" />
+          <label className="text-[9px] font-black uppercase text-zinc-500 px-1 block">Logo oder Name</label>
+          <div className={`relative min-h-[108px] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 overflow-hidden transition-all ${logoBusy ? 'opacity-60 pointer-events-none border-petrol/40 bg-petrol/5' : hasLogo ? 'border-petrol/30 bg-petrol/5' : 'border-navy/15 bg-white hover:border-petrol/40 hover:bg-petrol/[0.03] cursor-pointer'}`}>
+            {logoBusy ? (
+              <Loader2 size={28} className="text-petrol animate-spin" />
+            ) : hasLogo ? (
+              <Sparkles size={26} className="text-petrol" />
+            ) : (
+              <Camera size={28} className="text-zinc-300" />
+            )}
+            <span className="text-[10px] font-bold text-navy text-center px-4">
+              {logoBusy ? 'Wird vorbereitet…' : hasLogo ? 'Logo sitzt – anderes wählen?' : 'Foto / PNG tippen'}
+            </span>
+            <span className="text-[9px] text-zinc-500 text-center px-4">Galerie oder Kamera – kein SVG nötig</span>
+            <input
+              type="file"
+              accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.svg,image/svg+xml"
+              capture="environment"
+              onChange={onUpload}
+              disabled={logoBusy}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              aria-label="Logo hochladen"
+            />
+          </div>
+
+          {onApplyTextEngrave && (
+            <div className="rounded-2xl border border-navy/10 bg-cream/80 p-3 flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={engraveText}
+                onChange={(e) => setEngraveText(e.target.value)}
+                placeholder="Oder Firmenname tippen…"
+                maxLength={28}
+                disabled={logoBusy}
+                className="flex-1 min-w-0 p-3 rounded-xl border border-navy/10 text-xs bg-white font-bold outline-none focus:border-petrol/40"
+              />
+              <button
+                type="button"
+                disabled={logoBusy || !engraveText.trim()}
+                onClick={() => void onApplyTextEngrave(engraveText)}
+                className="shrink-0 px-4 py-3 rounded-xl bg-navy text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-40 active:scale-95"
+              >
+                Prägen
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[9px] font-black uppercase text-zinc-500 px-1 block">Platte (Material)</label>
+          <div className="grid grid-cols-5 gap-2">
+            {plateMaterials.map((m) => {
+              const active = (config.plateColor || '#F8F5F0').toLowerCase() === m.color.toLowerCase();
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => updateConfig('plateColor', m.color)}
+                  className={`flex flex-col items-center gap-1.5 p-1.5 rounded-xl border transition-all active:scale-95 ${active ? 'border-navy ring-2 ring-navy/15 bg-white' : 'border-transparent hover:bg-white'}`}
+                  aria-label={m.name}
+                >
+                  <span
+                    className="w-9 h-9 rounded-full border border-black/10 shadow-inner"
+                    style={{ backgroundColor: m.color }}
+                  />
+                  <span className="text-[8px] font-bold text-zinc-600">{m.name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <div className="space-y-2">
-          <label className="text-[9px] font-black uppercase text-zinc-500 px-1 block">Farbe</label>
+          <label className="text-[9px] font-black uppercase text-zinc-500 px-1 block">Logo-Farbe</label>
           <div className="flex flex-wrap gap-2">
-            {['#006699', '#12A9E0', '#11235A', '#ff4d4d', '#2ecc71', '#d4af37', '#000000', '#fdfcf8'].map(c => (
-              <button key={c} type="button" onClick={() => updateConfig('logoColor', c)} className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl border-2 transition-all active:scale-95 ${config.logoColor === c ? 'border-navy ring-2 ring-navy/20' : 'border-transparent'}`} style={{ backgroundColor: c }} aria-label={`Farbe ${c}`} />
+            {logoSwatches.map((s) => {
+              const active = config.logoColor.toLowerCase() === s.color.toLowerCase();
+              return (
+                <button
+                  key={s.color}
+                  type="button"
+                  onClick={() => updateConfig('logoColor', s.color)}
+                  className={`flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-full border transition-all active:scale-95 ${active ? 'border-navy bg-white shadow-sm' : 'border-navy/10 bg-white/60'}`}
+                  aria-label={s.name}
+                >
+                  <span className="w-6 h-6 rounded-full border border-black/10" style={{ backgroundColor: s.color }} />
+                  <span className="text-[9px] font-bold text-navy">{s.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[9px] font-black uppercase text-zinc-500 px-1 block">Look</label>
+          <div className="grid grid-cols-3 gap-2">
+            {looks.map((look) => (
+              <button
+                key={look.id}
+                type="button"
+                onClick={() => {
+                  setConfig((prev) => ({ ...prev, logoScale: look.scale, logoDepth: look.depth }));
+                }}
+                className={`rounded-2xl border px-2 py-3 text-center transition-all active:scale-95 ${
+                  activeLook === look.id
+                    ? 'border-navy bg-navy text-white'
+                    : 'border-navy/10 bg-white text-navy hover:border-petrol/30'
+                }`}
+              >
+                <span className="block text-[11px] font-extrabold">{look.label}</span>
+                <span className={`block text-[8px] mt-0.5 ${activeLook === look.id ? 'text-white/70' : 'text-zinc-500'}`}>
+                  {look.hint}
+                </span>
+              </button>
             ))}
           </div>
         </div>
 
-        <div className="card p-4 space-y-5 pt-4">
-          <div className="space-y-2">
-            <div className="flex justify-between text-[8px] font-black uppercase text-zinc-500"><span>Skalierung</span><span>{(config.logoScale * 100).toFixed(0)}%</span></div>
-            <input type="range" min="0.1" max="2.0" step="0.01" value={config.logoScale} onChange={e => updateConfig('logoScale', parseFloat(e.target.value))} className="w-full h-2 accent-petrol" />
-          </div>
-          <div className="space-y-2">
-            <div className="flex justify-between text-[8px] font-black uppercase text-zinc-500"><span>Prägetiefe</span><span>{config.logoDepth.toFixed(1)} mm</span></div>
-            <input type="range" min="0.1" max="4.0" step="0.1" value={config.logoDepth} onChange={e => updateConfig('logoDepth', parseFloat(e.target.value))} className="w-full h-2 accent-petrol" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <div className="text-[8px] font-black uppercase text-zinc-500">X</div>
-              <input type="range" min="-15" max="15" step="0.5" value={config.logoPosX} onChange={e => updateConfig('logoPosX', parseFloat(e.target.value))} className="w-full h-2 accent-petrol" />
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => updateConfig('mirrorX', !config.mirrorX)}
+            className={`rounded-2xl border p-3 flex flex-col items-center gap-1.5 transition-all active:scale-95 ${config.mirrorX ? 'border-navy bg-navy text-white' : 'border-navy/10 bg-white text-navy'}`}
+          >
+            <FlipHorizontal2 size={18} />
+            <span className="text-[8px] font-bold uppercase">Spiegeln</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => updateConfig('logoRotation', (config.logoRotation + 90) % 360)}
+            className="rounded-2xl border border-navy/10 bg-white text-navy p-3 flex flex-col items-center gap-1.5 transition-all active:scale-95 hover:border-petrol/30"
+          >
+            <RotateCw size={18} />
+            <span className="text-[8px] font-bold uppercase">90° drehen</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => updateConfig('hasChain', !config.hasChain)}
+            className={`rounded-2xl border p-3 flex flex-col items-center gap-1.5 transition-all active:scale-95 ${config.hasChain !== false ? 'border-navy bg-navy text-white' : 'border-navy/10 bg-white text-navy'}`}
+          >
+            <Link2 size={18} />
+            <span className="text-[8px] font-bold uppercase">Ring</span>
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setShowFineTune((v) => !v)}
+            className="w-full flex items-center justify-between px-1 text-[9px] font-black uppercase text-zinc-500"
+          >
+            <span>Feineinstellung (optional)</span>
+            {showFineTune ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+          {showFineTune && (
+            <div className="rounded-2xl border border-navy/10 bg-white p-4 space-y-5">
+              <div className="space-y-2">
+                <div className="flex justify-between text-[8px] font-black uppercase text-zinc-500"><span>Größe</span><span>{(config.logoScale * 100).toFixed(0)}%</span></div>
+                <input type="range" min="0.1" max="2.0" step="0.01" value={config.logoScale} onChange={e => updateConfig('logoScale', parseFloat(e.target.value))} className="w-full h-2 accent-petrol" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-[8px] font-black uppercase text-zinc-500"><span>Prägetiefe</span><span>{config.logoDepth.toFixed(1)} mm</span></div>
+                <input type="range" min="0.1" max="4.0" step="0.1" value={config.logoDepth} onChange={e => updateConfig('logoDepth', parseFloat(e.target.value))} className="w-full h-2 accent-petrol" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <div className="text-[8px] font-black uppercase text-zinc-500">Links / Rechts</div>
+                  <input type="range" min="-15" max="15" step="0.5" value={config.logoPosX} onChange={e => updateConfig('logoPosX', parseFloat(e.target.value))} className="w-full h-2 accent-petrol" />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[8px] font-black uppercase text-zinc-500">Hoch / Runter</div>
+                  <input type="range" min="-15" max="15" step="0.5" value={config.logoPosY} onChange={e => updateConfig('logoPosY', parseFloat(e.target.value))} className="w-full h-2 accent-petrol" />
+                </div>
+              </div>
             </div>
-            <div className="space-y-1">
-              <div className="text-[8px] font-black uppercase text-zinc-500">Y</div>
-              <input type="range" min="-15" max="15" step="0.5" value={config.logoPosY} onChange={e => updateConfig('logoPosY', parseFloat(e.target.value))} className="w-full h-2 accent-petrol" />
-            </div>
-          </div>
+          )}
         </div>
       </div>
     );

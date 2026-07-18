@@ -21,7 +21,7 @@ export interface ValidationResult {
 
 /** Validates an SVG file (extension and size). */
 export function validateSvgFile(file: File): ValidationResult {
-  if (!file.name.toLowerCase().endsWith('.svg')) {
+  if (!file.name.toLowerCase().endsWith('.svg') && file.type !== 'image/svg+xml') {
     return { valid: false, error: 'Bitte lade nur SVG-Dateien hoch.' };
   }
   if (file.size > FILE_LIMITS.SVG_MAX_BYTES) {
@@ -31,6 +31,41 @@ export function validateSvgFile(file: File): ValidationResult {
     };
   }
   return { valid: true };
+}
+
+/** Logo für Anhänger: Bild oder SVG. */
+export function validateLogoEngraveFile(file: File): ValidationResult {
+  const name = file.name.toLowerCase();
+  const isSvg = name.endsWith('.svg') || file.type === 'image/svg+xml';
+  const isRaster =
+    file.type.startsWith('image/') ||
+    /\.(png|jpe?g|webp|gif)$/i.test(name);
+  if (!isSvg && !isRaster) {
+    return { valid: false, error: 'Bitte ein Foto/PNG/JPG oder SVG vom Logo wählen.' };
+  }
+  const max = isSvg ? FILE_LIMITS.SVG_MAX_BYTES : FILE_LIMITS.IMAGE_MAX_BYTES;
+  if (file.size > max) {
+    return {
+      valid: false,
+      error: `Die Datei ist zu groß. Bitte unter ${formatFileSize(max)}.`,
+    };
+  }
+  return { valid: true };
+}
+
+/** PNG/JPG/WebP/GIF (kein SVG). */
+export function isRasterLogoFile(file: File): boolean {
+  const t = file.type.toLowerCase();
+  if (t.startsWith('image/') && t !== 'image/svg+xml') return true;
+  return /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+}
+
+/** SVG-Datei. */
+export function isSvgLogoFile(file: File): boolean {
+  return (
+    file.type === 'image/svg+xml' ||
+    file.name.toLowerCase().endsWith('.svg')
+  );
 }
 
 /** Validates an image file (size only; accept attribute handles type in UI). */

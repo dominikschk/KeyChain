@@ -22,8 +22,9 @@ import {
   getScanCountLast30Days,
   updateConfigProfile,
   replaceConfigBlocks,
+  updateLandingTarget,
 } from '../lib/configApi';
-import { validateProfileTitle } from '../lib/validation';
+import { validateProfileTitle, toSafeHttpUrl } from '../lib/validation';
 import { showError } from '../lib/utils';
 import { Controls } from '../components/Controls';
 import { BlockRenderer } from '../components/Microsite';
@@ -121,6 +122,36 @@ export const CcpPage: React.FC = () => {
     const token = writeTokenRef.current;
     if (!config || !configId || !token) return;
 
+    const isExternal = config.landingMode === 'external';
+
+    if (isExternal) {
+      const url = toSafeHttpUrl(config.externalUrl || '');
+      if (!url) {
+        showError('Bitte eine gültige Adresse eingeben (https://…).', 'Ziel-Link');
+        return;
+      }
+      setSaving(true);
+      setSavedOk(false);
+      try {
+        const result = await updateLandingTarget(configId, token, 'external', url);
+        if (!result.ok) {
+          showError(
+            result.error?.includes('function') || result.error?.includes('schema')
+              ? 'Bitte einmal die SQL-Funktion update_nfc_landing_target in Supabase ausführen (siehe supabase-schema.sql).'
+              : (result.error ?? 'Speichern fehlgeschlagen.'),
+            'Ziel-Link'
+          );
+          return;
+        }
+        setConfig((prev) => (prev ? { ...prev, externalUrl: url } : prev));
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 2500);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     const titleCheck = validateProfileTitle(config.profileTitle);
     if (!titleCheck.valid) {
       showError(titleCheck.error!);
@@ -172,7 +203,6 @@ export const CcpPage: React.FC = () => {
   }, [config, configId]);
 
   const noopUpload = useMemo(() => () => {}, []);
-  const noopColor = useMemo(() => () => {}, []);
 
   const isDark = config?.theme === 'dark';
 
@@ -229,14 +259,20 @@ export const CcpPage: React.FC = () => {
             <section className="card p-5">
               <h2 className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy flex items-center gap-2 mb-3">
                 <Smartphone size={18} />
-                Meine Handy-Seite
+                {config.landingMode === 'external' ? 'Mein Chip-Link' : 'Meine Handy-Seite'}
               </h2>
               <p className="text-sm text-zinc-500 mb-4">
                 Name: <strong className="text-navy">{config.profileTitle}</strong>
               </p>
+              {config.landingMode === 'external' && !!config.externalUrl && (
+                <p className="text-sm text-zinc-600 mb-4 leading-snug">
+                  Kunden landen auf:{' '}
+                  <span className="font-semibold text-navy break-all">{config.externalUrl}</span>
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 <a
-                  href={micrositeUrl}
+                  href={config.landingMode === 'external' && config.externalUrl ? config.externalUrl : micrositeUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-navy text-white text-sm font-semibold hover:bg-navy/90 active:scale-[0.98]"
@@ -250,7 +286,7 @@ export const CcpPage: React.FC = () => {
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-zinc-200 text-zinc-700 text-sm font-medium hover:bg-zinc-50"
                 >
                   {copied ? <Check size={16} /> : <Copy size={16} />}
-                  {copied ? 'Kopiert' : 'Link kopieren'}
+                  {copied ? 'Kopiert' : 'NFC-Link kopieren'}
                 </button>
               </div>
               {!canEdit && (
@@ -267,7 +303,7 @@ export const CcpPage: React.FC = () => {
                 Chip-Scans
               </h2>
               <p className="text-sm text-zinc-500 mb-4">
-                Anzahl Aufrufe deiner Microsite (NFC-Scans).
+                Anzahl Aufrufe über den NFC-Chip.
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-center">
@@ -281,7 +317,27 @@ export const CcpPage: React.FC = () => {
               </div>
             </section>
 
-            {canEdit && (
+            {canEdit && config.landingMode === 'external' && (
+              <section className="card p-5 space-y-3">
+                <h2 className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy flex items-center gap-2">
+                  <Pencil size={18} />
+                  Ziel-Adresse ändern
+                </h2>
+                <p className="text-xs text-zinc-500 leading-snug">
+                  Der Chip bleibt gleich – nur wohin er öffnet, änderst du hier.
+                </p>
+                <input
+                  type="url"
+                  inputMode="url"
+                  value={config.externalUrl || ''}
+                  onChange={(e) => setConfig((prev) => (prev ? { ...prev, externalUrl: e.target.value } : prev))}
+                  placeholder="https://…"
+                  className="w-full p-4 rounded-2xl border border-navy/10 text-sm bg-cream font-medium outline-none focus:border-petrol/40"
+                />
+              </section>
+            )}
+
+            {canEdit && config.landingMode !== 'external' && (
               <section className="space-y-4">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <h2 className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy flex items-center gap-2">
@@ -320,9 +376,8 @@ export const CcpPage: React.FC = () => {
                           return typeof updater === 'function' ? updater(prev) : updater;
                         });
                       }}
-                      svgElements={null}
+                      hasLogo={false}
                       onUpload={noopUpload}
-                      onUpdateColor={noopColor}
                     />
                   </div>
 

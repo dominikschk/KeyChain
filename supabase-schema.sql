@@ -604,3 +604,59 @@ CREATE POLICY "nudaim_public_read" ON storage.objects FOR SELECT
 -- ------------------------------------------------------------
 -- INSERT INTO public.admin_users (email) VALUES ('dein-admin@example.com')
 --   ON CONFLICT (email) DO NOTHING;
+
+-- Landing-Ziel (eigene URL vs. Microsite) in plate_data – nur mit write_token
+CREATE OR REPLACE FUNCTION public.update_nfc_landing_target(
+  p_config_id uuid,
+  p_write_token text,
+  p_landing_mode text,
+  p_external_url text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  updated_count integer;
+  v_mode text;
+  v_url text;
+BEGIN
+  IF p_write_token IS NULL OR length(trim(p_write_token)) < 32 THEN
+    RAISE EXCEPTION 'write_token required';
+  END IF;
+
+  v_mode := trim(coalesce(p_landing_mode, 'microsite'));
+  IF v_mode NOT IN ('microsite', 'external') THEN
+    RAISE EXCEPTION 'invalid landing_mode';
+  END IF;
+
+  v_url := nullif(trim(coalesce(p_external_url, '')), '');
+  IF v_mode = 'external' THEN
+    IF v_url IS NULL OR char_length(v_url) > 2048 THEN
+      RAISE EXCEPTION 'invalid external_url';
+    END IF;
+    IF v_url !~* '^https?://' THEN
+      RAISE EXCEPTION 'invalid external_url';
+    END IF;
+  END IF;
+
+  UPDATE public.nfc_configs c
+  SET plate_data = coalesce(c.plate_data, '{}'::jsonb)
+    || jsonb_build_object(
+      'landingMode', v_mode,
+      'externalUrl', CASE WHEN v_mode = 'external' THEN v_url ELSE '' END
+    )
+  WHERE c.id = p_config_id
+    AND c.write_token = p_write_token;
+
+  GET DIAGNOSTICS updated_count = ROW_COUNT;
+  IF updated_count = 0 THEN
+    RAISE EXCEPTION 'update denied';
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.update_nfc_landing_target(uuid, text, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.update_nfc_landing_target(uuid, text, text, text) TO anon, authenticated;
+

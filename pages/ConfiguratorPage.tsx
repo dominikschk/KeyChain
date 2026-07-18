@@ -1,21 +1,19 @@
 /**
  * Konfigurator – Panel zum Konfigurieren von NFeC-Produkten (3D + Microsite).
  */
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Loader2, QrCode as QrIcon, X, ArrowRight, RefreshCw, Edit3, Smartphone, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown, Copy } from 'lucide-react';
-import { Viewer } from '../components/Viewer';
+import React, { useState, useRef, useEffect, useCallback, Suspense, lazy } from 'react';
+import { Loader2, ArrowRight, RefreshCw, Edit3, Smartphone, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown, Copy } from 'lucide-react';
 import { Controls } from '../components/Controls';
-import { Microsite } from '../components/Microsite';
-import { MicrositeChat } from '../components/MicrositeChat';
+import { SitePreview } from '../components/SitePreview';
+import { KeychainPreview } from '../components/KeychainPreview';
+import type { KeychainPreviewHandle } from '../components/KeychainPreview';
 import { LoginScreen } from '../components/LoginScreen';
 import { ShopifyGuide } from '../components/ShopifyGuide';
 import { DEFAULT_CONFIG, buildShopifyCartUrl, buildMicrositeUrl, buildCcpEditUrl, PRODUCTS } from '../constants';
-import { ModelConfig, SVGPathData, Department } from '../types';
-import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
-import * as THREE from 'three';
+import { ModelConfig, Department } from '../types';
 import { supabase, getDetailedError } from '../lib/supabase';
 import { generateShortId, generateWriteToken, showError, resetFileInput } from '../lib/utils';
-import { validateSvgFile, validateProfileTitle } from '../lib/validation';
+import { validateLogoEngraveFile, validateProfileTitle, toSafeHttpUrl, isRasterLogoFile, isSvgLogoFile } from '../lib/validation';
 import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
 import { getSession, onAuthStateChange, signOut } from '../lib/auth';
 import type { AuthSession } from '../lib/auth';
@@ -33,58 +31,67 @@ import {
 } from '../lib/configStorage';
 import { getConfigByShortId, recordScan, setConfigStlUrl, insertConfigBlocks } from '../lib/configApi';
 
+const MicrositeChat = lazy(() =>
+  import('../components/MicrositeChat').then((m) => ({ default: m.MicrositeChat }))
+);
+const Microsite = lazy(() =>
+  import('../components/Microsite').then((m) => ({ default: m.Microsite }))
+);
+
 const LAST_DELIVERY_KEY = 'nudaim_last_delivery_links';
+const DRAFT_BANNER_KEY = 'nudaim_draft_banner_seen';
 
 type DeliveryLinks = {
   shortId: string;
   micrositeUrl: string;
   ccpUrl: string;
   cartUrl: string;
+  /** Bei eigener Website: wohin der Chip wirklich weiterleitet */
+  destinationUrl?: string;
 };
 
-const ConfirmationModal: React.FC<{
-  config: ModelConfig;
-  onConfirm: () => void;
-  onCancel: () => void;
-  screenshot: string | null;
-}> = ({ onConfirm, onCancel, screenshot, config }) => (
-  <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md">
-    <div className="card w-full max-w-2xl flex flex-col max-h-[90dvh] sm:max-h-[85vh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300">
-      <header className="flex items-center justify-between shrink-0 px-4 py-3 sm:px-5 sm:py-4 border-b border-navy/5">
-        <h2 className="font-headline text-base sm:text-lg font-extrabold uppercase tracking-tight text-navy">Bereit zum Bestellen?</h2>
-        <button type="button" onClick={onCancel} className="btn-tap flex items-center justify-center rounded-xl text-zinc-400 hover:bg-cream hover:text-navy transition-colors" aria-label="Schließen"><X size={22} /></button>
-      </header>
-      <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 scroll-container min-h-0">
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          <div className="aspect-square bg-cream rounded-xl sm:rounded-2xl flex items-center justify-center p-3 border border-navy/5 overflow-hidden">
-            {screenshot ? <img src={screenshot} className="w-full h-full object-contain" alt="Dein Anhänger" /> : <Loader2 className="animate-spin text-petrol/30" size={28} />}
-          </div>
-          <div className="aspect-square bg-navy rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-4 sm:p-6 text-white text-center">
-            <QrIcon size={28} className="opacity-30 mb-2 sm:mb-3" />
-            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider truncate w-full px-1">{config.profileTitle}</p>
-            <p className="text-[7px] sm:text-[8px] uppercase tracking-widest mt-1 opacity-60">Handy-Seite aktiv</p>
-          </div>
-        </div>
-        <p className="text-[10px] text-zinc-500 leading-relaxed text-center px-2">
-          Wir fertigen deinen Anhänger mit deinem Logo. Die Seite auf dem Handy kannst du später jederzeit ändern.
-        </p>
-      </div>
-      <footer className="p-4 sm:p-5 border-t border-navy/5 bg-zinc-50/80 shrink-0 safe-bottom">
-        <button type="button" onClick={onConfirm} className="w-full min-h-[48px] sm:h-12 bg-navy text-white rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-widest flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-          <span>Ja, jetzt bestellen</span>
-          <ArrowRight size={18} />
-        </button>
-      </footer>
-    </div>
-  </div>
-);
+const SAVING_LABELS: Record<string, string> = {
+  screenshot: 'Vorschau wird vorbereitet…',
+  upload: 'Bild wird hochgeladen…',
+  db: 'Wird gespeichert…',
+  done: 'Fast fertig…',
+};
 
-/** Nach dem Speichern: Links sichern, bevor es zum Shopify-Warenkorb geht. */
+function hostnameFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '') || 'Eigene Website';
+  } catch {
+    return 'Eigene Website';
+  }
+}
+
+/** Nach dem Speichern: Links kurz sichern, dann Warenkorb (Auto-Weiter). */
 const DeliveryHandoffModal: React.FC<{
   links: DeliveryLinks;
   onContinue: () => void;
 }> = ({ links, onContinue }) => {
   const [copied, setCopied] = useState<'ms' | 'ccp' | null>(null);
+  const [seconds, setSeconds] = useState(4);
+  const continueRef = useRef(onContinue);
+  continueRef.current = onContinue;
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    if (seconds > 0) {
+      const t = window.setTimeout(() => setSeconds((s) => s - 1), 1000);
+      return () => window.clearTimeout(t);
+    }
+    if (!doneRef.current) {
+      doneRef.current = true;
+      continueRef.current();
+    }
+  }, [seconds]);
+
+  const go = () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onContinue();
+  };
 
   const copy = async (which: 'ms' | 'ccp', value: string) => {
     try {
@@ -100,20 +107,27 @@ const DeliveryHandoffModal: React.FC<{
     <div className="fixed inset-0 z-[2500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md">
       <div className="card w-full max-w-lg flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300">
         <header className="px-5 py-4 border-b border-navy/5 bg-cream">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-petrol mb-1">Wichtig – kurz speichern</p>
-          <h2 className="font-headline text-lg font-extrabold uppercase tracking-tight text-navy">Deine Links sind bereit</h2>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-petrol mb-1">Gespeichert</p>
+          <h2 className="font-headline text-lg font-extrabold uppercase tracking-tight text-navy">Links bereit</h2>
           <p className="text-sm text-zinc-600 mt-1 leading-snug">
-            Die kommen später auch in der Bestellmail. Am besten jetzt einmal kopieren oder öffnen.
+            Kommen auch in der Bestellmail. Warenkorb öffnet in {seconds}s – oder sofort tippen.
           </p>
         </header>
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div className="rounded-2xl border border-navy/10 bg-white p-4 space-y-2">
             <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Für deine Kunden</p>
-            <p className="text-sm font-semibold text-navy">Handy-Seite</p>
+            <p className="text-sm font-semibold text-navy">
+              {links.destinationUrl ? 'NFC-Link (Chip)' : 'Handy-Seite'}
+            </p>
             <p className="text-xs text-zinc-500 break-all">{links.micrositeUrl}</p>
+            {links.destinationUrl && (
+              <p className="text-xs text-zinc-600 leading-snug pt-1">
+                Öffnet danach: <span className="font-semibold text-navy break-all">{links.destinationUrl}</span>
+              </p>
+            )}
             <div className="flex flex-wrap gap-2 pt-1">
               <a
-                href={links.micrositeUrl}
+                href={links.destinationUrl || links.micrositeUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="min-h-[44px] px-4 rounded-xl bg-navy text-white text-sm font-semibold inline-flex items-center gap-2"
@@ -133,27 +147,16 @@ const DeliveryHandoffModal: React.FC<{
 
           <div className="rounded-2xl border border-petrol/20 bg-petrol/5 p-4 space-y-2">
             <p className="text-xs font-bold uppercase tracking-wider text-petrol">Nur für dich</p>
-            <p className="text-sm font-semibold text-navy">Seite später ändern</p>
-            <p className="text-xs text-zinc-600 leading-snug">
-              Privater Link – nicht öffentlich teilen. Damit änderst du Texte, Links und Logo.
-            </p>
+            <p className="text-sm font-semibold text-navy">Später ändern</p>
             <p className="text-xs text-zinc-500 break-all">{links.ccpUrl}</p>
             <div className="flex flex-wrap gap-2 pt-1">
-              <a
-                href={links.ccpUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="min-h-[44px] px-4 rounded-xl bg-petrol text-white text-sm font-semibold inline-flex items-center gap-2"
-              >
-                <ExternalLink size={16} /> Bearbeiten öffnen
-              </a>
               <button
                 type="button"
                 onClick={() => void copy('ccp', links.ccpUrl)}
                 className="min-h-[44px] px-4 rounded-xl border border-petrol/30 text-sm font-semibold text-navy inline-flex items-center gap-2 bg-white"
               >
                 {copied === 'ccp' ? <Check size={16} /> : <Copy size={16} />}
-                {copied === 'ccp' ? 'Kopiert' : 'Kopieren'}
+                {copied === 'ccp' ? 'Kopiert' : 'Bearbeiten-Link kopieren'}
               </button>
             </div>
           </div>
@@ -163,11 +166,11 @@ const DeliveryHandoffModal: React.FC<{
         <footer className="p-4 border-t border-navy/5 bg-zinc-50/80 safe-bottom">
           <button
             type="button"
-            onClick={onContinue}
+            onClick={go}
             className="w-full min-h-[52px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
           >
             <ShoppingCart size={18} />
-            Weiter zum Warenkorb
+            Jetzt zum Warenkorb
             <ArrowRight size={18} />
           </button>
         </footer>
@@ -188,8 +191,8 @@ const ConfiguratorPage: React.FC = () => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   /** Assistent zuerst im gleichen Fenster; danach optional manueller Editor */
   const [digitalMode, setDigitalMode] = useState<'assist' | 'manual'>('assist');
-  /** Zwei getrennte Arbeitsphasen: erst Seite, dann Anhänger */
-  const [workPhase, setWorkPhase] = useState<'site' | 'hardware'>('site');
+  /** Zwei Arbeitsphasen: zuerst Anhänger (Produkt), dann Chip-Ziel */
+  const [workPhase, setWorkPhase] = useState<'site' | 'hardware'>('hardware');
   const [shopifyGuideOpen, setShopifyGuideOpen] = useState(false);
   const [deliveryLinks, setDeliveryLinks] = useState<DeliveryLinks | null>(null);
 
@@ -223,8 +226,16 @@ const ConfiguratorPage: React.FC = () => {
     getConfigByShortId(shortId)
       .then((result) => {
         if (result) {
-          setMicrositeConfig(result.config);
           recordScan(result.configId).catch(() => { /* einmal pro Aufruf; Fehler still */ });
+          const dest =
+            result.config.landingMode === 'external'
+              ? toSafeHttpUrl(result.config.externalUrl || '')
+              : null;
+          if (dest) {
+            window.location.replace(dest);
+            return;
+          }
+          setMicrositeConfig(result.config);
         } else setMicrositeError('Diese Seite wurde nicht gefunden. Bitte den Link prüfen oder den Anbieter kontaktieren.');
       })
       .catch(() => setMicrositeError('Die Seite konnte gerade nicht geladen werden. Bitte später erneut versuchen.'))
@@ -235,20 +246,25 @@ const ConfiguratorPage: React.FC = () => {
     const draft = loadDraft();
     return draft ?? JSON.parse(JSON.stringify(DEFAULT_CONFIG));
   });
-  const [svgElements, setSvgElements] = useState<SVGPathData[] | null>(null);
   const [svgContent, setSvgContent] = useState<string | null>(() => loadDraftSvg());
+  const [logoBusy, setLogoBusy] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string>(() => PRODUCTS[0]?.id ?? 'keychain');
   const [activeDept, setActiveDept] = useState<Department>('digital');
-  const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('editor');
+  const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('preview');
   const [previewType, setPreviewType] = useState<'3d' | 'digital'>('digital');
   const [savingStep, setSavingStep] = useState('idle');
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [currentScreenshot, setCurrentScreenshot] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showDraftBanner, setShowDraftBanner] = useState(() => {
+    try {
+      return !!loadDraft() && !sessionStorage.getItem(DRAFT_BANNER_KEY);
+    } catch {
+      return false;
+    }
+  });
   const draftSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const viewerRef = useRef<{ takeScreenshot: () => Promise<string>; exportSTL: () => Promise<Blob | null> }>(null);
+  const viewerRef = useRef<KeychainPreviewHandle>(null);
 
   useEffect(() => {
     if (workPhase === 'hardware') {
@@ -286,7 +302,6 @@ const ConfiguratorPage: React.FC = () => {
   const handleResetConfig = useCallback(() => {
     if (!window.confirm('Konfiguration auf Standard zurücksetzen? Der aktuelle Entwurf geht verloren.')) return;
     setConfig(getDefaultConfig());
-    setSvgElements(null);
     setSvgContent(null);
     clearDraft();
   }, []);
@@ -320,65 +335,99 @@ const ConfiguratorPage: React.FC = () => {
     e.target.value = '';
   }, []);
 
-  const initiateSave = useCallback(async () => {
-    try {
-      const screenshot = await viewerRef.current?.takeScreenshot();
-      setCurrentScreenshot(screenshot || null);
-      setShowConfirmation(true);
-    } catch (err) {
-      console.error('Screenshot error:', err);
-      showError('Bitte versuche es erneut.', 'Fehler beim Erstellen des Screenshots.');
-    }
+  const goToSite = useCallback(() => {
+    setWorkPhase('site');
+    setMobileTab('editor');
   }, []);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowConfirmation(false);
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); initiateSave(); }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [initiateSave]);
+  const goToHardware = useCallback(() => {
+    if (config.landingMode === 'external') {
+      const url = toSafeHttpUrl(config.externalUrl || '');
+      if (!url) {
+        showError(
+          'Tipp: z. B. deine Website, Instagram oder Google-Profil – mit https:// davor.',
+          'Bitte eine gültige Adresse eingeben.'
+        );
+        return;
+      }
+      setConfig((prev) => ({
+        ...prev,
+        externalUrl: url,
+        profileTitle:
+          !prev.profileTitle || prev.profileTitle === DEFAULT_CONFIG.profileTitle
+            ? hostnameFromUrl(url)
+            : prev.profileTitle,
+      }));
+    }
+    setWorkPhase('hardware');
+    setMobileTab('preview');
+  }, [config.landingMode, config.externalUrl]);
 
-  const executeSave = async () => {
+  const executeSave = useCallback(async (screenshotDataUrl: string | null) => {
     if (!supabase) {
       showError('Bitte prüfe deine Umgebungsvariablen.', 'Supabase ist nicht konfiguriert.');
       return;
     }
-    const titleCheck = validateProfileTitle(config.profileTitle);
-    if (!titleCheck.valid) {
-      showError(titleCheck.error!);
-      setShowConfirmation(false);
-      return;
+
+    const isExternal = config.landingMode === 'external';
+    let destinationUrl: string | undefined;
+    if (isExternal) {
+      const url = toSafeHttpUrl(config.externalUrl || '');
+      if (!url) {
+        showError('Bitte eine gültige Adresse eingeben.', 'Eigene Seite');
+        return;
+      }
+      destinationUrl = url;
+    } else {
+      const titleCheck = validateProfileTitle(config.profileTitle);
+      if (!titleCheck.valid) {
+        showError(titleCheck.error!);
+        return;
+      }
     }
-    setShowConfirmation(false);
+
+    let profileTitle = config.profileTitle.trim();
+    if (isExternal && destinationUrl) {
+      if (!profileTitle || profileTitle === DEFAULT_CONFIG.profileTitle) {
+        profileTitle = hostnameFromUrl(destinationUrl);
+      }
+    }
+
     setSavingStep('screenshot');
     const shortId = generateShortId();
     const writeToken = generateWriteToken();
+    // STL parallel starten – wartet nicht auf Critical Path
+    const stlExportPromise =
+      viewerRef.current?.exportSTL?.().catch((e) => {
+        console.warn('STL export failed:', e);
+        return null;
+      }) ?? Promise.resolve(null);
+
     try {
       let finalImageUrl = '';
-      if (currentScreenshot) {
+      if (screenshotDataUrl) {
         setSavingStep('upload');
-        const res = await fetch(currentScreenshot);
+        const res = await fetch(screenshotDataUrl);
         if (!res.ok) throw new Error('Screenshot konnte nicht geladen werden');
         const blob = await res.blob();
-        const path = storagePath(`preview_${shortId}_`, 'shot.png');
+        const ext = blob.type.includes('jpeg') || blob.type.includes('jpg') ? 'jpg' : 'png';
+        const path = storagePath(`preview_${shortId}_`, `shot.${ext}`);
         const url = await uploadAndGetPublicUrl(supabase, path, blob);
         if (!url) throw new Error('Upload fehlgeschlagen');
         finalImageUrl = url;
       }
+
       setSavingStep('db');
       const product = PRODUCTS.find((p) => p.id === selectedProductId) ?? PRODUCTS[0];
-      // Client-UUID: INSERT ohne SELECT-Policy (RLS erlaubt anon kein SELECT)
       const configId = crypto.randomUUID();
       const { error: dbError } = await supabase.from('nfc_configs').insert([{
         id: configId,
         short_id: shortId,
         write_token: writeToken,
         preview_image: finalImageUrl,
-        profile_title: config.profileTitle.trim(),
-        header_image_url: config.headerImageUrl,
-        profile_logo_url: config.profileLogoUrl,
+        profile_title: profileTitle,
+        header_image_url: isExternal ? null : config.headerImageUrl,
+        profile_logo_url: isExternal ? null : config.profileLogoUrl,
         accent_color: config.accentColor,
         theme: config.theme,
         font_style: config.fontStyle,
@@ -390,18 +439,24 @@ const ConfiguratorPage: React.FC = () => {
           plateDepth: config.plateDepth,
           logoScale: config.logoScale,
           logoColor: config.logoColor,
+          plateColor: config.plateColor || '#F8F5F0',
           logoDepth: config.logoDepth,
           logoPosX: config.logoPosX,
           logoPosY: config.logoPosY,
           logoRotation: config.logoRotation,
+          mirrorX: !!config.mirrorX,
+          hasChain: config.hasChain !== false,
           logo_svg: svgContent || null,
           surfaceColor: config.surfaceColor || null,
           textColor: config.textColor || null,
           layoutMode: config.layoutMode || 'landing',
+          landingMode: isExternal ? 'external' : 'microsite',
+          externalUrl: destinationUrl || '',
         }
       }]);
       if (dbError) throw dbError;
-      if (config.nfcBlocks.length > 0) {
+
+      if (!isExternal && config.nfcBlocks.length > 0) {
         const ok = await insertConfigBlocks(
           configId,
           writeToken,
@@ -416,128 +471,145 @@ const ConfiguratorPage: React.FC = () => {
         );
         if (!ok) throw new Error('Blöcke konnten nicht gespeichert werden');
       }
-      if (viewerRef.current?.exportSTL) {
-        try {
-          const stlBlob = await viewerRef.current.exportSTL();
-          if (stlBlob) {
-            const stlPath = storagePath(`stl/${shortId}_`, 'model.stl');
-            const stlUrl = await uploadAndGetPublicUrl(supabase, stlPath, stlBlob);
-            if (stlUrl) {
-              await setConfigStlUrl(configId, stlUrl, writeToken);
-            }
-          }
-        } catch (e) {
-          console.warn('STL export/upload failed:', e);
-        }
-      }
+
       setSavingStep('done');
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
       const variantId = product?.variantId ?? '56564338262361';
       const micrositeUrl = buildMicrositeUrl(baseUrl, shortId);
       const ccpUrl = buildCcpEditUrl(baseUrl, shortId, writeToken);
-      const cartUrl = buildShopifyCartUrl(variantId, shortId, finalImageUrl, baseUrl, writeToken);
-      const links: DeliveryLinks = { shortId, micrositeUrl, ccpUrl, cartUrl };
+      const cartUrl = buildShopifyCartUrl(variantId, shortId, finalImageUrl, baseUrl, writeToken, destinationUrl);
+      const links: DeliveryLinks = { shortId, micrositeUrl, ccpUrl, cartUrl, destinationUrl };
       try {
         localStorage.setItem(LAST_DELIVERY_KEY, JSON.stringify({ ...links, savedAt: Date.now() }));
       } catch {
         /* ignore */
       }
+      clearDraft();
       setDeliveryLinks(links);
       setSavingStep('idle');
+
+      // STL im Hintergrund – blockiert Warenkorb nicht
+      void (async () => {
+        try {
+          const stlBlob = await stlExportPromise;
+          if (!stlBlob || !supabase) return;
+          const stlPath = storagePath(`stl/${shortId}_`, 'model.stl');
+          const stlUrl = await uploadAndGetPublicUrl(supabase, stlPath, stlBlob);
+          if (stlUrl) await setConfigStlUrl(configId, stlUrl, writeToken);
+        } catch (e) {
+          console.warn('STL background upload failed:', e);
+        }
+      })();
     } catch (err) {
       console.error('Save error:', err);
       setSavingStep('idle');
       const errorDetails = getDetailedError(err);
       showError(errorDetails.msg, errorDetails.title);
     }
-  };
+  }, [config, selectedProductId, svgContent]);
 
-  const parseSvgContent = useCallback((content: string, autoScaleLogo = true): { elements: SVGPathData[]; scale: number } | null => {
+  const initiateSave = useCallback(async () => {
     try {
-      if (!content?.trim()) return null;
-      const loader = new SVGLoader();
-      const svgData = loader.parse(content);
-      if (!svgData.paths?.length) return null;
-      const elements = svgData.paths.map((path, i) => ({
-        id: `path-${i}`,
-        shapes: SVGLoader.createShapes(path),
-        color: path.color.getStyle(),
-        currentColor: path.color.getStyle(),
-        name: `Teil ${i + 1}`,
-      }));
-      const box = new THREE.Box3();
-      elements.forEach((el) => {
-        el.shapes.forEach((shape) => {
-          shape.getPoints().forEach((p) =>
-            box.expandByPoint(new THREE.Vector3(p.x, -p.y, 0))
+      if (config.landingMode === 'external') {
+        const url = toSafeHttpUrl(config.externalUrl || '');
+        if (!url) {
+          showError(
+            'Tipp: z. B. deine Website, Instagram oder Google-Profil – mit https:// davor.',
+            'Bitte eine gültige Adresse eingeben.'
           );
-        });
-      });
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      if (size.x === 0 && size.y === 0) return null;
-      const targetSize = 38;
-      const scale = autoScaleLogo ? parseFloat((targetSize / Math.max(size.x, size.y)).toFixed(3)) : 1;
-      return { elements, scale };
+          return;
+        }
+        setConfig((prev) => ({ ...prev, externalUrl: url }));
+      }
+      setSavingStep('screenshot');
+      const screenshot = (await viewerRef.current?.takeScreenshot()) || null;
+      await executeSave(screenshot);
     } catch (err) {
-      console.error('SVG parsing error:', err);
-      return null;
+      console.error('Screenshot error:', err);
+      setSavingStep('idle');
+      showError('Bitte versuche es erneut.', 'Fehler beim Erstellen des Screenshots.');
     }
+  }, [config.landingMode, config.externalUrl, executeSave]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); void initiateSave(); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [initiateSave]);
+
+  const applyEngraveSvg = useCallback((content: string) => {
+    if (!content?.trim()) {
+      showError(
+        'Tipp: Dunkles Logo auf hellem Hintergrund funktioniert am besten.',
+        'Logo konnte nicht geprägt werden.'
+      );
+      return false;
+    }
+    setSvgContent(content);
+    setConfig((prev) => ({
+      ...prev,
+      logoScale: prev.logoScale || 1,
+      logoPosX: 0,
+      logoPosY: 0,
+    }));
+    return true;
   }, []);
 
-  // SVG aus Draft beim Initialisieren wiederherstellen
-  useEffect(() => {
-    if (svgContent && !svgElements) {
-      const parsed = parseSvgContent(svgContent, false);
-      if (parsed) {
-        setSvgElements(parsed.elements);
-      }
-    }
-  }, [svgContent, svgElements, parseSvgContent]);
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
-    const fileCheck = validateSvgFile(file);
+
+    const fileCheck = validateLogoEngraveFile(file);
     if (!fileCheck.valid) {
       showError(fileCheck.error!);
-      resetFileInput(e.target);
+      resetFileInput(input);
       return;
     }
-    const reader = new FileReader();
-    reader.onerror = () => {
-      showError('Bitte versuche es erneut.', 'Fehler beim Lesen der Datei.');
-      resetFileInput(e.target);
-    };
-    reader.onload = (ev) => {
-      try {
-        const content = ev.target?.result as string;
+
+    setLogoBusy(true);
+    try {
+      let content: string;
+      if (isSvgLogoFile(file)) {
+        content = await file.text();
         if (!content?.trim()) {
-          showError('Die SVG-Datei ist leer.');
-          resetFileInput(e.target);
+          showError('Die Datei ist leer.');
           return;
         }
-        const parsed = parseSvgContent(content);
-        if (!parsed) {
-          showError('Bitte verwende eine gültige SVG-Datei.', 'Die SVG-Datei konnte nicht verarbeitet werden.');
-          resetFileInput(e.target);
-          return;
-        }
-        setSvgElements(parsed.elements);
-        setSvgContent(content);
-        setConfig((prev) => ({
-          ...prev,
-          logoScale: parsed.scale,
-          logoPosX: 0,
-          logoPosY: 0,
-        }));
-      } catch (err) {
-        console.error('SVG upload error:', err);
-        showError('Bitte stelle sicher, dass es sich um eine gültige SVG-Datei handelt.', 'Fehler beim Verarbeiten der SVG-Datei.');
-        resetFileInput(e.target);
+      } else if (isRasterLogoFile(file)) {
+        const { rasterFileToSvg } = await import('../lib/logoFromRaster');
+        content = await rasterFileToSvg(file);
+      } else {
+        showError('Bitte ein Foto/PNG/JPG oder SVG vom Logo wählen.');
+        return;
       }
-    };
-    reader.readAsText(file);
+
+      if (!applyEngraveSvg(content)) return;
+    } catch (err) {
+      console.error('Logo upload error:', err);
+      const msg = err instanceof Error ? err.message : 'Bitte versuche ein anderes Bild.';
+      showError(msg, 'Logo konnte nicht geladen werden.');
+    } finally {
+      setLogoBusy(false);
+      resetFileInput(input);
+    }
+  };
+
+  const handleTextEngrave = async (text: string) => {
+    setLogoBusy(true);
+    try {
+      const { textToEngraveSvg } = await import('../lib/logoFromRaster');
+      const content = await textToEngraveSvg(text);
+      applyEngraveSvg(content);
+    } catch (err) {
+      console.error('Text engrave error:', err);
+      const msg = err instanceof Error ? err.message : 'Bitte erneut versuchen.';
+      showError(msg, 'Text konnte nicht geprägt werden.');
+    } finally {
+      setLogoBusy(false);
+    }
   };
 
   if (viewMode === 'microsite') {
@@ -557,11 +629,19 @@ const ConfiguratorPage: React.FC = () => {
         </div>
       );
     }
-    return <Microsite config={micrositeConfig} googleLogoUrl={session?.user?.user_metadata?.avatar_url} />;
+    return (
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-cream"><Loader2 className="animate-spin text-petrol" size={32} /></div>}>
+        <Microsite config={micrositeConfig} googleLogoUrl={session?.user?.user_metadata?.avatar_url} />
+      </Suspense>
+    );
   }
   if (viewMode === 'preview') {
     const displayConfig = previewConfig ?? JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-    return <Microsite config={displayConfig} googleLogoUrl={session?.user?.user_metadata?.avatar_url} />;
+    return (
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-cream"><Loader2 className="animate-spin text-petrol" size={32} /></div>}>
+        <Microsite config={displayConfig} googleLogoUrl={session?.user?.user_metadata?.avatar_url} />
+      </Suspense>
+    );
   }
 
   if (viewMode === 'editor') {
@@ -596,20 +676,18 @@ const ConfiguratorPage: React.FC = () => {
           {toastMessage}
         </div>
       )}
-      {showConfirmation && (
-        <ConfirmationModal config={config} onConfirm={executeSave} onCancel={() => setShowConfirmation(false)} screenshot={currentScreenshot} />
-      )}
 
       <header className="shrink-0 bg-white border-b border-zinc-200/80 z-30">
         <div className="h-14 flex items-center justify-between px-4 md:px-5 gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <span className="font-headline font-extrabold text-lg uppercase tracking-tight text-navy truncate">NUDAIM</span>
+            <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-wider text-petrol">Schlüsselanhänger</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {workPhase === 'hardware' && (
               <button
                 type="button"
-                onClick={initiateSave}
+                onClick={() => void initiateSave()}
                 className="hidden md:flex items-center gap-2 h-9 px-4 bg-navy text-white text-xs font-semibold rounded-lg hover:bg-navy/90 active:scale-[0.98]"
               >
                 <ShoppingCart size={14} />
@@ -652,41 +730,75 @@ const ConfiguratorPage: React.FC = () => {
 
         {/* Phasen-Leiste: klar getrennt */}
         <div className="px-4 md:px-5 pb-3">
+          {showDraftBanner && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-petrol/20 bg-petrol/5 px-3 py-2.5">
+              <p className="text-xs text-navy font-medium">Entwurf geladen – weiterarbeiten oder neu starten?</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    try { sessionStorage.setItem(DRAFT_BANNER_KEY, '1'); } catch { /* ignore */ }
+                    setShowDraftBanner(false);
+                  }}
+                  className="min-h-[36px] px-3 rounded-lg bg-navy text-white text-xs font-semibold"
+                >
+                  Weiter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearDraft();
+                    setConfig(getDefaultConfig());
+                    setSvgContent(null);
+                    try { sessionStorage.setItem(DRAFT_BANNER_KEY, '1'); } catch { /* ignore */ }
+                    setShowDraftBanner(false);
+                  }}
+                  className="min-h-[36px] px-3 rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-700"
+                >
+                  Neu starten
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-2 mb-2">
-            <div className={`flex-1 h-1.5 rounded-full ${workPhase === 'site' || workPhase === 'hardware' ? 'bg-petrol' : 'bg-zinc-200'}`} />
-            <div className={`flex-1 h-1.5 rounded-full ${workPhase === 'hardware' ? 'bg-petrol' : 'bg-zinc-200'}`} />
+            <div className={`flex-1 h-1.5 rounded-full ${workPhase === 'hardware' || workPhase === 'site' ? 'bg-petrol' : 'bg-zinc-200'}`} />
+            <div className={`flex-1 h-1.5 rounded-full ${workPhase === 'site' ? 'bg-petrol' : 'bg-zinc-200'}`} />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                Schritt {workPhase === 'site' ? '1' : '2'} von 2
+                Schritt {workPhase === 'hardware' ? '1' : '2'} von 2 · Produkt: Schlüsselanhänger
               </p>
               <p className="text-sm font-extrabold text-navy">
-                {workPhase === 'site' ? 'Was Kunden auf dem Handy sehen' : 'Dein Schlüsselanhänger'}
+                {workPhase === 'hardware'
+                  ? 'Dein Schlüsselanhänger'
+                  : (config.landingMode === 'external' ? 'Wohin der Chip öffnen soll' : 'Was Kunden auf dem Handy sehen')}
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 max-w-xl">
-                {workPhase === 'site'
-                  ? 'Baue zuerst die Seite für deine Kunden. Den Anhänger machst du im nächsten Schritt.'
-                  : 'Jetzt kommt der physische Anhänger. Die Handy-Seite ist schon fertig.'}
+                {workPhase === 'hardware'
+                  ? 'Logo prägen, Farbe wählen – das ist dein Produkt. Den Chip-Link legst du danach fest.'
+                  : (config.landingMode === 'external'
+                    ? 'Optional: Website, Instagram oder Shop – wohin der Chip nach dem Scannen öffnet.'
+                    : 'Optional: kleine Handy-Seite für deine Kunden – oder eigene URL wählen.')}
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {workPhase === 'hardware' && (
-                <button
-                  type="button"
-                  onClick={() => setWorkPhase('site')}
-                  className="min-h-[40px] px-3 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
-                >
-                  ← Zurück zur Handy-Seite
-                </button>
-              )}
               {workPhase === 'site' && (
                 <button
                   type="button"
-                  onClick={() => setWorkPhase('hardware')}
+                  onClick={goToHardware}
+                  className="min-h-[40px] px-3 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                >
+                  ← Zurück zum Anhänger
+                </button>
+              )}
+              {workPhase === 'hardware' && (
+                <button
+                  type="button"
+                  onClick={goToSite}
                   className="min-h-[40px] px-4 rounded-xl bg-navy text-white text-xs font-semibold hover:bg-navy/90"
                 >
-                  Weiter zum Anhänger →
+                  Weiter: Chip-Link →
                 </button>
               )}
             </div>
@@ -695,6 +807,42 @@ const ConfiguratorPage: React.FC = () => {
       </header>
 
       {workPhase === 'site' && (
+        <div className="px-4 md:px-5 pb-3 border-b border-zinc-100 bg-white">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Wohin soll der Chip öffnen?</p>
+          <div className="grid grid-cols-2 gap-2 max-w-xl">
+            <button
+              type="button"
+              onClick={() => setConfig((prev) => ({ ...prev, landingMode: 'microsite' }))}
+              className={`min-h-[52px] px-3 py-2 rounded-xl border text-left transition-colors ${
+                (config.landingMode || 'microsite') !== 'external'
+                  ? 'border-navy bg-navy text-white'
+                  : 'border-zinc-200 bg-white text-navy hover:border-navy/30'
+              }`}
+            >
+              <span className="block text-xs font-bold">NUDAIM-Seite</span>
+              <span className={`block text-[10px] mt-0.5 ${(config.landingMode || 'microsite') !== 'external' ? 'text-white/70' : 'text-zinc-500'}`}>
+                Hier bauen (Vorlagen)
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfig((prev) => ({ ...prev, landingMode: 'external' }))}
+              className={`min-h-[52px] px-3 py-2 rounded-xl border text-left transition-colors ${
+                config.landingMode === 'external'
+                  ? 'border-navy bg-navy text-white'
+                  : 'border-zinc-200 bg-white text-navy hover:border-navy/30'
+              }`}
+            >
+              <span className="block text-xs font-bold">Eigene Seite</span>
+              <span className={`block text-[10px] mt-0.5 ${config.landingMode === 'external' ? 'text-white/70' : 'text-zinc-500'}`}>
+                Website / Insta / Shop
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {workPhase === 'site' && config.landingMode !== 'external' && (
         <div className="sm:hidden flex border-b border-zinc-200/80 bg-white px-4 py-2">
           <div className="flex bg-zinc-100 p-0.5 rounded-lg w-full">
             <button
@@ -717,7 +865,60 @@ const ConfiguratorPage: React.FC = () => {
 
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
         <aside className={`flex flex-col bg-zinc-50/50 min-h-0 w-full md:w-[400px] lg:w-[420px] shrink-0 border-r border-zinc-200/80 ${mobileTab === 'editor' ? 'flex' : 'hidden md:flex'}`}>
-          {workPhase === 'site' && digitalMode === 'assist' ? (
+          {workPhase === 'site' && config.landingMode === 'external' ? (
+            <>
+              <div className="flex-1 scroll-container min-h-0">
+                <div className="p-4 sm:p-5 pb-28 md:pb-6 space-y-4">
+                  <div className="card p-4 sm:p-5 space-y-3">
+                    <p className="text-[9px] font-black uppercase text-petrol tracking-wider">Adresse eintragen</p>
+                    <p className="text-sm font-semibold text-navy leading-snug">
+                      Kein Konfigurator nötig – einfach den Link pasten.
+                    </p>
+                    <input
+                      type="url"
+                      inputMode="url"
+                      autoComplete="url"
+                      placeholder="z. B. www.dein-laden.de oder instagram.com/…"
+                      value={config.externalUrl || ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setConfig((prev) => {
+                          const normalized = toSafeHttpUrl(v);
+                          const next: ModelConfig = { ...prev, externalUrl: v };
+                          if (
+                            normalized &&
+                            (!prev.profileTitle || prev.profileTitle === DEFAULT_CONFIG.profileTitle)
+                          ) {
+                            next.profileTitle = hostnameFromUrl(normalized);
+                          }
+                          return next;
+                        });
+                      }}
+                      className="w-full p-4 rounded-2xl border border-navy/10 text-sm bg-cream font-medium outline-none focus:border-petrol/40"
+                    />
+                    <p className="text-[10px] text-zinc-500 leading-snug">
+                      Passt: Website, Instagram, Google-Profil, Shop, Buchungslink. Der Chip behält einen NUDAIM-Link – du kannst das Ziel später ändern.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void initiateSave()}
+                    className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+                  >
+                    <ShoppingCart size={18} />
+                    Fertig – bestellen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goToHardware}
+                    className="w-full min-h-[44px] rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700"
+                  >
+                    ← Zurück zum Anhänger
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : workPhase === 'site' && digitalMode === 'assist' ? (
             <div className="flex-1 min-h-0 flex flex-col">
               <div className="hidden sm:flex border-b border-zinc-100 bg-white px-3 py-2 gap-1">
                 <button
@@ -736,16 +937,26 @@ const ConfiguratorPage: React.FC = () => {
                 </button>
               </div>
               <div className="flex-1 min-h-0">
-                <MicrositeChat
-                  variant="panel"
-                  config={config}
-                  onApplyConfig={(next) => {
-                    setConfig(next);
-                    setPreviewType('digital');
-                  }}
-                  onContinueManual={() => setDigitalMode('manual')}
-                  onContinueToHardware={() => setWorkPhase('hardware')}
-                />
+                <Suspense
+                  fallback={
+                    <div className="h-full flex items-center justify-center gap-2 text-zinc-500">
+                      <Loader2 className="animate-spin text-petrol" size={24} />
+                      <span className="text-sm">Assistent lädt…</span>
+                    </div>
+                  }
+                >
+                  <MicrositeChat
+                    variant="panel"
+                    config={config}
+                    onApplyConfig={(next) => {
+                      setConfig(next);
+                      setPreviewType('digital');
+                    }}
+                    onContinueManual={() => setDigitalMode('manual')}
+                    onContinueToHardware={goToHardware}
+                    onContinueToOrder={() => void initiateSave()}
+                  />
+                </Suspense>
               </div>
             </div>
           ) : workPhase === 'site' ? (
@@ -772,19 +983,28 @@ const ConfiguratorPage: React.FC = () => {
                     activeDept="digital"
                     config={config}
                     setConfig={setConfig}
-                    svgElements={svgElements}
+                    hasLogo={!!svgContent}
                     onUpload={handleFileUpload}
-                    onUpdateColor={(id, c) => setSvgElements(prev => prev?.map(el => el.id === id ? { ...el, currentColor: c } : el) || null)}
+                    onApplyTextEngrave={handleTextEngrave}
+                    logoBusy={logoBusy}
                   />
                 </div>
               </div>
               <footer className="hidden md:flex shrink-0 p-4 border-t border-zinc-200/80 bg-white flex-col gap-2">
                 <button
                   type="button"
-                  onClick={() => setWorkPhase('hardware')}
+                  onClick={() => void initiateSave()}
                   className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
-                  Weiter zum Anhänger →
+                  <ShoppingCart size={18} />
+                  Fertig – bestellen
+                </button>
+                <button
+                  type="button"
+                  onClick={goToHardware}
+                  className="w-full min-h-[44px] rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700"
+                >
+                  ← Zurück zum Anhänger
                 </button>
               </footer>
             </>
@@ -810,16 +1030,24 @@ const ConfiguratorPage: React.FC = () => {
                     activeDept="3d"
                     config={config}
                     setConfig={setConfig}
-                    svgElements={svgElements}
+                    hasLogo={!!svgContent}
                     onUpload={handleFileUpload}
-                    onUpdateColor={(id, c) => setSvgElements(prev => prev?.map(el => el.id === id ? { ...el, currentColor: c } : el) || null)}
+                    onApplyTextEngrave={handleTextEngrave}
+                    logoBusy={logoBusy}
                   />
                 </div>
               </div>
-              <footer className="hidden md:flex shrink-0 p-4 border-t border-zinc-200/80 bg-white">
-                <button type="button" onClick={initiateSave} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
-                  <ShoppingCart size={18} />
-                  Fertig – bestellen
+              <footer className="hidden md:flex shrink-0 p-4 border-t border-zinc-200/80 bg-white flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={goToSite}
+                  className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+                >
+                  Weiter: Chip-Link →
+                </button>
+                <button type="button" onClick={() => void initiateSave()} className="w-full min-h-[44px] rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 flex items-center justify-center gap-2">
+                  <ShoppingCart size={16} />
+                  Direkt bestellen
                 </button>
               </footer>
             </>
@@ -828,28 +1056,38 @@ const ConfiguratorPage: React.FC = () => {
 
         <main className={`flex-1 relative z-10 min-h-0 bg-zinc-100 ${mobileTab === 'preview' ? 'flex flex-col' : 'hidden md:flex'}`}>
           <div className="flex-1 relative overflow-hidden min-h-[200px]">
-            <Viewer
-              ref={viewerRef}
-              config={config}
-              svgElements={svgElements}
-              showNFCPreview={workPhase === 'site'}
-              googleLogoUrl={session?.user?.user_metadata?.avatar_url}
-            />
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] px-4 py-2 rounded-lg bg-white/95 border border-zinc-200 shadow-sm text-xs font-semibold text-navy">
-              {workPhase === 'site' ? 'So sehen es deine Kunden' : 'Dein Schlüsselanhänger'}
-            </div>
+            {workPhase === 'site' ? (
+              <SitePreview
+                config={config}
+                googleLogoUrl={session?.user?.user_metadata?.avatar_url}
+                label={config.landingMode === 'external' ? 'Ziel-Link für Kunden' : 'So sehen es deine Kunden'}
+              />
+            ) : (
+              <KeychainPreview ref={viewerRef} config={config} svgContent={svgContent} />
+            )}
+            {workPhase === 'hardware' && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] px-4 py-2 rounded-lg bg-white/95 border border-zinc-200 shadow-sm text-xs font-semibold text-navy">
+                Dein Schlüsselanhänger
+              </div>
+            )}
           </div>
           <div className="md:hidden shrink-0 p-4 bg-white border-t border-zinc-200 safe-bottom">
-            {workPhase === 'site' ? (
-              <button
-                type="button"
-                onClick={() => setWorkPhase('hardware')}
-                className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
-              >
-                Weiter zum Anhänger →
-              </button>
+            {workPhase === 'hardware' ? (
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={goToSite}
+                  className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+                >
+                  Weiter: Chip-Link →
+                </button>
+                <button type="button" onClick={() => void initiateSave()} className="w-full min-h-[44px] rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 flex items-center justify-center gap-2">
+                  <ShoppingCart size={16} />
+                  Direkt bestellen
+                </button>
+              </div>
             ) : (
-              <button type="button" onClick={initiateSave} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
+              <button type="button" onClick={() => void initiateSave()} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
                 <ShoppingCart size={18} />
                 Fertig – bestellen
               </button>
@@ -858,7 +1096,9 @@ const ConfiguratorPage: React.FC = () => {
           {savingStep !== 'idle' && (
             <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-[600] flex flex-col items-center justify-center text-center px-6">
               <RefreshCw className="text-petrol animate-spin mb-4" size={40} />
-              <p className="font-black uppercase tracking-wider text-navy text-sm">Wird vorbereitet…</p>
+              <p className="font-black uppercase tracking-wider text-navy text-sm">
+                {SAVING_LABELS[savingStep] || 'Wird vorbereitet…'}
+              </p>
               <p className="text-[10px] text-zinc-500 mt-1">Danach geht’s zur Bestellung</p>
             </div>
           )}
@@ -868,11 +1108,11 @@ const ConfiguratorPage: React.FC = () => {
       <nav className="md:hidden flex h-16 bg-white border-t border-zinc-200 z-[600] shrink-0 pb-safe pt-1" role="tablist" aria-label="Hauptnavigation">
         <button type="button" role="tab" onClick={() => setMobileTab('editor')} className={`flex-1 flex flex-col items-center justify-center gap-1 min-w-0 transition-colors ${mobileTab === 'editor' ? 'text-navy' : 'text-zinc-400'}`} aria-selected={mobileTab === 'editor'}>
           <Edit3 size={22} strokeWidth={mobileTab === 'editor' ? 2.5 : 2} />
-          <span className="text-[10px] font-semibold">Bauen</span>
+          <span className="text-[10px] font-semibold">{workPhase === 'hardware' ? 'Anhänger' : 'Chip-Link'}</span>
         </button>
         <button type="button" role="tab" onClick={() => setMobileTab('preview')} className={`flex-1 flex flex-col items-center justify-center gap-1 min-w-0 transition-colors ${mobileTab === 'preview' ? 'text-navy' : 'text-zinc-400'}`} aria-selected={mobileTab === 'preview'}>
           <Smartphone size={22} strokeWidth={mobileTab === 'preview' ? 2.5 : 2} />
-          <span className="text-[10px] font-semibold">Kunden-Ansicht</span>
+          <span className="text-[10px] font-semibold">{workPhase === 'hardware' ? 'Vorschau' : 'Handy-Ansicht'}</span>
         </button>
       </nav>
     </div>

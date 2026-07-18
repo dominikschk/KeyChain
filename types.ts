@@ -13,6 +13,8 @@ export type ActionIcon = 'link' | 'globe' | 'shopping-cart' | 'info' | 'briefcas
 export type FontStyle = 'luxury' | 'modern' | 'elegant' | 'display' | 'soft';
 export type ProfileTheme = 'light' | 'dark';
 export type LayoutMode = 'stack' | 'landing';
+/** Chip öffnet NUDAIM-Seite oder leitet auf eine eigene URL weiter. */
+export type LandingMode = 'microsite' | 'external';
 
 export interface NFCBlock {
   id: string;
@@ -55,6 +57,8 @@ export interface ModelConfig {
   logoPosY: number;
   logoRotation: number;
   logoColor: string;
+  /** Farbe der Platte (Kunststoff) */
+  plateColor?: string;
   mirrorX: boolean;
   hasChain: boolean;
   eyeletPosX: number;
@@ -76,6 +80,10 @@ export interface ModelConfig {
   theme: ProfileTheme;
   /** stack = klassische Kacheln, landing = Mini-Website mit Hero/Sections */
   layoutMode?: LayoutMode;
+  /** microsite = Konfigurator-Seite, external = eigene Website/Instagram/Shop */
+  landingMode?: LandingMode;
+  /** Ziel-URL wenn landingMode === 'external' (http/https) */
+  externalUrl?: string;
 }
 
 export interface SVGPathData {
