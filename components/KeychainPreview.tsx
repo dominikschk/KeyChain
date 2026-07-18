@@ -3,7 +3,7 @@
  */
 import React, { forwardRef, useImperativeHandle, useRef, useEffect, useCallback } from 'react';
 import type { ModelConfig } from '../types';
-import { extractRasterPngFromSvg, isRasterLogoSvg } from '../lib/logoFromRaster';
+import { extractRasterPngFromSvg, isRasterLogoSvg, keepsOriginalLogoColors } from '../lib/logoFromRaster';
 
 const BASE_IMG = '/keychain-base.png';
 
@@ -110,6 +110,11 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
             const png = extractRasterPngFromSvg(svgContent);
             if (!png) {
               if (!cancelled) setLogoUrl(null);
+              return;
+            }
+            // Originalfarben (max. 3) beibehalten – Druckfarbe nur bei Mono-Text-Logos
+            if (keepsOriginalLogoColors(svgContent)) {
+              if (!cancelled) setLogoUrl(png);
               return;
             }
             const colored = await colorizeLogoPng(png, printColor);

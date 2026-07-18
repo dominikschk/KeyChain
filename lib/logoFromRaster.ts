@@ -1,11 +1,11 @@
 /**
- * Logo für den Anhänger – neuer Ansatz:
- * Raster → Hintergrund weg → als PNG im SVG speichern (kein Trace-Chaos).
- * SVG-Dateien bleiben Vektor.
- * Vorschau färbt die Pixel ein; kein vecburner/Multi-Color-Trace.
+ * Logo für den Anhänger:
+ * RemBg → Originalfarben behalten (max. 3, sonst vereinfachen) → PNG im SVG.
  */
 
 import { processLogoForPrint, compositeOnWhite, toPrintBinary } from './logoProcess';
+
+const MAX_LOGO_COLORS = 3;
 
 function maxEdge(): number {
   if (typeof window !== 'undefined' && window.innerWidth < 768) return 420;
@@ -14,6 +14,8 @@ function maxEdge(): number {
 
 const PHOTO_MSG =
   'Das sieht nach einem Foto aus, nicht nach einem Logo. Bitte ein Logo mit klarem Motiv und einfachem Hintergrund hochladen (PNG/JPG/SVG).';
+
+type Rgb = { r: number; g: number; b: number };
 
 async function fileToRawImageData(file: File): Promise<ImageData> {
   const bitmap = await createImageBitmap(file);
@@ -37,42 +39,181 @@ async function fileToRawImageData(file: File): Promise<ImageData> {
   }
 }
 
-/** Motiv-Maske: alles Nicht-Weiß = Logo, Alpha aus Kante (Anti-Alias). */
-function toSoftLogoRgba(traceOnWhite: ImageData, printBinary: ImageData): ImageData {
+function lum(r: number, g: number, b: number): number {
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+function dist2(a: Rgb, b: Rgb): number {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return dr * dr + dg * dg + db * db;
+}
+
+function isBgPixel(r: number, g: number, b: number, maskBg: boolean): boolean {
+  if (maskBg) return true;
+  const L = lum(r, g, b);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const sat = max === 0 ? 0 : (max - min) / max;
+  return L > 238 && sat < 0.1;
+}
+
+/** Palette auf max. k Farben reduzieren (häufigste + Merge). */
+function buildPalette(samples: Rgb[], maxColors: number): Rgb[] {
+  if (!samples.length) return [{ r: 0, g: 0, b: 0 }];
+  if (maxColors < 1) maxColors = 1;
+
+  // Grobe Buckets (5 Bit) zählen
+  const buckets = new Map<number, { color: Rgb; count: number }>();
+  for (const p of samples) {
+    const key = ((p.r >> 3) << 10) | ((p.g >> 3) << 5) | (p.b >> 3);
+    const cur = buckets.get(key);
+    if (cur) {
+      const n = cur.count + 1;
+      cur.color = {
+        r: Math.round((cur.color.r * cur.count + p.r) / n),
+        g: Math.round((cur.color.g * cur.count + p.g) / n),
+        b: Math.round((cur.color.b * cur.count + p.b) / n),
+      };
+      cur.count = n;
+    } else {
+      buckets.set(key, { color: { ...p }, count: 1 });
+    }
+  }
+
+  let clusters = [...buckets.values()].sort((a, b) => b.count - a.count);
+
+  // Zu ähnliche Buckets mergen
+  const mergeThr = 38 * 38;
+  const merged: { color: Rgb; count: number }[] = [];
+  for (const c of clusters) {
+    let hit: (typeof merged)[number] | null = null;
+    let best = Infinity;
+    for (const m of merged) {
+      const d = dist2(c.color, m.color);
+      if (d < mergeThr && d < best) {
+        best = d;
+        hit = m;
+      }
+    }
+    if (hit) {
+      const n = hit.count + c.count;
+      hit.color = {
+        r: Math.round((hit.color.r * hit.count + c.color.r * c.count) / n),
+        g: Math.round((hit.color.g * hit.count + c.color.g * c.count) / n),
+        b: Math.round((hit.color.b * hit.count + c.color.b * c.count) / n),
+      };
+      hit.count = n;
+    } else {
+      merged.push({ color: { ...c.color }, count: c.count });
+    }
+  }
+  clusters = merged.sort((a, b) => b.count - a.count);
+
+  // Wenn mehr als maxColors: nächste Paare zusammenlegen bis Limit
+  while (clusters.length > maxColors) {
+    let bi = 0;
+    let bj = 1;
+    let best = Infinity;
+    for (let i = 0; i < clusters.length; i++) {
+      for (let j = i + 1; j < clusters.length; j++) {
+        const d = dist2(clusters[i]!.color, clusters[j]!.color);
+        if (d < best) {
+          best = d;
+          bi = i;
+          bj = j;
+        }
+      }
+    }
+    const a = clusters[bi]!;
+    const b = clusters[bj]!;
+    const n = a.count + b.count;
+    const next = {
+      color: {
+        r: Math.round((a.color.r * a.count + b.color.r * b.count) / n),
+        g: Math.round((a.color.g * a.count + b.color.g * b.count) / n),
+        b: Math.round((a.color.b * a.count + b.color.b * b.count) / n),
+      },
+      count: n,
+    };
+    clusters = clusters.filter((_, idx) => idx !== bi && idx !== bj);
+    clusters.push(next);
+    clusters.sort((x, y) => y.count - x.count);
+  }
+
+  return clusters.slice(0, maxColors).map((c) => c.color);
+}
+
+function nearestColor(p: Rgb, palette: Rgb[]): Rgb {
+  let best = palette[0]!;
+  let bestD = Infinity;
+  for (const c of palette) {
+    const d = dist2(p, c);
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return best;
+}
+
+/**
+ * Originalfarben behalten, auf max. 3 vereinfachen, Hintergrund transparent.
+ */
+function toColorLimitedLogo(traceOnWhite: ImageData, printBinary: ImageData, maxColors = MAX_LOGO_COLORS): ImageData {
   const w = traceOnWhite.width;
   const h = traceOnWhite.height;
-  const out = new ImageData(w, h);
   const src = traceOnWhite.data;
   const sameSize = printBinary.width === w && printBinary.height === h;
   const mask = sameSize ? printBinary.data : null;
-  const d = out.data;
 
-  for (let i = 0; i < src.length; i += 4) {
+  const samples: Rgb[] = [];
+  const fgFlags = new Uint8Array(w * h);
+
+  for (let p = 0, i = 0; i < src.length; i += 4, p++) {
     const r = src[i]!;
     const g = src[i + 1]!;
     const b = src[i + 2]!;
-    const L = 0.299 * r + 0.587 * g + 0.114 * b;
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const sat = max === 0 ? 0 : (max - min) / max;
+    const maskBg = mask ? mask[i]! >= 128 : false;
+    if (isBgPixel(r, g, b, maskBg)) continue;
+    fgFlags[p] = 1;
+    // AA-helle Ränder nicht in die Palette ziehen (verzerren Farben)
+    if (lum(r, g, b) < 220) samples.push({ r, g, b });
+  }
 
-    // Druckmaske nur zum Entfernen von Rest-Hintergrund, nicht zum Verhärten
-    const maskSaysBg = mask ? mask[i]! >= 128 : false;
-    const looksLikeBg = L > 238 && sat < 0.1;
-    if (maskSaysBg || looksLikeBg) {
+  // Zu wenige Samples → alle FG-Pixel
+  if (samples.length < 40) {
+    samples.length = 0;
+    for (let p = 0, i = 0; i < src.length; i += 4, p++) {
+      if (!fgFlags[p]) continue;
+      samples.push({ r: src[i]!, g: src[i + 1]!, b: src[i + 2]! });
+    }
+  }
+
+  const palette = buildPalette(samples, maxColors);
+  const out = new ImageData(w, h);
+  const d = out.data;
+
+  for (let p = 0, i = 0; i < src.length; i += 4, p++) {
+    if (!fgFlags[p]) {
       d[i] = d[i + 1] = d[i + 2] = 0;
       d[i + 3] = 0;
       continue;
     }
-
-    // Weiche Deckkraft: dunkle/kräftige Pixel voll, helle AA-Ränder weicher
-    const strength = Math.max(0, Math.min(1, (230 - L) / 90 + sat * 0.5));
-    const a = Math.round(255 * Math.max(0.4, strength));
-    d[i] = 0;
-    d[i + 1] = 0;
-    d[i + 2] = 0;
-    d[i + 3] = a;
+    const r = src[i]!;
+    const g = src[i + 1]!;
+    const b = src[i + 2]!;
+    const L = lum(r, g, b);
+    const c = nearestColor({ r, g, b }, palette);
+    // Weiche Kante an hellen AA-Pixeln
+    const strength = Math.max(0.45, Math.min(1, (235 - L) / 70 + 0.35));
+    d[i] = c.r;
+    d[i + 1] = c.g;
+    d[i + 2] = c.b;
+    d[i + 3] = Math.round(255 * strength);
   }
+
   return out;
 }
 
@@ -86,13 +227,13 @@ function imageDataToPngDataUrl(img: ImageData): string {
   return canvas.toDataURL('image/png');
 }
 
-/** Minimales SVG mit eingebettetem PNG – kein Pfad-Trace. */
-function pngDataUrlToSvg(dataUrl: string, width: number, height: number): string {
+function pngDataUrlToSvg(dataUrl: string, width: number, height: number, keepColors: boolean): string {
   const w = Math.max(1, width);
   const h = Math.max(1, height);
+  const keep = keepColors ? '1' : '0';
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
-    `width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" data-nudaim-logo="raster">` +
+    `width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" data-nudaim-logo="raster" data-keep-colors="${keep}">` +
     `<image width="${w}" height="${h}" href="${dataUrl}" xlink:href="${dataUrl}" ` +
     `preserveAspectRatio="xMidYMid meet"/>` +
     `</svg>`
@@ -103,7 +244,11 @@ export function isRasterLogoSvg(svg: string | null | undefined): boolean {
   return !!svg && /data-nudaim-logo="raster"/i.test(svg);
 }
 
-/** PNG data-URL aus unserem Raster-SVG lesen. */
+/** Originalfarben beibehalten (nicht mit Druckfarbe überschreiben). */
+export function keepsOriginalLogoColors(svg: string | null | undefined): boolean {
+  return !!svg && /data-keep-colors="1"/i.test(svg);
+}
+
 export function extractRasterPngFromSvg(svg: string): string | null {
   const m =
     /\shref="(data:image\/png;base64,[^"]+)"/i.exec(svg) ||
@@ -133,10 +278,10 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
       throw new Error(PHOTO_MSG);
     }
     const preset = String(analysis.recommendedPreset || '').toLowerCase();
-    forceLogo = preset === 'logo' || preset === 'simple' || preset === 'lineart' || preset === 'pixel' || !analysis.isPhoto;
+    forceLogo =
+      preset === 'logo' || preset === 'simple' || preset === 'lineart' || preset === 'pixel' || !analysis.isPhoto;
   } catch (err) {
     if (err instanceof Error && err.message === PHOTO_MSG) throw err;
-    // Analyse optional – ohne vecburner trotzdem weiter
   }
 
   const processed = processLogoForPrint(raw, { forceLogo });
@@ -144,16 +289,15 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
     throw new Error(processed.message);
   }
 
-  // Weiches Logo-PNG (keine Treppen-Vektoren)
-  const soft = toSoftLogoRgba(processed.traceImage, processed.image);
-  // Falls Maske andere Größe: nur Trace nutzen
-  const rgba =
-    soft.width === processed.traceImage.width
-      ? soft
-      : toSoftLogoRgba(processed.traceImage, toPrintBinary(processed.traceImage));
+  const binary =
+    processed.image.width === processed.traceImage.width &&
+    processed.image.height === processed.traceImage.height
+      ? processed.image
+      : toPrintBinary(processed.traceImage);
 
+  const rgba = toColorLimitedLogo(processed.traceImage, binary, MAX_LOGO_COLORS);
   const png = imageDataToPngDataUrl(rgba);
-  const svg = pngDataUrlToSvg(png, rgba.width, rgba.height);
+  const svg = pngDataUrlToSvg(png, rgba.width, rgba.height, true);
 
   return {
     svg,
@@ -162,7 +306,7 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
   };
 }
 
-/** Firmenname als PNG-Schrift (ebenfalls ohne Trace). */
+/** Firmenname: schwarz, wird in der Vorschau mit Druckfarbe eingefärbt. */
 export async function textToEngraveSvg(raw: string): Promise<string> {
   const text = raw.trim().replace(/\s+/g, ' ').slice(0, 28);
   if (!text) throw new Error('Bitte einen Namen eingeben.');
@@ -187,22 +331,18 @@ export async function textToEngraveSvg(raw: string): Promise<string> {
   ctx.fillText(text, canvas.width / 2, canvas.height / 2 + size * 0.05);
 
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  // Nur nicht-transparente Pixel behalten
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
-    const a = d[i + 3]!;
-    if (a < 20) {
+    if (d[i + 3]! < 20) {
       d[i] = d[i + 1] = d[i + 2] = 0;
       d[i + 3] = 0;
     } else {
       d[i] = d[i + 1] = d[i + 2] = 0;
-      // Alpha aus Font-Antialiasing
     }
   }
 
   const png = imageDataToPngDataUrl(img);
-  return pngDataUrlToSvg(png, canvas.width, canvas.height);
+  return pngDataUrlToSvg(png, canvas.width, canvas.height, false);
 }
 
-// Re-export für ggf. Tests
 export { compositeOnWhite };
