@@ -643,10 +643,15 @@ export function checkPrintability(binary: ImageData): LogoProcessFail | { ok: tr
   return { ok: true, image: maskToImageData(mask, w, h), foregroundRatio: ratio };
 }
 
+export type ProcessLogoOptions = {
+  /** Wenn vecburner Logo/Simple/Lineart empfiehlt: Foto-Reject überspringen. */
+  forceLogo?: boolean;
+};
+
 /**
  * Vollpipeline: RemBg → Logo/Foto → Binär → Druckbarkeit.
  */
-export function processLogoForPrint(src: ImageData): LogoProcessResult {
+export function processLogoForPrint(src: ImageData, options: ProcessLogoOptions = {}): LogoProcessResult {
   const { image: cut, removed, bgUniform } = removeBackground(src);
   let cropped = cropToForeground(cut, 6);
   let cls = classifyLogoOrPhoto(src, cropped, bgUniform);
@@ -658,7 +663,7 @@ export function processLogoForPrint(src: ImageData): LogoProcessResult {
     cls = classifyLogoOrPhoto(src, cropped, soft.bgUniform);
   }
 
-  if (cls.kind === 'photo') {
+  if (cls.kind === 'photo' && !options.forceLogo) {
     return { ok: false, reason: 'photo', message: PHOTO_MSG };
   }
 

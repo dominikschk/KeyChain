@@ -19,7 +19,8 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "three": "0.169.0",
-    "three-bvh-csg": "^0.0.16"
+    "three-bvh-csg": "^0.0.16",
+    "vecburner": "^1.0.0"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.5",

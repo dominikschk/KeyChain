@@ -16,6 +16,9 @@ export default defineConfig({
           if (id.includes('imagetracerjs')) {
             return 'imagetracer';
           }
+          if (id.includes('vecburner')) {
+            return 'vecburner';
+          }
         },
       },
     },

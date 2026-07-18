@@ -1,6 +1,8 @@
 /**
- * Logo für den Anhänger: PNG/JPG → Hintergrund weg → Logo-Check → 3D-Druck-Check → SVG.
- * ImageTracer wird erst beim Upload dynamisch geladen.
+ * Logo für den Anhänger (gratis-Stack):
+ * 1) Regelbasierte Aufbereitung (Hintergrund, Foto-Check, Druckbarkeit)
+ * 2) Vektorisieren mit vecburner (Logo/Lineart-Preset)
+ * 3) Fallback: imagetracerjs
  */
 
 import { processLogoForPrint } from './logoProcess';
@@ -29,7 +31,51 @@ const TRACE_OPTS = {
   rightangleenhance: true,
 };
 
-async function imageDataToSvg(img: ImageData): Promise<string> {
+const PHOTO_MSG =
+  'Das sieht nach einem Foto aus, nicht nach einem Logo. Bitte ein Logo mit klarem Motiv und einfachem Hintergrund hochladen (PNG/JPG/SVG).';
+
+/** Vecburner legt oft ein Hintergrund-Rect und helle Fills an – für Prägung entfernen. */
+function cleanEngraveSvg(svg: string): string {
+  let out = svg
+    .replace(/<\?xml[\s\S]*?\?>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<rect\b[^>]*\/?>/gi, '');
+
+  out = out.replace(/<path\b[^>]*\/?>/gi, (tag) => {
+    const fillMatch = /\sfill="([^"]*)"/i.exec(tag);
+    const fill = (fillMatch?.[1] || '').trim().toLowerCase().replace(/\s+/g, '');
+    const isLight =
+      fill === 'none' ||
+      fill === '#fff' ||
+      fill === '#ffffff' ||
+      fill === 'white' ||
+      fill === 'rgb(255,255,255)' ||
+      /^rgba\(255,255,255,/.test(fill);
+    if (isLight) return '';
+    let next = tag.replace(/\sfill="[^"]*"/gi, ' fill="#000000"');
+    if (!/\sfill=/i.test(next)) next = next.replace(/<path\b/i, '<path fill="#000000"');
+    next = next.replace(/\sstroke="[^"]*"/gi, ' stroke="none"');
+    next = next.replace(/\sstroke-width="[^"]*"/gi, '');
+    return next;
+  });
+
+  if (!/<path\b/i.test(out)) {
+    throw new Error(
+      'Kein klares Motiv erkannt. Bitte ein Logo mit klarem Kontrast verwenden (dunkles Logo auf hell oder umgekehrt).'
+    );
+  }
+  return out;
+}
+
+async function imageDataToSvgVecburner(img: ImageData): Promise<string> {
+  const { Vecburner } = await import('vecburner');
+  // Binärbild → Lineart-Preset (gratis, ohne Cloud)
+  const result = await Vecburner.vectorizeWithPreset(img, 'lineart');
+  if (!result?.svg) throw new Error('Vektorisierung fehlgeschlagen.');
+  return cleanEngraveSvg(result.svg);
+}
+
+async function imageDataToSvgImageTracer(img: ImageData): Promise<string> {
   const ImageTracer = (await import('imagetracerjs')).default;
   const svg = ImageTracer.imagedataToSVG(img, TRACE_OPTS) as string;
   if (!svg || !/<svg[\s>]/i.test(svg) || !/<path\b/i.test(svg)) {
@@ -37,7 +83,16 @@ async function imageDataToSvg(img: ImageData): Promise<string> {
       'Kein klares Motiv erkannt. Bitte ein Logo mit klarem Kontrast verwenden (dunkles Logo auf hell oder umgekehrt).'
     );
   }
-  return svg;
+  return cleanEngraveSvg(svg);
+}
+
+async function imageDataToSvg(img: ImageData): Promise<string> {
+  try {
+    return await imageDataToSvgVecburner(img);
+  } catch (err) {
+    console.warn('vecburner failed, falling back to imagetracerjs', err);
+    return imageDataToSvgImageTracer(img);
+  }
 }
 
 async function fileToRawImageData(file: File): Promise<ImageData> {
@@ -75,7 +130,25 @@ export async function rasterFileToSvg(file: File): Promise<string> {
 /** Wie rasterFileToSvg, inkl. Meta für die UI. */
 export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoResult> {
   const raw = await fileToRawImageData(file);
-  const processed = processLogoForPrint(raw);
+
+  // Gratis-Analyse von vecburner (kein API-Key, kein Upload)
+  let forceLogo = false;
+  try {
+    const { Vecburner } = await import('vecburner');
+    const analysis = Vecburner.analyzeImage(raw);
+    if (analysis.isPhoto) {
+      throw new Error(PHOTO_MSG);
+    }
+    const preset = String(analysis.recommendedPreset || '').toLowerCase();
+    if (preset === 'logo' || preset === 'simple' || preset === 'lineart' || preset === 'pixel') {
+      forceLogo = true;
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message === PHOTO_MSG) throw err;
+    console.warn('vecburner analyze skipped', err);
+  }
+
+  const processed = processLogoForPrint(raw, { forceLogo });
   if (!processed.ok) {
     throw new Error(processed.message);
   }
@@ -113,10 +186,8 @@ export async function textToEngraveSvg(raw: string): Promise<string> {
   ctx.fillText(text, canvas.width / 2, canvas.height / 2 + size * 0.05);
 
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  // Text ist bereits Logo-ähnlich – Pipeline trotzdem für Einheitlichkeit
-  const processed = processLogoForPrint(img);
+  const processed = processLogoForPrint(img, { forceLogo: true });
   if (!processed.ok) {
-    // Fallback: direkte Binarisierung ohne Foto-Check (reiner Text)
     for (let i = 0; i < img.data.length; i += 4) {
       const v = img.data[i]! < 128 ? 0 : 255;
       img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
