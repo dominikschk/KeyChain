@@ -242,8 +242,8 @@
     {% if p.first == 'Bearbeiten-Link' and p.last != blank %}{% assign nudaim_ccp = p.last %}{% endif %}
     {% if p.first == 'Config-ID' and p.last != blank %}{% assign nudaim_cfg = p.last %}{% endif %}
   {% endfor %}
-  {% if nudaim_ms == blank and line.properties['Microsite-URL'] != blank %}{% assign nudaim_ms = line.properties['Microsite-URL'] %}{% endif %}
   {% if nudaim_ms == blank and line.properties['Handy-Seite'] != blank %}{% assign nudaim_ms = line.properties['Handy-Seite'] %}{% endif %}
+  {% if nudaim_ms == blank and line.properties['Microsite-URL'] != blank %}{% assign nudaim_ms = line.properties['Microsite-URL'] %}{% endif %}
   {% if nudaim_ccp == blank and line.properties['Bearbeiten-Link'] != blank %}{% assign nudaim_ccp = line.properties['Bearbeiten-Link'] %}{% endif %}
   {% if nudaim_ccp == blank and line.properties['_CCP-URL'] != blank %}{% assign nudaim_ccp = line.properties['_CCP-URL'] %}{% endif %}
 

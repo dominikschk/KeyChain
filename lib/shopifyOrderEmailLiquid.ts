@@ -1,6 +1,7 @@
 /**
  * Fertiger Liquid-Schnipsel für die Shopify-Bestellbestätigung (NUDAIM-Stil).
- * Zeigt den Block nur 1× pro Config-ID (keine 7× Wiederholung bei mehreren Line-Items).
+ * Properties (Checkout): Handy-Seite, Bearbeiten-Link (+ versteckt _CCP-URL).
+ * Alte Orders mit Microsite-URL bleiben in der Mail lesbar.
  */
 export const SHOPIFY_ORDER_EMAIL_LIQUID = `{% comment %} --- START NUDAIM: Handy-Seite + Bearbeiten-Link (max. 1× pro Config) --- {% endcomment %}
 {% assign nudaim_seen = '|' %}

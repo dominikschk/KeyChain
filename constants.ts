@@ -48,10 +48,9 @@ export function buildShopifyCartUrl(
   };
   if (origin) {
     const micrositeUrl = buildMicrositeUrl(origin, shortId);
-    // Öffentlich: ohne write_token
-    params['properties[Microsite-URL]'] = micrositeUrl;
+    // Eine sichtbare Property (deutsch) – kein zweites Synonym im Checkout
     params['properties[Handy-Seite]'] = micrositeUrl;
-    // Edit-Capability: _CCP-URL (Warenkorb oft versteckt) + Bearbeiten-Link (sichtbar in Order/Mail)
+    // Edit: _CCP-URL oft im Warenkorb versteckt; Bearbeiten-Link sichtbar in Order/Mail
     if (writeToken && writeToken.length >= 32) {
       const ccpUrl = buildCcpEditUrl(origin, shortId, writeToken);
       params['properties[_CCP-URL]'] = ccpUrl;
