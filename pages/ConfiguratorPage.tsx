@@ -554,7 +554,7 @@ const ConfiguratorPage: React.FC = () => {
   const applyEngraveSvg = useCallback((content: string) => {
     if (!content?.trim()) {
       showError(
-        'Tipp: Dunkles Logo auf hellem Hintergrund funktioniert am besten.',
+        'Tipp: Einfaches Logo mit kräftigen Linien – ideal für den 3D-Druck.',
         'Logo konnte nicht geprägt werden.'
       );
       return false;
@@ -591,18 +591,19 @@ const ConfiguratorPage: React.FC = () => {
           return;
         }
       } else if (isRasterLogoFile(file)) {
-        const { rasterFileToSvg } = await import('../lib/logoFromRaster');
-        content = await rasterFileToSvg(file);
+        const { rasterFileToSvgDetailed } = await import('../lib/logoFromRaster');
+        const result = await rasterFileToSvgDetailed(file);
+        content = result.svg;
       } else {
-        showError('Bitte ein Foto/PNG/JPG oder SVG vom Logo wählen.');
+        showError('Bitte ein Logo als PNG, JPG oder SVG wählen.');
         return;
       }
 
       if (!applyEngraveSvg(content)) return;
     } catch (err) {
       console.error('Logo upload error:', err);
-      const msg = err instanceof Error ? err.message : 'Bitte versuche ein anderes Bild.';
-      showError(msg, 'Logo konnte nicht geladen werden.');
+      const msg = err instanceof Error ? err.message : 'Bitte versuche ein anderes Logo.';
+      showError(msg, 'Logo nicht druckbar');
     } finally {
       setLogoBusy(false);
       resetFileInput(input);
@@ -773,7 +774,7 @@ const ConfiguratorPage: React.FC = () => {
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 max-w-xl">
                 {workPhase === 'hardware'
-                  ? 'Logo und Text auf deinen Anhänger – wie im Onlineshop.'
+                  ? 'Logo prüfen, Hintergrund entfernen, druckfertig prägen – live in der Vorschau.'
                   : (config.landingMode === 'external'
                     ? 'Optional: Website, Instagram oder Shop – wohin der Chip nach dem Scannen öffnet.'
                     : 'Optional: kleine Handy-Seite für deine Kunden – oder eigene URL wählen.')}

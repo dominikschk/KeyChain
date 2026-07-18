@@ -194,62 +194,85 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
     }));
 
     return (
-      <div className="w-full h-full bg-[#F3F4F6] flex items-center justify-center p-4 md:p-8">
+      <div
+        className="w-full h-full flex items-center justify-center p-4 md:p-10 relative overflow-hidden"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 60% at 50% 40%, #ffffff 0%, #e8eef5 45%, #d4dde8 100%)',
+        }}
+      >
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.35]"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 20% 20%, rgba(18,169,224,0.12), transparent 40%), radial-gradient(circle at 80% 70%, rgba(17,35,90,0.08), transparent 45%)',
+          }}
+          aria-hidden
+        />
         <canvas ref={canvasRef} className="hidden" aria-hidden />
-        <div className="relative w-full max-w-[560px] aspect-square bg-white rounded-sm shadow-sm border border-zinc-200/80 flex items-center justify-center overflow-hidden">
-          <div className="relative w-[86%] max-w-[440px]">
-            <img
-              src={BASE_IMG}
-              alt="Schlüsselanhänger"
-              className="w-full h-auto select-none pointer-events-none"
-              draggable={false}
-            />
-            {!isDefaultPlate && (
-              <div
-                className="absolute inset-[14%] rounded-[18%] pointer-events-none mix-blend-multiply opacity-45"
-                style={{ backgroundColor: plate, top: '16%', bottom: '12%', left: '14%', right: '14%' }}
-                aria-hidden
+        <div className="relative w-full max-w-[560px]">
+          <div className="absolute -inset-3 rounded-[1.25rem] bg-white/40 blur-xl" aria-hidden />
+          <div className="relative aspect-square rounded-2xl bg-white/90 border border-navy/10 shadow-[0_20px_60px_-28px_rgba(17,35,90,0.45)] flex items-center justify-center overflow-hidden">
+            <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10 pointer-events-none">
+              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-navy/40">Live-Vorschau</span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-petrol/70">Druckfertig</span>
+            </div>
+            <div className="relative w-[86%] max-w-[440px] mt-2">
+              <img
+                src={BASE_IMG}
+                alt="Schlüsselanhänger"
+                className="w-full h-auto select-none pointer-events-none drop-shadow-md"
+                draggable={false}
               />
-            )}
-
-            {/* Prägefläche: Mitte + unteres Drittel (ohne NUDAIM-Schrift) */}
-            <div
-              className="absolute left-1/2 flex flex-col items-center justify-center pointer-events-none"
-              style={{
-                width: '48%',
-                top: '38%',
-                height: '42%',
-                transform: 'translateX(-50%)',
-                gap: `${4 + gap * 0.1}px`,
-                flexDirection: layout === 'text_above' ? 'column-reverse' : 'column',
-              }}
-            >
-              {showLogo && logoUrl && (
-                <img
-                  src={logoUrl}
-                  alt=""
-                  className="max-w-full max-h-[55%] object-contain drop-shadow-sm"
-                  style={{
-                    transform: `scale(${config.mirrorX ? -config.logoScale : config.logoScale}, ${config.logoScale}) rotate(${config.logoRotation || 0}deg)`,
-                    filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.12))',
-                  }}
-                  draggable={false}
+              {!isDefaultPlate && (
+                <div
+                  className="absolute inset-[14%] rounded-[18%] pointer-events-none mix-blend-multiply opacity-45"
+                  style={{ backgroundColor: plate, top: '16%', bottom: '12%', left: '14%', right: '14%' }}
+                  aria-hidden
                 />
               )}
-              {showText && (
-                <p
-                  className="text-center font-extrabold uppercase tracking-wide leading-none px-1"
-                  style={{
-                    color: printColor,
-                    fontSize: `clamp(11px, ${2.4 * config.logoScale}vw, 20px)`,
-                    textShadow: '0 1px 0 rgba(0,0,0,0.12)',
-                  }}
-                >
-                  {text}
-                </p>
-              )}
+
+              <div
+                className="absolute left-1/2 flex flex-col items-center justify-center pointer-events-none"
+                style={{
+                  width: '48%',
+                  top: '38%',
+                  height: '42%',
+                  transform: 'translateX(-50%)',
+                  gap: `${4 + gap * 0.1}px`,
+                  flexDirection: layout === 'text_above' ? 'column-reverse' : 'column',
+                }}
+              >
+                {showLogo && logoUrl && (
+                  <img
+                    src={logoUrl}
+                    alt=""
+                    className="max-w-full max-h-[55%] object-contain drop-shadow-sm"
+                    style={{
+                      transform: `scale(${config.mirrorX ? -config.logoScale : config.logoScale}, ${config.logoScale}) rotate(${config.logoRotation || 0}deg)`,
+                      filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.18))',
+                    }}
+                    draggable={false}
+                  />
+                )}
+                {showText && (
+                  <p
+                    className="text-center font-extrabold uppercase tracking-wide leading-none px-1"
+                    style={{
+                      color: printColor,
+                      fontSize: `clamp(11px, ${2.4 * config.logoScale}vw, 20px)`,
+                      textShadow: '0 1px 1px rgba(0,0,0,0.15)',
+                    }}
+                  >
+                    {text}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
+          <p className="mt-3 text-center text-[10px] font-semibold tracking-wide text-navy/35 uppercase">
+            Produktvorschau · Maßstab approximativ
+          </p>
         </div>
       </div>
     );

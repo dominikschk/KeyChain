@@ -333,54 +333,94 @@ export const Controls: React.FC<ControlsProps> = ({
     ];
 
     return (
-      <div className="space-y-6 pb-4">
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-zinc-800">Ihr Logo</h3>
+      <div className="space-y-5 pb-6">
+        <div className="rounded-2xl border border-navy/10 bg-gradient-to-br from-white via-white to-petrol/[0.04] p-4 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-petrol">Studio · 3D-Druck</p>
+          <p className="mt-1 text-sm font-bold text-navy leading-snug">Dein Anhänger, druckfertig vorbereitet</p>
+          <p className="mt-1.5 text-[11px] text-zinc-500 leading-relaxed">
+            Wir entfernen den Hintergrund, prüfen ob es ein Logo ist und ob die Linien für den 3D-Druck stark genug sind – ohne KI, mit klaren Regeln.
+          </p>
+        </div>
+
+        <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-navy">Logo</h3>
+            {hasLogo && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 border border-emerald-100">
+                Druckbereit
+              </span>
+            )}
+          </div>
           {hasLogo && logoPreviewUrl ? (
             <div className="flex items-start gap-3">
-              <div className="w-16 h-16 rounded border border-zinc-200 bg-zinc-50 flex items-center justify-center overflow-hidden shrink-0">
-                <img src={logoPreviewUrl} alt="Logo" className="max-w-full max-h-full object-contain" />
+              <div className="w-[72px] h-[72px] rounded-xl border border-navy/10 bg-[linear-gradient(45deg,#f4f4f5_25%,transparent_25%),linear-gradient(-45deg,#f4f4f5_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f4f4f5_75%),linear-gradient(-45deg,transparent_75%,#f4f4f5_75%)] bg-[length:12px_12px] bg-[position:0_0,0_6px,6px_-6px,-6px_0] flex items-center justify-center overflow-hidden shrink-0">
+                <img src={logoPreviewUrl} alt="Logo" className="max-w-[85%] max-h-[85%] object-contain" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-zinc-500">Für den Anhänger vorbereitet</p>
-                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs">
-                  <label className="text-petrol font-medium cursor-pointer hover:underline relative">
+                <p className="text-xs font-semibold text-navy">Hintergrund entfernt · Motiv geprüft</p>
+                <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">Geeignet für Prägung auf dem Schlüsselanhänger.</p>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2.5 text-xs">
+                  <label className="text-petrol font-bold cursor-pointer hover:underline relative">
                     Ersetzen
-                    <input type="file" accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.svg" onChange={onUpload} disabled={logoBusy} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    <input type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml" onChange={onUpload} disabled={logoBusy} className="absolute inset-0 opacity-0 cursor-pointer" />
                   </label>
                   {onClearLogo && (
-                    <button type="button" onClick={onClearLogo} className="text-zinc-500 hover:text-red-600 font-medium">Entfernen</button>
+                    <button type="button" onClick={onClearLogo} className="text-zinc-500 hover:text-red-600 font-semibold">Entfernen</button>
                   )}
                 </div>
               </div>
             </div>
           ) : (
-            <label className={`relative flex flex-col items-center justify-center gap-2 min-h-[96px] rounded border-2 border-dashed border-zinc-300 bg-white cursor-pointer hover:border-zinc-400 ${logoBusy ? 'opacity-50 pointer-events-none' : ''}`}>
-              {logoBusy ? <Loader2 className="animate-spin text-zinc-400" size={22} /> : <Camera className="text-zinc-300" size={22} />}
-              <span className="text-sm text-zinc-600">{logoBusy ? 'Wird geladen…' : 'Logo hochladen'}</span>
-              <span className="text-xs text-zinc-400">PNG, JPG oder Foto</span>
-              <input type="file" accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.svg" capture="environment" onChange={onUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+            <label className={`relative flex flex-col items-center justify-center gap-2.5 min-h-[124px] rounded-xl border-2 border-dashed border-navy/20 bg-cream/60 cursor-pointer transition-colors hover:border-petrol/50 hover:bg-petrol/[0.03] ${logoBusy ? 'opacity-50 pointer-events-none' : ''}`}>
+              {logoBusy ? (
+                <>
+                  <Loader2 className="animate-spin text-petrol" size={26} />
+                  <span className="text-sm font-semibold text-navy">Wird geprüft…</span>
+                  <span className="text-[11px] text-zinc-500">Hintergrund · Logo · Druckbarkeit</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-11 h-11 rounded-full bg-navy/5 flex items-center justify-center">
+                    <ImageIcon className="text-navy/70" size={22} />
+                  </div>
+                  <span className="text-sm font-bold text-navy">Logo hochladen</span>
+                  <span className="text-[11px] text-zinc-500 text-center px-4 leading-snug">PNG, JPG oder SVG · Fotos werden abgelehnt</span>
+                </>
+              )}
+              <input type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml" onChange={onUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
             </label>
           )}
+          <ul className="grid gap-1.5 pt-1">
+            {[
+              'Klarer Kontrast, möglichst wenige Farben',
+              'Kräftige Linien (ca. 1 mm) – keine Haarlinien',
+              'Kein Personen-/Produktfoto',
+            ].map((tip) => (
+              <li key={tip} className="flex items-start gap-2 text-[11px] text-zinc-500 leading-snug">
+                <span className="mt-1.5 w-1 h-1 rounded-full bg-petrol shrink-0" aria-hidden />
+                {tip}
+              </li>
+            ))}
+          </ul>
         </section>
 
-        <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-zinc-800">Ihr Text</h3>
+        <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-2">
+          <h3 className="text-sm font-bold text-navy">Prägetext</h3>
           <input
             type="text"
             value={config.engraveText || ''}
             onChange={(e) => updateConfig('engraveText', e.target.value.slice(0, 28))}
             placeholder="z. B. Firmenname"
             maxLength={28}
-            className="w-full px-3 py-2.5 rounded border border-zinc-300 text-sm text-zinc-800 bg-white outline-none focus:border-zinc-500"
+            className="w-full px-3.5 py-3 rounded-xl border border-navy/10 text-sm text-navy bg-cream/50 outline-none focus:border-petrol/40 focus:bg-white transition-colors"
           />
-          <p className="text-[11px] text-zinc-400">{(config.engraveText || '').length}/28</p>
+          <p className="text-[11px] text-zinc-400">{(config.engraveText || '').length}/28 Zeichen · fette Schrift für den Druck</p>
         </section>
 
-        <section className="space-y-2">
+        <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-2">
           <div className="flex justify-between items-center">
-            <h3 className="text-sm font-semibold text-zinc-800">Abstand</h3>
-            <span className="text-xs text-zinc-500">{config.engraveGap ?? 40}</span>
+            <h3 className="text-sm font-bold text-navy">Abstand Logo / Text</h3>
+            <span className="text-[11px] font-semibold tabular-nums text-zinc-500">{config.engraveGap ?? 40}</span>
           </div>
           <input
             type="range"
@@ -389,21 +429,21 @@ export const Controls: React.FC<ControlsProps> = ({
             step={1}
             value={config.engraveGap ?? 40}
             onChange={(e) => updateConfig('engraveGap', parseInt(e.target.value, 10))}
-            className="w-full accent-zinc-700"
+            className="w-full accent-petrol"
           />
         </section>
 
-        <section className="space-y-4">
-          <h3 className="text-sm font-semibold text-zinc-800">Design</h3>
+        <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-4">
+          <h3 className="text-sm font-bold text-navy">Farben</h3>
           <div className="space-y-2">
-            <p className="text-xs text-zinc-500">Druckfarbe</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Druckfarbe</p>
             <div className="flex flex-wrap gap-2">
               {printColors.map((c) => (
                 <button
                   key={`print-${c}`}
                   type="button"
                   onClick={() => updateConfig('logoColor', c)}
-                  className={`w-8 h-8 rounded-full border transition-transform active:scale-95 ${config.logoColor?.toLowerCase() === c.toLowerCase() ? 'border-zinc-800 ring-2 ring-offset-1 ring-zinc-400' : 'border-zinc-200'}`}
+                  className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${config.logoColor?.toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
                   style={{ backgroundColor: c }}
                   aria-label={`Druckfarbe ${c}`}
                 />
@@ -411,14 +451,14 @@ export const Controls: React.FC<ControlsProps> = ({
             </div>
           </div>
           <div className="space-y-2">
-            <p className="text-xs text-zinc-500">Produktfarbe</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Produktfarbe</p>
             <div className="flex flex-wrap gap-2">
               {plateColors.map((c) => (
                 <button
                   key={`plate-${c}`}
                   type="button"
                   onClick={() => updateConfig('plateColor', c)}
-                  className={`w-8 h-8 rounded-full border transition-transform active:scale-95 ${(config.plateColor || '#F8F5F0').toLowerCase() === c.toLowerCase() ? 'border-zinc-800 ring-2 ring-offset-1 ring-zinc-400' : 'border-zinc-200'}`}
+                  className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${(config.plateColor || '#F8F5F0').toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
                   style={{ backgroundColor: c }}
                   aria-label={`Produktfarbe ${c}`}
                 />
@@ -427,8 +467,8 @@ export const Controls: React.FC<ControlsProps> = ({
           </div>
         </section>
 
-        <section className="space-y-2">
-          <h3 className="text-sm font-semibold text-zinc-800">Ausrichtung</h3>
+        <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-2">
+          <h3 className="text-sm font-bold text-navy">Ausrichtung</h3>
           <div className="grid grid-cols-4 gap-2">
             {layouts.map((l) => (
               <button
@@ -436,43 +476,43 @@ export const Controls: React.FC<ControlsProps> = ({
                 type="button"
                 title={l.label}
                 onClick={() => updateConfig('engraveLayout', l.id)}
-                className={`h-12 rounded border text-sm font-semibold transition-colors ${layout === l.id ? 'border-zinc-800 bg-zinc-800 text-white' : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400'}`}
+                className={`h-12 rounded-xl border text-sm font-bold transition-colors ${layout === l.id ? 'border-navy bg-navy text-white shadow-sm' : 'border-navy/10 bg-cream/40 text-navy hover:border-petrol/40'}`}
               >
                 {l.icon}
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-zinc-400">
+          <p className="text-[11px] text-zinc-500">
             {layouts.find((l) => l.id === layout)?.label}
           </p>
         </section>
 
-        <section className="space-y-2 pt-1">
+        <section className="space-y-2 pt-0.5">
           <button
             type="button"
             onClick={() => setShowFineTune((v) => !v)}
-            className="text-xs font-medium text-zinc-500 hover:text-zinc-700"
+            className="text-xs font-bold text-petrol hover:text-navy transition-colors"
           >
-            {showFineTune ? '− Weniger Optionen' : '+ Größe & Position'}
+            {showFineTune ? '− Feineinstellung schließen' : '+ Größe & Position'}
           </button>
           {showFineTune && (
-            <div className="space-y-4 rounded border border-zinc-200 bg-white p-3">
+            <div className="space-y-4 rounded-2xl border border-navy/10 bg-white p-4 shadow-sm">
               <div className="space-y-1">
-                <div className="flex justify-between text-xs text-zinc-500"><span>Größe</span><span>{Math.round(config.logoScale * 100)}%</span></div>
-                <input type="range" min="0.4" max="1.8" step="0.01" value={config.logoScale} onChange={(e) => updateConfig('logoScale', parseFloat(e.target.value))} className="w-full accent-zinc-700" />
+                <div className="flex justify-between text-[11px] font-semibold text-zinc-500"><span>Größe</span><span>{Math.round(config.logoScale * 100)}%</span></div>
+                <input type="range" min="0.4" max="1.8" step="0.01" value={config.logoScale} onChange={(e) => updateConfig('logoScale', parseFloat(e.target.value))} className="w-full accent-petrol" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <div className="text-xs text-zinc-500">Links / Rechts</div>
-                  <input type="range" min="-15" max="15" step="0.5" value={config.logoPosX} onChange={(e) => updateConfig('logoPosX', parseFloat(e.target.value))} className="w-full accent-zinc-700" />
+                  <div className="text-[11px] font-semibold text-zinc-500">Links / Rechts</div>
+                  <input type="range" min="-15" max="15" step="0.5" value={config.logoPosX} onChange={(e) => updateConfig('logoPosX', parseFloat(e.target.value))} className="w-full accent-petrol" />
                 </div>
                 <div className="space-y-1">
-                  <div className="text-xs text-zinc-500">Hoch / Runter</div>
-                  <input type="range" min="-15" max="15" step="0.5" value={config.logoPosY} onChange={(e) => updateConfig('logoPosY', parseFloat(e.target.value))} className="w-full accent-zinc-700" />
+                  <div className="text-[11px] font-semibold text-zinc-500">Hoch / Runter</div>
+                  <input type="range" min="-15" max="15" step="0.5" value={config.logoPosY} onChange={(e) => updateConfig('logoPosY', parseFloat(e.target.value))} className="w-full accent-petrol" />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-xs text-zinc-600">
-                <input type="checkbox" checked={config.hasChain !== false} onChange={(e) => updateConfig('hasChain', e.target.checked)} />
+              <label className="flex items-center gap-2 text-xs font-semibold text-navy">
+                <input type="checkbox" checked={config.hasChain !== false} onChange={(e) => updateConfig('hasChain', e.target.checked)} className="accent-petrol" />
                 Schlüsselring anzeigen
               </label>
             </div>

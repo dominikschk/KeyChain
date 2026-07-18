@@ -33,7 +33,7 @@ export function validateSvgFile(file: File): ValidationResult {
   return { valid: true };
 }
 
-/** Logo für Anhänger: Bild oder SVG. */
+/** Logo für Anhänger: Logo-Datei (PNG/JPG/SVG) – keine Fotos (werden später regelbasiert erkannt). */
 export function validateLogoEngraveFile(file: File): ValidationResult {
   const name = file.name.toLowerCase();
   const isSvg = name.endsWith('.svg') || file.type === 'image/svg+xml';
@@ -41,7 +41,7 @@ export function validateLogoEngraveFile(file: File): ValidationResult {
     file.type.startsWith('image/') ||
     /\.(png|jpe?g|webp|gif)$/i.test(name);
   if (!isSvg && !isRaster) {
-    return { valid: false, error: 'Bitte ein Foto/PNG/JPG oder SVG vom Logo wählen.' };
+    return { valid: false, error: 'Bitte ein Logo als PNG, JPG oder SVG wählen.' };
   }
   const max = isSvg ? FILE_LIMITS.SVG_MAX_BYTES : FILE_LIMITS.IMAGE_MAX_BYTES;
   if (file.size > max) {

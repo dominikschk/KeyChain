@@ -1,11 +1,13 @@
 /**
- * Logo für den Anhänger: PNG/Foto/Text → SVG-Pfade (ohne SVG-Kenntnisse).
+ * Logo für den Anhänger: PNG/JPG → Hintergrund weg → Logo-Check → 3D-Druck-Check → SVG.
  * ImageTracer wird erst beim Upload dynamisch geladen.
  */
 
+import { processLogoForPrint } from './logoProcess';
+
 function maxEdge(): number {
-  if (typeof window !== 'undefined' && window.innerWidth < 768) return 320;
-  return 420;
+  if (typeof window !== 'undefined' && window.innerWidth < 768) return 360;
+  return 480;
 }
 
 const TRACE_OPTS = {
@@ -27,40 +29,18 @@ const TRACE_OPTS = {
   rightangleenhance: true,
 };
 
-function toHighContrast(img: ImageData): void {
-  const d = img.data;
-  let sum = 0;
-  const luminances: number[] = new Array(d.length / 4);
-  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-    const a = d[i + 3] / 255;
-    const r = d[i] * a + 255 * (1 - a);
-    const g = d[i + 1] * a + 255 * (1 - a);
-    const b = d[i + 2] * a + 255 * (1 - a);
-    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    luminances[p] = lum;
-    sum += lum;
-  }
-  const avg = sum / luminances.length;
-  const thr = Math.min(200, Math.max(80, avg * 0.92));
-  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-    const v = luminances[p]! < thr ? 0 : 255;
-    d[i] = v;
-    d[i + 1] = v;
-    d[i + 2] = v;
-    d[i + 3] = 255;
-  }
-}
-
 async function imageDataToSvg(img: ImageData): Promise<string> {
   const ImageTracer = (await import('imagetracerjs')).default;
   const svg = ImageTracer.imagedataToSVG(img, TRACE_OPTS) as string;
   if (!svg || !/<svg[\s>]/i.test(svg) || !/<path\b/i.test(svg)) {
-    throw new Error('Kein klares Motiv erkannt. Bitte ein Logo mit klarem Kontrast (z. B. dunkles Logo auf hell) verwenden.');
+    throw new Error(
+      'Kein klares Motiv erkannt. Bitte ein Logo mit klarem Kontrast verwenden (dunkles Logo auf hell oder umgekehrt).'
+    );
   }
   return svg;
 }
 
-async function fileToImageData(file: File): Promise<ImageData> {
+async function fileToRawImageData(file: File): Promise<ImageData> {
   const bitmap = await createImageBitmap(file);
   try {
     const edge = maxEdge();
@@ -72,24 +52,42 @@ async function fileToImageData(file: File): Promise<ImageData> {
     canvas.height = h;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) throw new Error('Canvas nicht verfügbar.');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, w, h);
+    ctx.clearRect(0, 0, w, h);
     ctx.drawImage(bitmap, 0, 0, w, h);
-    const img = ctx.getImageData(0, 0, w, h);
-    toHighContrast(img);
-    return img;
+    return ctx.getImageData(0, 0, w, h);
   } finally {
     bitmap.close();
   }
 }
 
-/** PNG/JPG/WebP/GIF → SVG für Extrusion. */
+export type RasterLogoResult = {
+  svg: string;
+  bgRemoved: boolean;
+  printReady: boolean;
+};
+
+/** PNG/JPG/WebP/GIF → geprüftes, druckbares SVG. */
 export async function rasterFileToSvg(file: File): Promise<string> {
-  const img = await fileToImageData(file);
-  return imageDataToSvg(img);
+  const result = await rasterFileToSvgDetailed(file);
+  return result.svg;
 }
 
-/** Firmenname als Prägetext (ohne Datei). */
+/** Wie rasterFileToSvg, inkl. Meta für die UI. */
+export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoResult> {
+  const raw = await fileToRawImageData(file);
+  const processed = processLogoForPrint(raw);
+  if (!processed.ok) {
+    throw new Error(processed.message);
+  }
+  const svg = await imageDataToSvg(processed.image);
+  return {
+    svg,
+    bgRemoved: processed.meta.bgRemoved,
+    printReady: true,
+  };
+}
+
+/** Firmenname als Prägetext (ohne Datei) – schon druckfreundlich (bold sans). */
 export async function textToEngraveSvg(raw: string): Promise<string> {
   const text = raw.trim().replace(/\s+/g, ' ').slice(0, 28);
   if (!text) throw new Error('Bitte einen Namen eingeben.');
@@ -115,6 +113,16 @@ export async function textToEngraveSvg(raw: string): Promise<string> {
   ctx.fillText(text, canvas.width / 2, canvas.height / 2 + size * 0.05);
 
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  toHighContrast(img);
-  return imageDataToSvg(img);
+  // Text ist bereits Logo-ähnlich – Pipeline trotzdem für Einheitlichkeit
+  const processed = processLogoForPrint(img);
+  if (!processed.ok) {
+    // Fallback: direkte Binarisierung ohne Foto-Check (reiner Text)
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = img.data[i]! < 128 ? 0 : 255;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = 255;
+    }
+    return imageDataToSvg(img);
+  }
+  return imageDataToSvg(processed.image);
 }
