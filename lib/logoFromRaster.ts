@@ -1,130 +1,19 @@
 /**
- * Logo für den Anhänger (gratis-Stack):
- * RemBg + Checks → Trace aus sauberem Logo auf Weiß (nicht aus Binär-Treppen).
+ * Logo für den Anhänger – neuer Ansatz:
+ * Raster → Hintergrund weg → als PNG im SVG speichern (kein Trace-Chaos).
+ * SVG-Dateien bleiben Vektor.
+ * Vorschau färbt die Pixel ein; kein vecburner/Multi-Color-Trace.
  */
 
-import { processLogoForPrint } from './logoProcess';
+import { processLogoForPrint, compositeOnWhite, toPrintBinary } from './logoProcess';
 
 function maxEdge(): number {
   if (typeof window !== 'undefined' && window.innerWidth < 768) return 420;
   return 560;
 }
 
-const TRACE_OPTS = {
-  ltres: 1,
-  qtres: 1,
-  pathomit: 8,
-  colorsampling: 0,
-  numberofcolors: 2,
-  mincolorratio: 0,
-  colorquantcycles: 1,
-  blurradius: 0,
-  blurdelta: 20,
-  strokewidth: 0,
-  linefilter: true,
-  scale: 1,
-  roundcoords: 1,
-  viewbox: true,
-  desc: false,
-  rightangleenhance: false,
-};
-
 const PHOTO_MSG =
   'Das sieht nach einem Foto aus, nicht nach einem Logo. Bitte ein Logo mit klarem Motiv und einfachem Hintergrund hochladen (PNG/JPG/SVG).';
-
-function isLightFill(fill: string): boolean {
-  const f = fill.trim().toLowerCase().replace(/\s+/g, '');
-  if (!f || f === 'none') return true;
-  if (f === '#fff' || f === '#ffffff' || f === 'white') return true;
-  if (f === 'rgb(255,255,255)' || /^rgba\(255,255,255,/.test(f)) return true;
-  // sehr helle Grautöne (Hintergrundreste)
-  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(f);
-  if (hex) {
-    let h = hex[1]!;
-    if (h.length === 3) h = h[0]! + h[0] + h[1] + h[1] + h[2] + h[2];
-    const r = parseInt(h.slice(0, 2), 16);
-    const g = parseInt(h.slice(2, 4), 16);
-    const b = parseInt(h.slice(4, 6), 16);
-    if (0.299 * r + 0.587 * g + 0.114 * b > 230) return true;
-  }
-  const rgb = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(f);
-  if (rgb) {
-    const r = +rgb[1]!;
-    const g = +rgb[2]!;
-    const b = +rgb[3]!;
-    if (0.299 * r + 0.587 * g + 0.114 * b > 230) return true;
-  }
-  return false;
-}
-
-/** Hintergrund-Rects & helle Fills weg, Motiv einheitlich schwarz. */
-function cleanEngraveSvg(svg: string): string {
-  let out = svg
-    .replace(/<\?xml[\s\S]*?\?>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<rect\b[^>]*\/?>/gi, '');
-
-  out = out.replace(/<path\b[^>]*\/?>/gi, (tag) => {
-    const fillMatch = /\sfill="([^"]*)"/i.exec(tag);
-    const fill = fillMatch?.[1] || '';
-    if (isLightFill(fill)) return '';
-    let next = tag.replace(/\sfill="[^"]*"/gi, ' fill="#000000"');
-    if (!/\sfill=/i.test(next)) next = next.replace(/<path\b/i, '<path fill="#000000"');
-    next = next.replace(/\sstroke="[^"]*"/gi, ' stroke="none"');
-    next = next.replace(/\sstroke-width="[^"]*"/gi, '');
-    return next;
-  });
-
-  if (!/<path\b/i.test(out)) {
-    throw new Error(
-      'Kein klares Motiv erkannt. Bitte ein Logo mit klarem Kontrast verwenden (dunkles Logo auf hell oder umgekehrt).'
-    );
-  }
-  if (/<svg\b/i.test(out) && !/shape-rendering=/i.test(out)) {
-    out = out.replace(/<svg\b/i, '<svg shape-rendering="geometricPrecision"');
-  }
-  return out;
-}
-
-async function imageDataToSvgVecburner(img: ImageData): Promise<string> {
-  const { Vecburner } = await import('vecburner');
-  // Logo-Preset auf dem farbigen Motiv = glatte Kurven, keine Binär-Treppen
-  const result = await Vecburner.vectorize(img, {
-    preset: 'logo',
-    numColors: 6,
-    colorTolerance: 40,
-    pathTolerance: 0.9,
-    smoothness: 2,
-    minPathLength: 24,
-    mode: 'spline',
-    binaryMode: false,
-    blurSigma: 0.45,
-    morphology: false,
-    contourMethod: 'marching',
-  });
-  if (!result?.svg) throw new Error('Vektorisierung fehlgeschlagen.');
-  return cleanEngraveSvg(result.svg);
-}
-
-async function imageDataToSvgImageTracer(img: ImageData): Promise<string> {
-  const ImageTracer = (await import('imagetracerjs')).default;
-  const svg = ImageTracer.imagedataToSVG(img, TRACE_OPTS) as string;
-  if (!svg || !/<svg[\s>]/i.test(svg) || !/<path\b/i.test(svg)) {
-    throw new Error(
-      'Kein klares Motiv erkannt. Bitte ein Logo mit klarem Kontrast verwenden (dunkles Logo auf hell oder umgekehrt).'
-    );
-  }
-  return cleanEngraveSvg(svg);
-}
-
-async function imageDataToSvg(img: ImageData): Promise<string> {
-  try {
-    return await imageDataToSvgVecburner(img);
-  } catch (err) {
-    console.warn('vecburner failed, falling back to imagetracerjs', err);
-    return imageDataToSvgImageTracer(img);
-  }
-}
 
 async function fileToRawImageData(file: File): Promise<ImageData> {
   const bitmap = await createImageBitmap(file);
@@ -148,6 +37,80 @@ async function fileToRawImageData(file: File): Promise<ImageData> {
   }
 }
 
+/** Motiv-Maske: alles Nicht-Weiß = Logo, Alpha aus Kante (Anti-Alias). */
+function toSoftLogoRgba(traceOnWhite: ImageData, printBinary: ImageData): ImageData {
+  const w = traceOnWhite.width;
+  const h = traceOnWhite.height;
+  const out = new ImageData(w, h);
+  const src = traceOnWhite.data;
+  const sameSize = printBinary.width === w && printBinary.height === h;
+  const mask = sameSize ? printBinary.data : null;
+  const d = out.data;
+
+  for (let i = 0; i < src.length; i += 4) {
+    const r = src[i]!;
+    const g = src[i + 1]!;
+    const b = src[i + 2]!;
+    const L = 0.299 * r + 0.587 * g + 0.114 * b;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const sat = max === 0 ? 0 : (max - min) / max;
+
+    // Druckmaske nur zum Entfernen von Rest-Hintergrund, nicht zum Verhärten
+    const maskSaysBg = mask ? mask[i]! >= 128 : false;
+    const looksLikeBg = L > 238 && sat < 0.1;
+    if (maskSaysBg || looksLikeBg) {
+      d[i] = d[i + 1] = d[i + 2] = 0;
+      d[i + 3] = 0;
+      continue;
+    }
+
+    // Weiche Deckkraft: dunkle/kräftige Pixel voll, helle AA-Ränder weicher
+    const strength = Math.max(0, Math.min(1, (230 - L) / 90 + sat * 0.5));
+    const a = Math.round(255 * Math.max(0.4, strength));
+    d[i] = 0;
+    d[i + 1] = 0;
+    d[i + 2] = 0;
+    d[i + 3] = a;
+  }
+  return out;
+}
+
+function imageDataToPngDataUrl(img: ImageData): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas nicht verfügbar.');
+  ctx.putImageData(img, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
+/** Minimales SVG mit eingebettetem PNG – kein Pfad-Trace. */
+function pngDataUrlToSvg(dataUrl: string, width: number, height: number): string {
+  const w = Math.max(1, width);
+  const h = Math.max(1, height);
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
+    `width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" data-nudaim-logo="raster">` +
+    `<image width="${w}" height="${h}" href="${dataUrl}" xlink:href="${dataUrl}" ` +
+    `preserveAspectRatio="xMidYMid meet"/>` +
+    `</svg>`
+  );
+}
+
+export function isRasterLogoSvg(svg: string | null | undefined): boolean {
+  return !!svg && /data-nudaim-logo="raster"/i.test(svg);
+}
+
+/** PNG data-URL aus unserem Raster-SVG lesen. */
+export function extractRasterPngFromSvg(svg: string): string | null {
+  const m =
+    /\shref="(data:image\/png;base64,[^"]+)"/i.exec(svg) ||
+    /\sxlink:href="(data:image\/png;base64,[^"]+)"/i.exec(svg);
+  return m?.[1] ?? null;
+}
+
 export type RasterLogoResult = {
   svg: string;
   bgRemoved: boolean;
@@ -162,7 +125,7 @@ export async function rasterFileToSvg(file: File): Promise<string> {
 export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoResult> {
   const raw = await fileToRawImageData(file);
 
-  let forceLogo = false;
+  let forceLogo = true;
   try {
     const { Vecburner } = await import('vecburner');
     const analysis = Vecburner.analyzeImage(raw);
@@ -170,20 +133,28 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
       throw new Error(PHOTO_MSG);
     }
     const preset = String(analysis.recommendedPreset || '').toLowerCase();
-    if (preset === 'logo' || preset === 'simple' || preset === 'lineart' || preset === 'pixel') {
-      forceLogo = true;
-    }
+    forceLogo = preset === 'logo' || preset === 'simple' || preset === 'lineart' || preset === 'pixel' || !analysis.isPhoto;
   } catch (err) {
     if (err instanceof Error && err.message === PHOTO_MSG) throw err;
-    console.warn('vecburner analyze skipped', err);
+    // Analyse optional – ohne vecburner trotzdem weiter
   }
 
   const processed = processLogoForPrint(raw, { forceLogo });
   if (!processed.ok) {
     throw new Error(processed.message);
   }
-  // Trace aus sauberer Vorlage, nicht aus der Binär-Maske
-  const svg = await imageDataToSvg(processed.traceImage);
+
+  // Weiches Logo-PNG (keine Treppen-Vektoren)
+  const soft = toSoftLogoRgba(processed.traceImage, processed.image);
+  // Falls Maske andere Größe: nur Trace nutzen
+  const rgba =
+    soft.width === processed.traceImage.width
+      ? soft
+      : toSoftLogoRgba(processed.traceImage, toPrintBinary(processed.traceImage));
+
+  const png = imageDataToPngDataUrl(rgba);
+  const svg = pngDataUrlToSvg(png, rgba.width, rgba.height);
+
   return {
     svg,
     bgRemoved: processed.meta.bgRemoved,
@@ -191,18 +162,18 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
   };
 }
 
+/** Firmenname als PNG-Schrift (ebenfalls ohne Trace). */
 export async function textToEngraveSvg(raw: string): Promise<string> {
   const text = raw.trim().replace(/\s+/g, ' ').slice(0, 28);
   if (!text) throw new Error('Bitte einen Namen eingeben.');
 
   const canvas = document.createElement('canvas');
   canvas.width = 900;
-  canvas.height = 320;
+  canvas.height = 280;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('Canvas nicht verfügbar.');
 
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#000000';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -216,9 +187,22 @@ export async function textToEngraveSvg(raw: string): Promise<string> {
   ctx.fillText(text, canvas.width / 2, canvas.height / 2 + size * 0.05);
 
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const processed = processLogoForPrint(img, { forceLogo: true });
-  if (!processed.ok) {
-    return imageDataToSvg(img);
+  // Nur nicht-transparente Pixel behalten
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3]!;
+    if (a < 20) {
+      d[i] = d[i + 1] = d[i + 2] = 0;
+      d[i + 3] = 0;
+    } else {
+      d[i] = d[i + 1] = d[i + 2] = 0;
+      // Alpha aus Font-Antialiasing
+    }
   }
-  return imageDataToSvg(processed.traceImage);
+
+  const png = imageDataToPngDataUrl(img);
+  return pngDataUrlToSvg(png, canvas.width, canvas.height);
 }
+
+// Re-export für ggf. Tests
+export { compositeOnWhite };

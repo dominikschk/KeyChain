@@ -338,7 +338,7 @@ export const Controls: React.FC<ControlsProps> = ({
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-petrol">Studio · 3D-Druck</p>
           <p className="mt-1 text-sm font-bold text-navy leading-snug">Dein Anhänger, druckfertig vorbereitet</p>
           <p className="mt-1.5 text-[11px] text-zinc-500 leading-relaxed">
-            Wir entfernen den Hintergrund, prüfen ob es ein Logo ist und ob die Linien für den 3D-Druck stark genug sind – ohne KI, mit klaren Regeln.
+            Hintergrund wird entfernt, Fotos abgelehnt – dein Logo bleibt scharf in der Vorschau.
           </p>
         </div>
 
@@ -347,7 +347,7 @@ export const Controls: React.FC<ControlsProps> = ({
             <h3 className="text-sm font-bold text-navy">Logo</h3>
             {hasLogo && (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 border border-emerald-100">
-                Druckbereit
+                Bereit
               </span>
             )}
           </div>

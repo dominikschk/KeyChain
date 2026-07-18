@@ -1,8 +1,9 @@
 /**
- * Produktvorschau: echtes Anhänger-Foto als Basis, Logo + Text darüber.
+ * Produktvorschau: Anhänger-Foto + Logo (Raster eingefärbt oder SVG-Pfade).
  */
-import React, { forwardRef, useImperativeHandle, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useEffect, useCallback } from 'react';
 import type { ModelConfig } from '../types';
+import { extractRasterPngFromSvg, isRasterLogoSvg } from '../lib/logoFromRaster';
 
 const BASE_IMG = '/keychain-base.png';
 
@@ -20,6 +21,51 @@ function svgToDataUrl(svg: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+function parseCssColor(color: string): { r: number; g: number; b: number } {
+  const c = color.trim();
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c);
+  if (hex) {
+    let h = hex[1]!;
+    if (h.length === 3) h = `${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`;
+    return {
+      r: parseInt(h.slice(0, 2), 16),
+      g: parseInt(h.slice(2, 4), 16),
+      b: parseInt(h.slice(4, 6), 16),
+    };
+  }
+  const rgb = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(c);
+  if (rgb) return { r: +rgb[1]!, g: +rgb[2]!, b: +rgb[3]! };
+  return { r: 17, g: 17, b: 17 };
+}
+
+/** Schwarzes Logo-PNG in Druckfarbe einfärben (Alpha bleibt). */
+async function colorizeLogoPng(pngDataUrl: string, color: string): Promise<string> {
+  const { r, g, b } = parseCssColor(color);
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('Logo-PNG fehlt'));
+    el.src = pngDataUrl;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return pngDataUrl;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = data.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3]! < 8) continue;
+    d[i] = r;
+    d[i + 1] = g;
+    d[i + 2] = b;
+  }
+  ctx.putImageData(data, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
 export type KeychainPreviewHandle = {
   takeScreenshot: () => Promise<string>;
   exportSTL: () => Promise<Blob | null>;
@@ -34,6 +80,7 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
   ({ config, svgContent }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const baseImgRef = useRef<HTMLImageElement | null>(null);
+    const [logoUrl, setLogoUrl] = React.useState<string | null>(null);
 
     const plate = config.plateColor || '#F8F5F0';
     const printColor = config.logoColor || '#111111';
@@ -51,13 +98,32 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
       config.plateColor.toLowerCase() === '#f8f5f0' ||
       config.plateColor.toLowerCase() === '#ffffff';
 
-    const logoUrl = useMemo(() => {
-      if (!svgContent?.trim()) return null;
-      try {
-        return svgToDataUrl(tintSvg(svgContent, printColor));
-      } catch {
-        return null;
-      }
+    useEffect(() => {
+      let cancelled = false;
+      (async () => {
+        if (!svgContent?.trim()) {
+          setLogoUrl(null);
+          return;
+        }
+        try {
+          if (isRasterLogoSvg(svgContent)) {
+            const png = extractRasterPngFromSvg(svgContent);
+            if (!png) {
+              if (!cancelled) setLogoUrl(null);
+              return;
+            }
+            const colored = await colorizeLogoPng(png, printColor);
+            if (!cancelled) setLogoUrl(colored);
+            return;
+          }
+          if (!cancelled) setLogoUrl(svgToDataUrl(tintSvg(svgContent, printColor)));
+        } catch {
+          if (!cancelled) setLogoUrl(null);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }, [svgContent, printColor]);
 
     const loadBase = useCallback(() => {
@@ -90,7 +156,6 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
 
       try {
         const base = await loadBase();
-        // Produktfoto zentriert
         const drawW = size * 0.82;
         const drawH = drawW;
         const dx = (size - drawW) / 2;
@@ -102,7 +167,6 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
           ctx.globalCompositeOperation = 'multiply';
           ctx.globalAlpha = 0.45;
           ctx.fillStyle = plate;
-          // Farbe nur über dem Anhänger-Bereich (grobe Mitte)
           ctx.beginPath();
           const pad = drawW * 0.12;
           roundRect(ctx, dx + pad, dy + pad * 1.15, drawW - pad * 2, drawH - pad * 2.1, drawW * 0.12);
@@ -110,7 +174,6 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
           ctx.restore();
         }
 
-        // Overlay-Zone: Zentrum / unteres Drittel (wo früher NUDAIM 3D stand)
         const cx = size / 2;
         const contentY = dy + drawH * 0.52;
         const gapPx = 10 + gap * 0.4;
@@ -133,7 +196,6 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
               ctx.scale(config.mirrorX ? -1 : 1, 1);
               ctx.imageSmoothingEnabled = true;
               ctx.imageSmoothingQuality = 'high';
-              // leichter Präge-Schatten
               ctx.shadowColor = 'rgba(0,0,0,0.18)';
               ctx.shadowBlur = 2;
               ctx.shadowOffsetY = 1;
