@@ -154,13 +154,6 @@
           </tr>
           <tr>
             {% for instruction in transaction.buyer_pending_payment_instructions %}
-            {% for line_item in line_items %}
-  {% if line_item.properties['Microsite-URL'] != blank %}
-    <p><strong>Deine Microsite:</strong><br>
-    <a href="{{ line_item.properties['Microsite-URL'] }}">{{ line_item.properties['Microsite-URL'] }}</a></p>
-    <p><strong>Short-ID:</strong> {{ line_item.properties['Config-ID'] }}</p>
-  {% endif %}
-{% endfor %}
               <td>{{ instruction.value }}</td>
             {% endfor %}
             <td>{{transaction.amount | money}}</td>
@@ -228,9 +221,10 @@
           <tr>
             <td>
               <h3>Bestellübersicht</h3>
-{% comment %} --- START NUDAIM: Handy-Seite + Bearbeiten-Link (max. 1× pro Config) --- {% endcomment %}
-{% assign nudaim_seen = '|' %}
+{% comment %} --- START NUDAIM: Handy-Seite + Bearbeiten-Link (genau 1×) --- {% endcomment %}
+{% assign nudaim_done = false %}
 {% for line in line_items %}
+  {% unless nudaim_done %}
   {% assign nudaim_ms = '' %}
   {% assign nudaim_ccp = '' %}
   {% assign nudaim_cfg = '' %}
@@ -248,12 +242,7 @@
   {% if nudaim_ccp == blank and line.properties['_CCP-URL'] != blank %}{% assign nudaim_ccp = line.properties['_CCP-URL'] %}{% endif %}
 
   {% if nudaim_ms != blank or nudaim_ccp != blank %}
-    {% assign nudaim_key = nudaim_cfg %}
-    {% if nudaim_key == blank %}{% assign nudaim_key = nudaim_ms %}{% endif %}
-    {% if nudaim_key == blank %}{% assign nudaim_key = nudaim_ccp %}{% endif %}
-    {% assign nudaim_marker = '|' | append: nudaim_key | append: '|' %}
-    {% unless nudaim_seen contains nudaim_marker %}
-      {% assign nudaim_seen = nudaim_seen | append: nudaim_key | append: '|' %}
+    {% assign nudaim_done = true %}
     <div style="margin: 20px 0 28px; padding: 22px 20px; background: #FDFCF8; border: 1px solid rgba(17,35,90,0.12); border-radius: 16px; font-family: system-ui, -apple-system, sans-serif;">
       <p style="margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #006699;">NUDAIM</p>
       <p style="margin: 0 0 8px; font-size: 18px; font-weight: 800; color: #11235A; line-height: 1.25;">Deine Handy-Seite ist bereit</p>
@@ -286,8 +275,8 @@
         <p style="margin: 14px 0 0; font-size: 12px; color: #9ca3af;">Bestell-Code: {{ nudaim_cfg }}</p>
       {% endif %}
     </div>
-    {% endunless %}
   {% endif %}
+  {% endunless %}
 {% endfor %}
 {% comment %} --- ENDE NUDAIM --- {% endcomment %}
             </td>

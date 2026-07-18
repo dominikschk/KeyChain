@@ -1,11 +1,10 @@
 /**
- * Fertiger Liquid-Schnipsel für die Shopify-Bestellbestätigung (NUDAIM-Stil).
- * Properties (Checkout): Handy-Seite, Bearbeiten-Link (+ versteckt _CCP-URL).
- * Alte Orders mit Microsite-URL bleiben in der Mail lesbar.
+ * Fertiger Liquid-Schnipsel (genau 1×, egal wie viele Line-Items).
  */
-export const SHOPIFY_ORDER_EMAIL_LIQUID = `{% comment %} --- START NUDAIM: Handy-Seite + Bearbeiten-Link (max. 1× pro Config) --- {% endcomment %}
-{% assign nudaim_seen = '|' %}
+export const SHOPIFY_ORDER_EMAIL_LIQUID = `{% comment %} --- START NUDAIM: Handy-Seite + Bearbeiten-Link (genau 1×) --- {% endcomment %}
+{% assign nudaim_done = false %}
 {% for line in line_items %}
+  {% unless nudaim_done %}
   {% assign nudaim_ms = '' %}
   {% assign nudaim_ccp = '' %}
   {% assign nudaim_cfg = '' %}
@@ -17,17 +16,12 @@ export const SHOPIFY_ORDER_EMAIL_LIQUID = `{% comment %} --- START NUDAIM: Handy
     {% if p.first == 'CCP-URL' and p.last != blank %}{% assign nudaim_ccp = p.last %}{% endif %}
     {% if p.first == 'Config-ID' and p.last != blank %}{% assign nudaim_cfg = p.last %}{% endif %}
   {% endfor %}
+  {% if nudaim_ms == blank and line.properties['Handy-Seite'] != blank %}{% assign nudaim_ms = line.properties['Handy-Seite'] %}{% endif %}
   {% if nudaim_ms == blank and line.properties['Microsite-URL'] != blank %}{% assign nudaim_ms = line.properties['Microsite-URL'] %}{% endif %}
   {% if nudaim_ccp == blank and line.properties['Bearbeiten-Link'] != blank %}{% assign nudaim_ccp = line.properties['Bearbeiten-Link'] %}{% endif %}
   {% if nudaim_ccp == blank and line.properties['_CCP-URL'] != blank %}{% assign nudaim_ccp = line.properties['_CCP-URL'] %}{% endif %}
-
   {% if nudaim_ms != blank or nudaim_ccp != blank %}
-    {% assign nudaim_key = nudaim_cfg %}
-    {% if nudaim_key == blank %}{% assign nudaim_key = nudaim_ms %}{% endif %}
-    {% if nudaim_key == blank %}{% assign nudaim_key = nudaim_ccp %}{% endif %}
-    {% assign nudaim_marker = '|' | append: nudaim_key | append: '|' %}
-    {% unless nudaim_seen contains nudaim_marker %}
-      {% assign nudaim_seen = nudaim_seen | append: nudaim_key | append: '|' %}
+    {% assign nudaim_done = true %}
     <div style="margin: 20px 0 28px; padding: 22px 20px; background: #FDFCF8; border: 1px solid rgba(17,35,90,0.12); border-radius: 16px; font-family: system-ui, -apple-system, sans-serif;">
       <p style="margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #006699;">NUDAIM</p>
       <p style="margin: 0 0 8px; font-size: 18px; font-weight: 800; color: #11235A; line-height: 1.25;">Deine Handy-Seite ist bereit</p>
@@ -49,8 +43,8 @@ export const SHOPIFY_ORDER_EMAIL_LIQUID = `{% comment %} --- START NUDAIM: Handy
         <p style="margin: 14px 0 0; font-size: 12px; color: #9ca3af;">Bestell-Code: {{ nudaim_cfg }}</p>
       {% endif %}
     </div>
-    {% endunless %}
   {% endif %}
+  {% endunless %}
 {% endfor %}
 {% comment %} --- ENDE NUDAIM --- {% endcomment %}
 `;
