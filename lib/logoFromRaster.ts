@@ -165,9 +165,7 @@ function nearestIdx(p: Rgb, palette: Rgb[]): number {
 }
 
 /**
- * Max. 3 Farben + weiche Außenkante.
- * Innen: volle Deckkraft (keine Textur durchscheinend).
- * Kein Nearest-Upscale.
+ * Max. 3 Farben + weiche Außenkante – nur für die Produktion / den 3D-Druck.
  */
 function toThreeColorLogo(traceOnWhite: ImageData): { image: ImageData; dominant: Rgb } {
   const w = traceOnWhite.width;
@@ -274,6 +272,50 @@ function toThreeColorLogo(traceOnWhite: ImageData): { image: ImageData; dominant
   return { image: out, dominant: palette[domIdx]! };
 }
 
+/** Vorschau: Originalfarben, weich freigestellt – keine Posterize. */
+function toCleanPreviewLogo(traceOnWhite: ImageData): { image: ImageData; dominant: Rgb } {
+  const w = traceOnWhite.width;
+  const h = traceOnWhite.height;
+  const src = traceOnWhite.data;
+  const out = new ImageData(w, h);
+  const d = out.data;
+
+  let sumR = 0;
+  let sumG = 0;
+  let sumB = 0;
+  let sumW = 0;
+
+  for (let i = 0; i < src.length; i += 4) {
+    const r = src[i]!;
+    const g = src[i + 1]!;
+    const b = src[i + 2]!;
+    let a = alphaMatte(r, g, b);
+    if (a < 8) {
+      d[i] = d[i + 1] = d[i + 2] = 0;
+      d[i + 3] = 0;
+      continue;
+    }
+    if (a > 140 || (lum(r, g, b) < 210 && sat(r, g, b) > 0.05)) {
+      a = 255;
+      sumR += r;
+      sumG += g;
+      sumB += b;
+      sumW += 1;
+    }
+    d[i] = r;
+    d[i + 1] = g;
+    d[i + 2] = b;
+    d[i + 3] = a;
+  }
+
+  const dominant: Rgb =
+    sumW > 0
+      ? { r: Math.round(sumR / sumW), g: Math.round(sumG / sumW), b: Math.round(sumB / sumW) }
+      : { r: 18, g: 169, b: 224 };
+
+  return { image: out, dominant };
+}
+
 function imageDataToPngDataUrl(img: ImageData): string {
   const canvas = document.createElement('canvas');
   canvas.width = img.width;
@@ -289,14 +331,24 @@ function rgbToHex(c: Rgb): string {
   return `#${h(c.r)}${h(c.g)}${h(c.b)}`;
 }
 
-function pngDataUrlToSvg(dataUrl: string, width: number, height: number, dominantHex: string): string {
+/** SVG mit Vorschau (Original) + versteckter Druckversion (max. 3 Farben). */
+function buildDualLogoSvg(
+  previewPng: string,
+  printPng: string,
+  width: number,
+  height: number,
+  dominantHex: string
+): string {
   const w = Math.max(1, width);
   const h = Math.max(1, height);
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
-    `width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" data-nudaim-logo="raster" data-keep-colors="1" data-dominant="${dominantHex}">` +
-    `<image width="${w}" height="${h}" href="${dataUrl}" xlink:href="${dataUrl}" ` +
+    `width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" data-nudaim-logo="raster" data-keep-colors="1" ` +
+    `data-dominant="${dominantHex}" data-has-print="1">` +
+    `<image data-role="preview" width="${w}" height="${h}" href="${previewPng}" xlink:href="${previewPng}" ` +
     `preserveAspectRatio="xMidYMid meet"/>` +
+    `<image data-role="print" width="${w}" height="${h}" href="${printPng}" xlink:href="${printPng}" ` +
+    `preserveAspectRatio="xMidYMid meet" visibility="hidden"/>` +
     `</svg>`
   );
 }
@@ -314,11 +366,55 @@ export function extractDominantFromSvg(svg: string): string | null {
   return m?.[1] ?? null;
 }
 
+function extractPngByRole(svg: string, role: 'preview' | 'print'): string | null {
+  const re = new RegExp(
+    `<image[^>]*data-role="${role}"[^>]*(?:href|xlink:href)="(data:image\\/png;base64,[^"]+)"`,
+    'i'
+  );
+  const m1 = re.exec(svg);
+  if (m1?.[1]) return m1[1];
+  // href vor data-role
+  const re2 = new RegExp(
+    `<image[^>]*(?:href|xlink:href)="(data:image\\/png;base64,[^"]+)"[^>]*data-role="${role}"`,
+    'i'
+  );
+  const m2 = re2.exec(svg);
+  if (m2?.[1]) return m2[1];
+  return null;
+}
+
+/** Vorschau-PNG (Originalfarben). */
 export function extractRasterPngFromSvg(svg: string): string | null {
-  const m =
-    /\shref="(data:image\/png;base64,[^"]+)"/i.exec(svg) ||
-    /\sxlink:href="(data:image\/png;base64,[^"]+)"/i.exec(svg);
-  return m?.[1] ?? null;
+  return (
+    extractPngByRole(svg, 'preview') ||
+    /\shref="(data:image\/png;base64,[^"]+)"/i.exec(svg)?.[1] ||
+    /\sxlink:href="(data:image\/png;base64,[^"]+)"/i.exec(svg)?.[1] ||
+    null
+  );
+}
+
+/** Druck-PNG (max. 3 Farben), Fallback = Vorschau. */
+export function extractPrintPngFromSvg(svg: string): string | null {
+  return extractPngByRole(svg, 'print') || extractRasterPngFromSvg(svg);
+}
+
+/** SVG nur mit Druckversion – für Speichern / Produktion. */
+export function svgForProduction(svg: string): string {
+  if (!isRasterLogoSvg(svg)) return svg;
+  const printPng = extractPrintPngFromSvg(svg);
+  if (!printPng) return svg;
+  const wMatch = /width="(\d+)"/.exec(svg);
+  const hMatch = /height="(\d+)"/.exec(svg);
+  const w = wMatch?.[1] || '512';
+  const h = hMatch?.[1] || '512';
+  const dom = extractDominantFromSvg(svg) || '#111111';
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
+    `width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" data-nudaim-logo="raster" data-keep-colors="1" ` +
+    `data-dominant="${dom}" data-print-ready="1">` +
+    `<image width="${w}" height="${h}" href="${printPng}" xlink:href="${printPng}" preserveAspectRatio="xMidYMid meet"/>` +
+    `</svg>`
+  );
 }
 
 function hexClose(a: string, b: string, tol = 32): boolean {
@@ -378,10 +474,18 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
     throw new Error(processed.message);
   }
 
-  const { image: rgba, dominant } = toThreeColorLogo(processed.traceImage);
-  const dominantHex = rgbToHex(dominant);
-  const png = imageDataToPngDataUrl(rgba);
-  const svg = pngDataUrlToSvg(png, rgba.width, rgba.height, dominantHex);
+  const preview = toCleanPreviewLogo(processed.traceImage);
+  const print = toThreeColorLogo(processed.traceImage);
+  const dominantHex = rgbToHex(preview.dominant);
+  const previewPng = imageDataToPngDataUrl(preview.image);
+  const printPng = imageDataToPngDataUrl(print.image);
+  const svg = buildDualLogoSvg(
+    previewPng,
+    printPng,
+    preview.image.width,
+    preview.image.height,
+    dominantHex
+  );
 
   return {
     svg,

@@ -14,6 +14,7 @@ import { ModelConfig, Department } from '../types';
 import { supabase, getDetailedError } from '../lib/supabase';
 import { generateShortId, generateWriteToken, showError, resetFileInput } from '../lib/utils';
 import { validateLogoEngraveFile, validateProfileTitle, toSafeHttpUrl, isRasterLogoFile, isSvgLogoFile } from '../lib/validation';
+import { svgForProduction } from '../lib/logoFromRaster';
 import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
 import { getSession, onAuthStateChange, signOut } from '../lib/auth';
 import type { AuthSession } from '../lib/auth';
@@ -252,6 +253,11 @@ const ConfiguratorPage: React.FC = () => {
   const logoPreviewUrl = useMemo(() => {
     if (!svgContent?.trim()) return null;
     try {
+      const preview =
+        /data-role="preview"[^>]*(?:href|xlink:href)="(data:image\/png;base64,[^"]+)"/i.exec(svgContent)?.[1] ||
+        /(?:href|xlink:href)="(data:image\/png;base64,[^"]+)"[^>]*data-role="preview"/i.exec(svgContent)?.[1] ||
+        /(?:href|xlink:href)="(data:image\/png;base64,[^"]+)"/i.exec(svgContent)?.[1];
+      if (preview) return preview;
       return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgContent)}`;
     } catch {
       return null;
@@ -455,7 +461,7 @@ const ConfiguratorPage: React.FC = () => {
           logoRotation: config.logoRotation,
           mirrorX: !!config.mirrorX,
           hasChain: config.hasChain !== false,
-          logo_svg: svgContent || null,
+          logo_svg: svgContent ? svgForProduction(svgContent) : null,
           engraveText: config.engraveText || '',
           engraveLayout: config.engraveLayout || 'logo_above',
           engraveGap: config.engraveGap ?? 40,
@@ -554,8 +560,8 @@ const ConfiguratorPage: React.FC = () => {
   const applyEngraveSvg = useCallback((content: string) => {
     if (!content?.trim()) {
       showError(
-        'Tipp: Einfaches Logo mit kräftigen Linien – ideal für den 3D-Druck.',
-        'Logo konnte nicht geprägt werden.'
+        'Tipp: Lade eine klare Logo-Datei hoch (kein Foto). In der Vorschau siehst du Originalfarben.',
+        'Logo konnte nicht übernommen werden.'
       );
       return false;
     }
@@ -606,7 +612,7 @@ const ConfiguratorPage: React.FC = () => {
     } catch (err) {
       console.error('Logo upload error:', err);
       const msg = err instanceof Error ? err.message : 'Bitte versuche ein anderes Logo.';
-      showError(msg, 'Logo nicht druckbar');
+      showError(msg, 'Logo konnte nicht geladen werden');
     } finally {
       setLogoBusy(false);
       resetFileInput(input);
@@ -777,7 +783,7 @@ const ConfiguratorPage: React.FC = () => {
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 max-w-xl">
                 {workPhase === 'hardware'
-                  ? 'Logo prüfen, Hintergrund entfernen, druckfertig prägen – live in der Vorschau.'
+                  ? 'Vorschau zeigt dein Logo original. Für den 3D-Druck vereinfachen wir die Farben automatisch.'
                   : (config.landingMode === 'external'
                     ? 'Optional: Website, Instagram oder Shop – wohin der Chip nach dem Scannen öffnet.'
                     : 'Optional: kleine Handy-Seite für deine Kunden – oder eigene URL wählen.')}
