@@ -337,19 +337,22 @@ export const Controls: React.FC<ControlsProps> = ({
         <div className="rounded-2xl border border-navy/10 bg-gradient-to-br from-white via-white to-petrol/[0.04] p-4 shadow-sm space-y-3">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-petrol">Schlüsselanhänger gestalten</p>
-            <p className="mt-1 text-sm font-bold text-navy leading-snug">So wird dein Logo verarbeitet</p>
+            <p className="mt-1 text-sm font-bold text-navy leading-snug">Wichtig: Vorschau ≠ fertiger Druck</p>
+            <p className="mt-1 text-[11px] text-zinc-500 leading-snug">
+              Die Live-Ansicht zeigt dein Logo so, wie du es hochgeladen hast. Für den physischen 3D-Druck bereiten wir eine separate, druckbare Version vor.
+            </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            <div className="rounded-xl bg-white/80 border border-navy/5 p-3">
-              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">In der Vorschau</p>
+            <div className="rounded-xl bg-white/80 border border-emerald-100 p-3">
+              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">1 · Live-Vorschau</p>
               <p className="mt-1 text-[11px] text-zinc-600 leading-snug">
-                Du siehst dein Logo <span className="font-semibold text-navy">in Originalqualität</span> – scharf und mit allen Farben.
+                <span className="font-semibold text-navy">Originalfarben &amp; scharf</span> – so siehst du Placement, Größe und Wirkung am Anhänger.
               </p>
             </div>
-            <div className="rounded-xl bg-white/80 border border-navy/5 p-3">
-              <p className="text-[10px] font-black uppercase tracking-wider text-petrol">Beim 3D-Druck</p>
+            <div className="rounded-xl bg-white/80 border border-petrol/15 p-3">
+              <p className="text-[10px] font-black uppercase tracking-wider text-petrol">2 · Später im 3D-Druck</p>
               <p className="mt-1 text-[11px] text-zinc-600 leading-snug">
-                Für die Produktion vereinfachen wir auf <span className="font-semibold text-navy">max. 3 Farben</span> – damit Linien klar und druckbar bleiben.
+                Automatisch auf <span className="font-semibold text-navy">max. 3 klare Farben</span> – damit das Logo sauber gedruckt werden kann (keine feinen Verläufe).
               </p>
             </div>
           </div>
@@ -370,9 +373,9 @@ export const Controls: React.FC<ControlsProps> = ({
                 <img src={logoPreviewUrl} alt="Logo" className="max-w-[85%] max-h-[85%] object-contain" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-navy">Hintergrund entfernt</p>
+                <p className="text-xs font-semibold text-navy">Logo bereit – Hintergrund entfernt</p>
                 <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
-                  Vorschau = Original. Druck = später auf max. 3 Farben.
+                  In der Vorschau: Original. Für den Druck speichern wir automatisch eine 3-Farben-Version.
                 </p>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2.5 text-xs">
                   <label className="text-petrol font-bold cursor-pointer hover:underline relative">
@@ -391,7 +394,7 @@ export const Controls: React.FC<ControlsProps> = ({
                 <>
                   <Loader2 className="animate-spin text-petrol" size={26} />
                   <span className="text-sm font-semibold text-navy">Logo wird vorbereitet…</span>
-                  <span className="text-[11px] text-zinc-500 text-center px-3">Hintergrund entfernen · Vorschau &amp; Druckversion</span>
+                  <span className="text-[11px] text-zinc-500 text-center px-3">Hintergrund entfernen · Original-Vorschau + Druckversion</span>
                 </>
               ) : (
                 <>
@@ -407,9 +410,9 @@ export const Controls: React.FC<ControlsProps> = ({
           )}
           <ul className="grid gap-1.5 pt-1">
             {[
-              'Am besten: Logo mit transparentem oder weißem Hintergrund',
-              'Verläufe werden in der Vorschau gezeigt, beim Druck vereinfacht',
-              'Personen- oder Produktfotos werden abgelehnt',
+              'Ideal: klares Logo (PNG/SVG), nicht ein Foto vom Anhänger',
+              'Viele Farben/Verläufe: in der Vorschau sichtbar – beim Druck auf max. 3 Farben',
+              'Personen- oder Produktfotos lehnen wir ab (nicht druckbar)',
             ].map((tip) => (
               <li key={tip} className="flex items-start gap-2 text-[11px] text-zinc-500 leading-snug">
                 <span className="mt-1.5 w-1 h-1 rounded-full bg-petrol shrink-0" aria-hidden />
@@ -451,10 +454,12 @@ export const Controls: React.FC<ControlsProps> = ({
         <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-4">
           <div>
             <h3 className="text-sm font-bold text-navy">Farben</h3>
-            <p className="text-[11px] text-zinc-500 mt-0.5">Produktfarbe für den Anhänger. Druckfarbe färbt Logo/Text einfarbig um (optional).</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
+              Produktfarbe = Kunststoff des Anhängers. Druckfarbe = optional Logo/Text einfarbig umfärben (sonst bleiben die Originalfarben in der Vorschau).
+            </p>
           </div>
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Druckfarbe (optional einfärben)</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Druckfarbe (optional · einfärben)</p>
             <div className="flex flex-wrap gap-2">
               {printColors.map((c) => (
                 <button

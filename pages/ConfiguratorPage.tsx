@@ -560,7 +560,7 @@ const ConfiguratorPage: React.FC = () => {
   const applyEngraveSvg = useCallback((content: string) => {
     if (!content?.trim()) {
       showError(
-        'Tipp: Lade eine klare Logo-Datei hoch (kein Foto). In der Vorschau siehst du Originalfarben.',
+        'Tipp: Am besten eine klare Logo-Datei (kein Foto). Die Vorschau bleibt original – für den Druck vereinfachen wir später auf max. 3 Farben.',
         'Logo konnte nicht übernommen werden.'
       );
       return false;
@@ -783,7 +783,7 @@ const ConfiguratorPage: React.FC = () => {
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 max-w-xl">
                 {workPhase === 'hardware'
-                  ? 'Vorschau zeigt dein Logo original. Für den 3D-Druck vereinfachen wir die Farben automatisch.'
+                  ? 'Links gestaltest du, rechts siehst du die Live-Vorschau (Originalfarben). Beim Bestellen speichern wir automatisch eine druckbare 3-Farben-Version.'
                   : (config.landingMode === 'external'
                     ? 'Optional: Website, Instagram oder Shop – wohin der Chip nach dem Scannen öffnet.'
                     : 'Optional: kleine Handy-Seite für deine Kunden – oder eigene URL wählen.')}

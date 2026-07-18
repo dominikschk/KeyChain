@@ -340,8 +340,8 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
               </div>
             </div>
           </div>
-          <p className="mt-3 text-center text-[10px] font-semibold tracking-wide text-navy/40 max-w-sm mx-auto leading-snug">
-            So wirkt dein Anhänger. Für den 3D-Druck werden die Farben später auf max. 3 vereinfacht.
+          <p className="mt-3 text-center text-[10px] font-semibold tracking-wide text-navy/45 max-w-sm mx-auto leading-snug">
+            Live-Vorschau in Originalfarben. Der fertige 3D-Druck nutzt eine vereinfachte Version mit max. 3 Farben.
           </p>
         </div>
       </div>
