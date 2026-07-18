@@ -27,9 +27,6 @@ export type LogoProcessResult = LogoProcessOk | LogoProcessFail;
 const PHOTO_MSG =
   'Das sieht nach einem Foto aus, nicht nach einem Logo. Bitte ein Logo mit klarem Motiv und einfachem Hintergrund hochladen (PNG/JPG/SVG).';
 
-const THIN_MSG =
-  'Die Linien sind zu fein für den 3D-Druck. Bitte ein Logo mit kräftigeren Strichen verwenden (mind. ca. 1 mm Linienstärke).';
-
 const COMPLEX_MSG =
   'Das Motiv ist zu detailliert für den 3D-Druck. Bitte ein einfacheres Logo ohne feine Schattierungen nutzen.';
 
@@ -103,25 +100,45 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
   const out = new ImageData(new Uint8ClampedArray(src.data), w, h);
   const d = out.data;
 
+  // Bereits transparente Logos: Alpha behalten, nur Rest ggf. säubern
+  let transparentShare = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3]! < 40) transparentShare++;
+  }
+  transparentShare /= d.length / 4;
+
   const samples = sampleEdgeColors(src);
   const bg = dominantColor(samples);
   const spread = edgeColorSpread(samples);
-  const bgUniform = spread < 38;
+  const bgUniform = spread < 48;
+  const bgLum = bg ? lum(bg.r, bg.g, bg.b) : 255;
+  const bgIsLight = bgLum > 220;
+  const bgIsDark = bgLum < 40;
 
-  // Toleranz: bei einheitlichem Rand enger, sonst etwas weiter
-  const tol = bgUniform ? 42 : 28;
+  // Helle Studio-/PNG-Hintergründe etwas großzügiger entfernen
+  let tol = bgUniform ? 52 : 34;
+  if (bgIsLight) tol = Math.max(tol, 58);
+  if (bgIsDark) tol = Math.max(tol, 48);
 
-  if (!bg || (!bgUniform && spread > 70)) {
-    // Kein klarer Rand-Hintergrund: nur sehr helle/weiße Pixel leicht ausdünnen
+  const wipeNearNeutral = (threshold: number) => {
     let removedAny = false;
     for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3]! < 10) continue;
       const L = lum(d[i]!, d[i + 1]!, d[i + 2]!);
-      if (L > 245 && d[i + 3]! > 10) {
+      const max = Math.max(d[i]!, d[i + 1]!, d[i + 2]!);
+      const min = Math.min(d[i]!, d[i + 1]!, d[i + 2]!);
+      const sat = max === 0 ? 0 : (max - min) / max;
+      if (L > threshold && sat < 0.14) {
         d[i + 3] = 0;
         removedAny = true;
       }
     }
-    return { image: out, removed: removedAny, bgUniform: false };
+    return removedAny;
+  };
+
+  if (!bg || (!bgUniform && spread > 85)) {
+    const removedAny = wipeNearNeutral(242);
+    return { image: out, removed: removedAny || transparentShare > 0.02, bgUniform: false };
   }
 
   const visited = new Uint8Array(w * h);
@@ -129,6 +146,18 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
   const qy = new Int32Array(w * h);
   let qh = 0;
   let qt = 0;
+
+  const matchesBg = (r: number, g: number, b: number, limit: number) => {
+    if (colorDist(r, g, b, bg.r, bg.g, bg.b) <= limit) return true;
+    // Zusätzlich: fast weiß/schwarz wie der Rand
+    const L = lum(r, g, b);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const sat = max === 0 ? 0 : (max - min) / max;
+    if (bgIsLight && L > 232 && sat < 0.16) return true;
+    if (bgIsDark && L < 28 && sat < 0.2) return true;
+    return false;
+  };
 
   const trySeed = (x: number, y: number) => {
     const idx = y * w + x;
@@ -138,7 +167,7 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
       visited[idx] = 1;
       return;
     }
-    if (colorDist(d[i]!, d[i + 1]!, d[i + 2]!, bg.r, bg.g, bg.b) > tol) return;
+    if (!matchesBg(d[i]!, d[i + 1]!, d[i + 2]!, tol)) return;
     visited[idx] = 1;
     qx[qt] = x;
     qy[qt] = y;
@@ -172,7 +201,7 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
         visited[nidx] = 1;
         continue;
       }
-      if (colorDist(d[ni]!, d[ni + 1]!, d[ni + 2]!, bg.r, bg.g, bg.b) > tol) continue;
+      if (!matchesBg(d[ni]!, d[ni + 1]!, d[ni + 2]!, tol)) continue;
       visited[nidx] = 1;
       qx[qt] = nx;
       qy[qt] = ny;
@@ -180,16 +209,18 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
     }
   }
 
-  // Zusätzlich: restliche Pixel nahe der BG-Farbe (Inseln im Motiv-Rand) nur wenn sehr nah
-  const tight = Math.max(18, tol * 0.55);
+  // Restnahe BG-Farbe (JPEG-Rauschen) vorsichtig nachziehen
+  const tight = Math.max(22, tol * 0.62);
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3]! < 10) continue;
-    if (colorDist(d[i]!, d[i + 1]!, d[i + 2]!, bg.r, bg.g, bg.b) <= tight) {
+    if (matchesBg(d[i]!, d[i + 1]!, d[i + 2]!, tight)) {
       d[i + 3] = 0;
     }
   }
 
-  return { image: out, removed: qt > 0, bgUniform };
+  if (bgIsLight) wipeNearNeutral(248);
+
+  return { image: out, removed: qt > 0 || transparentShare > 0.02, bgUniform };
 }
 
 function quantKey(r: number, g: number, b: number): number {
@@ -300,8 +331,8 @@ function foregroundRatio(img: ImageData): number {
 }
 
 /**
- * Foto vs. Logo – einfache Heuristiken (Farben, Textur, Kanten, Rand).
- * Fotos werden abgelehnt.
+ * Foto vs. Logo – nur klare Fotos ablehnen.
+ * Im Zweifel = Logo (JPEG-Kompression / Anti-Aliasing erzeugen viele Farben).
  */
 export function classifyLogoOrPhoto(
   original: ImageData,
@@ -315,38 +346,69 @@ export function classifyLogoOrPhoto(
   const fg = foregroundRatio(afterBg);
   const edgeSpread = edgeColorSpread(sampleEdgeColors(original));
 
+  let transparentShare = 0;
+  const od = original.data;
+  for (let i = 0; i < od.length; i += 4) {
+    if (od[i + 3]! < 40) transparentShare++;
+  }
+  transparentShare /= od.length / 4;
+
   let photoScore = 0;
+  let strong = 0;
 
-  // Viele Farben → typisch Foto
-  if (colorsOrig > 220) photoScore += 3;
-  else if (colorsOrig > 120) photoScore += 2;
-  else if (colorsOrig > 60) photoScore += 1;
-  else if (colorsOrig <= 24) photoScore -= 2;
+  // JPEG-Logos haben oft 80–200 „Farben“ durch Dithering – das allein ist kein Foto
+  if (colorsOrig > 380) {
+    photoScore += 2;
+    strong++;
+  } else if (colorsOrig > 260) {
+    photoScore += 1;
+  }
+  if (colorsOrig <= 40) photoScore -= 2;
 
-  if (colorsFg > 100) photoScore += 2;
-  else if (colorsFg <= 18) photoScore -= 1;
+  if (colorsFg > 180) {
+    photoScore += 1;
+    strong++;
+  } else if (colorsFg <= 28) {
+    photoScore -= 1;
+  }
 
-  // Hohe lokale Varianz im Motiv → Foto/Gradient
-  if (variance > 900) photoScore += 3;
-  else if (variance > 420) photoScore += 2;
-  else if (variance < 80) photoScore -= 1;
+  if (variance > 1400) {
+    photoScore += 3;
+    strong++;
+  } else if (variance > 800) {
+    photoScore += 1;
+  } else if (variance < 120) {
+    photoScore -= 2;
+  }
 
-  // Dichte Kanten überall → Foto
-  if (edges > 0.28) photoScore += 2;
-  else if (edges > 0.18) photoScore += 1;
-  else if (edges < 0.06) photoScore -= 1;
+  if (edges > 0.38) {
+    photoScore += 2;
+    strong++;
+  } else if (edges > 0.26) {
+    photoScore += 1;
+  } else if (edges < 0.08) {
+    photoScore -= 1;
+  }
 
-  // Uneinheitlicher Rand → oft Foto ohne Studio-Hintergrund
-  if (!bgUniform && edgeSpread > 55) photoScore += 2;
-  if (bgUniform) photoScore -= 1;
+  if (!bgUniform && edgeSpread > 75) {
+    photoScore += 2;
+    strong++;
+  }
+  if (bgUniform) photoScore -= 2;
 
-  // Fast vollflächig nach RemBg → eher Foto-Ausschnitt
-  if (fg > 0.78) photoScore += 2;
-  if (fg > 0.9) photoScore += 1;
-  // Sehr wenig Motiv nach RemBg bei buntem Original → oft Foto mit komplexem BG
-  if (fg < 0.02 && colorsOrig > 80) photoScore += 2;
+  if (fg > 0.92 && variance > 500) {
+    photoScore += 2;
+    strong++;
+  } else if (fg > 0.85 && !bgUniform) {
+    photoScore += 1;
+  }
 
-  const kind = photoScore >= 4 ? 'photo' : 'logo';
+  // PNG mit Alpha → sehr wahrscheinlich Logo
+  if (transparentShare > 0.08) photoScore -= 3;
+  if (transparentShare > 0.25) photoScore -= 2;
+
+  // Nur ablehnen, wenn mehrere starke Foto-Signale zusammenkommen
+  const kind = photoScore >= 7 && strong >= 2 ? 'photo' : 'logo';
   return { kind, score: photoScore, uniqueColors: colorsFg };
 }
 
@@ -390,55 +452,47 @@ export function cropToForeground(img: ImageData, pad = 4): ImageData {
 }
 
 /**
- * Binarisieren für Trace: Vordergrund schwarz, Hintergrund weiß.
- * Nutzt Alpha nach RemBg.
+ * Binarisieren: nach RemBg ist fast alles Opake = Motiv (auch helle/farbige Logos).
  */
 export function toPrintBinary(img: ImageData): ImageData {
   const out = new ImageData(new Uint8ClampedArray(img.data), img.width, img.height);
   const d = out.data;
-  const luminances: number[] = [];
-  for (let i = 0; i < d.length; i += 4) {
-    if (d[i + 3]! < 40) continue;
-    luminances.push(lum(d[i]!, d[i + 1]!, d[i + 2]!));
-  }
-  if (!luminances.length) {
-    for (let i = 0; i < d.length; i += 4) {
-      d[i] = d[i + 1] = d[i + 2] = 255;
-      d[i + 3] = 255;
-    }
-    return out;
-  }
-  let sum = 0;
-  for (const L of luminances) sum += L;
-  const avg = sum / luminances.length;
-  const thr = Math.min(200, Math.max(70, avg * 0.9));
 
   for (let i = 0; i < d.length; i += 4) {
-    if (d[i + 3]! < 40) {
+    const a = d[i + 3]!;
+    if (a < 40) {
       d[i] = d[i + 1] = d[i + 2] = 255;
       d[i + 3] = 255;
       continue;
     }
-    const L = lum(d[i]!, d[i + 1]!, d[i + 2]!);
-    // Dunkle Pixel = Motiv; sehr helle Motive auf dunklem BG umkehren
-    const ink = L < thr;
+    const r = d[i]!;
+    const g = d[i + 1]!;
+    const b = d[i + 2]!;
+    const L = lum(r, g, b);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const sat = max === 0 ? 0 : (max - min) / max;
+    // Rest-Hintergrund (fast weiß, ungesättigt) verwerfen – farbige/helle Logos behalten
+    const leftoverBg = L > 236 && sat < 0.12;
+    const ink = !leftoverBg;
     const v = ink ? 0 : 255;
     d[i] = d[i + 1] = d[i + 2] = v;
     d[i + 3] = 255;
   }
 
-  // Wenn Motiv fast weiß (Logo war hell), invertieren
   let black = 0;
   let white = 0;
   for (let i = 0; i < d.length; i += 4) {
     if (d[i]! < 128) black++;
     else white++;
   }
-  if (black > 0 && black / (black + white) < 0.04) {
-    // zu wenig Schwarz – ggf. helles Logo: invert
-    for (let i = 0; i < d.length; i += 4) {
-      const v = d[i]! < 128 ? 255 : 0;
+  // Falls RemBg nichts getan hat und Motiv dunkel auf hell: klassische Schwelle
+  if (black / Math.max(1, black + white) < 0.015) {
+    for (let i = 0; i < img.data.length; i += 4) {
+      const L = lum(img.data[i]!, img.data[i + 1]!, img.data[i + 2]!);
+      const v = L < 160 ? 0 : 255;
       d[i] = d[i + 1] = d[i + 2] = v;
+      d[i + 3] = 255;
     }
   }
   return out;
@@ -531,47 +585,59 @@ function maskToImageData(mask: Uint8Array, w: number, h: number): ImageData {
   return img;
 }
 
+/** Ein Schritt morphologische Dilatation (4-Nachbarschaft) – Linien verdicken. */
+function dilate(mask: Uint8Array, w: number, h: number): Uint8Array {
+  const out = new Uint8Array(mask);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const p = y * w + x;
+      if (mask[p]) continue;
+      if (mask[p - 1] || mask[p + 1] || mask[p - w] || mask[p + w]) out[p] = 1;
+    }
+  }
+  return out;
+}
+
 /**
- * 3D-Druck-Regeln (FDM-typisch, konservativ):
- * - Emboss-Linien ~≥ 0.8–1.0 mm → bei Analyseauflösung mind. ~2 px nach Erosion
- * - Motivanteil sinnvoll
- * - nicht zu viele Mikro-Inseln
+ * 3D-Druck-Regeln – im Zweifel akzeptieren und feine Linien verdicken.
  */
 export function checkPrintability(binary: ImageData): LogoProcessFail | { ok: true; image: ImageData; foregroundRatio: number } {
   const w = binary.width;
   const h = binary.height;
   let mask = binaryInkMask(binary);
-  const minIsland = Math.max(12, Math.floor((w * h) * 0.0004));
+  const minIsland = Math.max(8, Math.floor((w * h) * 0.00025));
   const cleaned = removeSmallIslands(mask, w, h, minIsland);
   mask = cleaned.mask;
 
-  const ink = countInk(mask);
-  const ratio = ink / (w * h);
+  let ink = countInk(mask);
+  let ratio = ink / (w * h);
 
-  if (ink < 40 || ratio < 0.012) {
+  if (ink < 24 || ratio < 0.006) {
     return { ok: false, reason: 'coverage', message: COVERAGE_MSG };
   }
-  if (ratio > 0.62) {
+
+  // Fast vollflächig: eher Rest-Hintergrund – versuchen, nur dunklere Kerne zu behalten hilft selten;
+  // hier trotzdem durchlassen bis 88 %, Trace braucht Motiv.
+  if (ratio > 0.88) {
     return { ok: false, reason: 'coverage', message: COVERAGE_MSG };
   }
-  if (cleaned.islands > 48) {
+  if (cleaned.islands > 90) {
     return { ok: false, reason: 'too_complex', message: COMPLEX_MSG };
   }
 
-  // Zwei Erosionen: überlebt zu wenig, sind Linien zu dünn für FDM (~1 mm)
   const e1 = erode(mask, w, h);
-  const e2 = erode(e1, w, h);
-  const after = countInk(e2);
-  const survive = after / Math.max(1, ink);
-  if (survive < 0.12 && ink > 200) {
-    return { ok: false, reason: 'too_thin', message: THIN_MSG };
-  }
-  // Sehr kleine Motive: eine Erosion reicht als Check
-  if (ink <= 200) {
-    const eOnce = countInk(e1);
-    if (eOnce / Math.max(1, ink) < 0.2) {
-      return { ok: false, reason: 'too_thin', message: THIN_MSG };
-    }
+  const survive = countInk(e1) / Math.max(1, ink);
+
+  // Zu dünn → 1–2× verdicken statt ablehnen (besser für FDM)
+  if (survive < 0.18 && ink > 80) {
+    mask = dilate(mask, w, h);
+    mask = dilate(mask, w, h);
+    ink = countInk(mask);
+    ratio = ink / (w * h);
+  } else if (survive < 0.35) {
+    mask = dilate(mask, w, h);
+    ink = countInk(mask);
+    ratio = ink / (w * h);
   }
 
   return { ok: true, image: maskToImageData(mask, w, h), foregroundRatio: ratio };
@@ -582,20 +648,77 @@ export function checkPrintability(binary: ImageData): LogoProcessFail | { ok: tr
  */
 export function processLogoForPrint(src: ImageData): LogoProcessResult {
   const { image: cut, removed, bgUniform } = removeBackground(src);
-  const cropped = cropToForeground(cut, 6);
-  const cls = classifyLogoOrPhoto(src, cropped, bgUniform);
+  let cropped = cropToForeground(cut, 6);
+  let cls = classifyLogoOrPhoto(src, cropped, bgUniform);
+
+  // Zweiter Versuch ohne aggressiven Crop, falls Motiv „leer“ wirkt
+  if (foregroundRatio(cropped) < 0.008) {
+    const soft = removeBackground(src);
+    cropped = soft.image;
+    cls = classifyLogoOrPhoto(src, cropped, soft.bgUniform);
+  }
 
   if (cls.kind === 'photo') {
     return { ok: false, reason: 'photo', message: PHOTO_MSG };
   }
 
-  if (foregroundRatio(cropped) < 0.008) {
-    return { ok: false, reason: 'empty', message: COVERAGE_MSG };
+  if (foregroundRatio(cropped) < 0.004) {
+    // Fallback: Original ohne RemBg binarisieren (dunkles Logo auf hell)
+    const fallback = toPrintBinary(
+      (() => {
+        const copy = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
+        const d = copy.data;
+        for (let i = 0; i < d.length; i += 4) d[i + 3] = 255;
+        return copy;
+      })()
+    );
+    const printFb = checkPrintability(fallback);
+    if (!printFb.ok) return { ok: false, reason: 'empty', message: COVERAGE_MSG };
+    return {
+      ok: true,
+      image: printFb.image,
+      meta: {
+        bgRemoved: false,
+        foregroundRatio: printFb.foregroundRatio,
+        uniqueColors: cls.uniqueColors,
+        kind: 'logo',
+      },
+    };
   }
 
   const binary = toPrintBinary(cropped);
   const print = checkPrintability(binary);
-  if (!print.ok) return print;
+  if (!print.ok) {
+    // Letzter Versuch: Original direkt (manche Logos sind farbig ohne klaren Alpha-Cut)
+    const direct = toPrintBinary(
+      (() => {
+        const copy = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
+        // Weiß als transparent markieren
+        const d = copy.data;
+        for (let i = 0; i < d.length; i += 4) {
+          const L = lum(d[i]!, d[i + 1]!, d[i + 2]!);
+          const max = Math.max(d[i]!, d[i + 1]!, d[i + 2]!);
+          const min = Math.min(d[i]!, d[i + 1]!, d[i + 2]!);
+          const sat = max === 0 ? 0 : (max - min) / max;
+          if (L > 240 && sat < 0.1) d[i + 3] = 0;
+          else d[i + 3] = 255;
+        }
+        return cropToForeground(copy, 4);
+      })()
+    );
+    const print2 = checkPrintability(direct);
+    if (!print2.ok) return print;
+    return {
+      ok: true,
+      image: print2.image,
+      meta: {
+        bgRemoved: removed,
+        foregroundRatio: print2.foregroundRatio,
+        uniqueColors: cls.uniqueColors,
+        kind: 'logo',
+      },
+    };
+  }
 
   return {
     ok: true,
