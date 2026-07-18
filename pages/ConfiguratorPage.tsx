@@ -113,6 +113,9 @@ const DeliveryHandoffModal: React.FC<{
           <p className="text-sm text-zinc-600 mt-1 leading-snug">
             Kommen auch in der Bestellmail. Warenkorb öffnet in {seconds}s – oder sofort tippen.
           </p>
+          <p className="text-[11px] text-zinc-500 mt-2 leading-snug rounded-lg bg-white/70 border border-navy/5 px-2.5 py-2">
+            Hinweis zum Druck: Deine Live-Vorschau zeigte Originalfarben. Für die Produktion nutzen wir die vereinfachte Version (max. 3 Farben).
+          </p>
         </header>
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div className="rounded-2xl border border-navy/10 bg-white p-4 space-y-2">
