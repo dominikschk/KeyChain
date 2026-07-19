@@ -53,6 +53,7 @@ import {
 import { customerSaveError } from '../lib/customerErrors';
 import { t } from '../lib/i18n';
 import { filamentCustomerHint } from '../lib/filamentProfiles';
+import { isLiveSimple } from '../lib/liveMode';
 
 const MicrositeChat = lazy(() =>
   import('../components/MicrositeChat').then((m) => ({ default: m.MicrositeChat }))
@@ -78,7 +79,7 @@ const SAVING_LABELS: Record<string, string> = {
   screenshot: 'Bild vom Anhänger wird gemacht…',
   upload: 'Dein Design wird hochgeladen…',
   db: 'Bestellung wird vorbereitet…',
-  done: 'In den Warenkorb gelegt…',
+  done: 'Weiter zum Warenkorb…',
 };
 
 function hostnameFromUrl(url: string): string {
@@ -89,17 +90,40 @@ function hostnameFromUrl(url: string): string {
   }
 }
 
-/** Nach dem Speichern: Korb prüfen, weiteren Anhänger oder zur Kasse. */
+/** Live: ein Design → Warenkorb. Full: Korb mit mehreren Designs / Draft-Kasse. */
 const DeliveryHandoffModal: React.FC<{
   links: DeliveryLinks;
   onCheckout: () => void;
   onAddAnother: () => void;
   checkoutBusy?: boolean;
   checkoutHint?: string | null;
-}> = ({ links, onCheckout, onAddAnother, checkoutBusy, checkoutHint }) => {
+  simple?: boolean;
+}> = ({ links, onCheckout, onAddAnother, checkoutBusy, checkoutHint, simple }) => {
   const [copied, setCopied] = useState<'ms' | 'ccp' | null>(null);
   const [showLinks, setShowLinks] = useState(false);
+  const [seconds, setSeconds] = useState(simple ? 5 : 0);
   const totals = basketTotals(links.basket);
+  const continueRef = useRef(onCheckout);
+  continueRef.current = onCheckout;
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    if (!simple) return;
+    if (seconds > 0) {
+      const tmr = window.setTimeout(() => setSeconds((s) => s - 1), 1000);
+      return () => window.clearTimeout(tmr);
+    }
+    if (!doneRef.current) {
+      doneRef.current = true;
+      continueRef.current();
+    }
+  }, [simple, seconds]);
+
+  const go = () => {
+    if (doneRef.current && simple) return;
+    doneRef.current = true;
+    onCheckout();
+  };
 
   const copy = async (which: 'ms' | 'ccp', value: string) => {
     try {
@@ -110,6 +134,76 @@ const DeliveryHandoffModal: React.FC<{
       showError('Link bitte manuell markieren und kopieren.');
     }
   };
+
+  if (simple) {
+    return (
+      <div className="fixed inset-0 z-[2500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md">
+        <div className="card w-full max-w-lg flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300">
+          <header className="px-5 py-4 border-b border-navy/5 bg-cream">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-petrol mb-1">Geschafft</p>
+            <h2 className="font-headline text-lg font-extrabold uppercase tracking-tight text-navy">
+              Weiter zum Warenkorb
+            </h2>
+            <p className="text-sm text-zinc-600 mt-1 leading-snug">
+              Dein Anhänger ist gespeichert. Als Nächstes öffnet der Shopify-Warenkorb – dort siehst du den Preis und kannst bezahlen.
+            </p>
+          </header>
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <button
+              type="button"
+              onClick={go}
+              className="w-full min-h-[56px] bg-navy text-white rounded-xl font-semibold text-base flex items-center justify-center gap-2 active:scale-[0.98]"
+            >
+              <ShoppingCart size={20} />
+              Zum Warenkorb
+              <ArrowRight size={18} />
+            </button>
+            <p className="text-center text-xs text-zinc-500">
+              Öffnet automatisch in {seconds}s · Code:{' '}
+              <strong className="text-navy">{links.shortId}</strong>
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowLinks((v) => !v)}
+              className="w-full text-left text-sm font-semibold text-petrol py-2"
+            >
+              {showLinks ? '− Links ausblenden' : '+ Handy-Seite & Bearbeiten-Link'}
+            </button>
+            {showLinks && (
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-navy/10 bg-white p-4 space-y-2">
+                  <p className="text-sm font-semibold text-navy">
+                    {links.destinationUrl ? 'NFC-Link (Chip)' : 'Handy-Seite'}
+                  </p>
+                  <p className="text-xs text-zinc-500 break-all">{links.micrositeUrl}</p>
+                  <button
+                    type="button"
+                    onClick={() => void copy('ms', links.micrositeUrl)}
+                    className="min-h-[44px] px-4 rounded-xl border border-zinc-200 text-sm font-semibold text-navy inline-flex items-center gap-2"
+                  >
+                    {copied === 'ms' ? <Check size={16} /> : <Copy size={16} />}
+                    {copied === 'ms' ? 'Kopiert' : 'Kopieren'}
+                  </button>
+                </div>
+                <div className="rounded-2xl border border-petrol/20 bg-petrol/5 p-4 space-y-2">
+                  <p className="text-sm font-semibold text-navy">Später ändern</p>
+                  <p className="text-xs text-zinc-500 break-all">{links.ccpUrl}</p>
+                  <button
+                    type="button"
+                    onClick={() => void copy('ccp', links.ccpUrl)}
+                    className="min-h-[44px] px-4 rounded-xl border border-petrol/30 text-sm font-semibold text-navy inline-flex items-center gap-2 bg-white"
+                  >
+                    {copied === 'ccp' ? <Check size={16} /> : <Copy size={16} />}
+                    {copied === 'ccp' ? 'Kopiert' : 'Bearbeiten-Link kopieren'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[2500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md">
@@ -238,7 +332,9 @@ const ConfiguratorPage: React.FC = () => {
   const [authReady, setAuthReady] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   /** Assistent zuerst im gleichen Fenster; danach optional manueller Editor */
-  const [digitalMode, setDigitalMode] = useState<'assist' | 'manual'>('assist');
+  const [digitalMode, setDigitalMode] = useState<'assist' | 'manual'>(() =>
+    isLiveSimple() ? 'manual' : 'assist'
+  );
   /** Zwei Arbeitsphasen: zuerst Anhänger (Produkt), dann Chip-Ziel */
   const [workPhase, setWorkPhase] = useState<'site' | 'hardware'>('hardware');
   const [shopifyGuideOpen, setShopifyGuideOpen] = useState(false);
@@ -255,6 +351,10 @@ const ConfiguratorPage: React.FC = () => {
   });
 
   useEffect(() => {
+    if (isLiveSimple()) {
+      setCheckoutHint(null);
+      return;
+    }
     let cancelled = false;
     void probeDraftOrderFunction().then((p) => {
       if (cancelled) return;
@@ -347,6 +447,10 @@ const ConfiguratorPage: React.FC = () => {
     () => resolveCheckoutPrice(selectedProductId, orderQuantity),
     [selectedProductId, orderQuantity]
   );
+  const liveSimple = isLiveSimple();
+  const orderCtaLabel = liveSimple
+    ? `${t('cta.order')}${orderQuantity > 1 ? ` (${orderQuantity})` : ''}`
+    : `${t('cta.order')}${orderQuantity > 1 ? ` (${orderQuantity})` : ''} · ${checkoutPrice.totalLabel}`;
   const [activeDept, setActiveDept] = useState<Department>('digital');
   const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('preview');
   const [previewType, setPreviewType] = useState<'3d' | 'digital'>('digital');
@@ -679,8 +783,15 @@ const ConfiguratorPage: React.FC = () => {
         destinationUrl,
         variantId,
       };
-      const nextBasket = upsertBasketLine(loadCheckoutBasket(), basketLine);
-      saveCheckoutBasket(nextBasket);
+      // Live: immer nur dieses eine Design – kein Multi-Korb
+      const nextBasket = isLiveSimple()
+        ? [basketLine]
+        : upsertBasketLine(loadCheckoutBasket(), basketLine);
+      if (isLiveSimple()) {
+        clearCheckoutBasket();
+      } else {
+        saveCheckoutBasket(nextBasket);
+      }
       setBasketCount(nextBasket.length);
 
       const links: DeliveryLinks = {
@@ -722,6 +833,17 @@ const ConfiguratorPage: React.FC = () => {
 
   const handleBasketCheckout = useCallback(async () => {
     if (!deliveryLinks?.basket.length) return;
+
+    // Live-Shop: direkt Shopify-Warenkorb (bewährt, keine Draft-Secrets nötig)
+    if (isLiveSimple()) {
+      clearCheckoutBasket();
+      setBasketCount(0);
+      const url = deliveryLinks.cartUrl;
+      setDeliveryLinks(null);
+      window.location.href = url;
+      return;
+    }
+
     setCheckoutBusy(true);
     try {
       const lines = deliveryLinks.basket.map((l) => ({
@@ -746,7 +868,6 @@ const ConfiguratorPage: React.FC = () => {
         return;
       }
 
-      // Setup fehlt → Cart-Fallback nur bei einer Position, aber klar sagen
       if (draft.reason === 'not_configured' || draft.reason === 'setup') {
         setCheckoutHint(draft.message);
         if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
@@ -770,7 +891,6 @@ const ConfiguratorPage: React.FC = () => {
         return;
       }
 
-      // Sonstiger Fehler: bei 1 Position optional Cart, sonst hart fehlschlagen
       if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
         const goCart = window.confirm(
           `Kasse mit berechnetem Preis hat nicht geklappt:\n${draft.message}\n\nShopify-Warenkorb als Notlösung öffnen?`
@@ -816,7 +936,7 @@ const ConfiguratorPage: React.FC = () => {
         setConfig((prev) => ({ ...prev, externalUrl: url }));
       }
       const health = assessLogoHealth(svgContent);
-      if (health.willSimplifyForPrint) {
+      if (!isLiveSimple() && health.willSimplifyForPrint) {
         const ok = window.confirm(
           `${health.message || t('legal.preview')}\n\nTrotzdem zur Bestellung weiter?`
         );
@@ -955,6 +1075,7 @@ const ConfiguratorPage: React.FC = () => {
           links={deliveryLinks}
           checkoutBusy={checkoutBusy}
           checkoutHint={checkoutHint}
+          simple={isLiveSimple()}
           onCheckout={() => void handleBasketCheckout()}
           onAddAnother={handleAddAnotherDesign}
         />
@@ -1007,7 +1128,9 @@ const ConfiguratorPage: React.FC = () => {
                     <label className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"><Upload size={14} /> Import<input type="file" accept=".json,application/json" onChange={(e) => { handleImportConfig(e); setUserMenuOpen(false); }} className="hidden" /></label>
                     <button type="button" onClick={() => { void handleShareDraft(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Share2 size={14} /> Entwurf teilen</button>
                     <button type="button" onClick={() => { handlePreviewInNewTab(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ExternalLink size={14} /> So sehen es Kunden</button>
-                    <button type="button" onClick={() => { setShopifyGuideOpen(true); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ShoppingCart size={14} /> Shopify: Bestellmail</button>
+                    {!liveSimple && (
+                      <button type="button" onClick={() => { setShopifyGuideOpen(true); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ShoppingCart size={14} /> Shopify: Bestellmail</button>
+                    )}
                     <button type="button" onClick={() => { handleResetConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><RotateCcw size={14} /> Zurücksetzen</button>
                     <div className="border-t border-zinc-100 mt-1 pt-1">
                       <button type="button" onClick={() => { signOut(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"><LogOut size={14} /> Abmelden</button>
@@ -1305,14 +1428,22 @@ const ConfiguratorPage: React.FC = () => {
                     className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
                   />
                 </div>
-                <p className="text-[11px] text-zinc-500 leading-snug">{bulkHintForQuantity(orderQuantity)}</p>
-                <p className="text-sm font-semibold text-navy leading-snug">
-                  {checkoutPrice.unitLabel}
-                  {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
-                </p>
                 <p className="text-[11px] text-zinc-500 leading-snug">
-                  {pricingHintForQuantity(selectedProductId, orderQuantity)}
+                  {liveSimple
+                    ? 'Den Preis und die Zahlung siehst du im Shopify-Warenkorb.'
+                    : bulkHintForQuantity(orderQuantity)}
                 </p>
+                {!liveSimple && (
+                  <p className="text-sm font-semibold text-navy leading-snug">
+                    {checkoutPrice.unitLabel}
+                    {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                  </p>
+                )}
+                {!liveSimple && (
+                  <p className="text-[11px] text-zinc-500 leading-snug">
+                    {pricingHintForQuantity(selectedProductId, orderQuantity)}
+                  </p>
+                )}
                 <p className="text-[11px] text-zinc-500 leading-snug">{t('legal.preview.short')}</p>
                 <button
                   type="button"
@@ -1320,9 +1451,7 @@ const ConfiguratorPage: React.FC = () => {
                   className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
                   <ShoppingCart size={18} />
-                  {t('cta.order')}
-                  {orderQuantity > 1 ? ` (${orderQuantity})` : ''}
-                  {` · ${checkoutPrice.totalLabel}`}
+                  {orderCtaLabel}
                 </button>
                 <button
                   type="button"
@@ -1381,14 +1510,22 @@ const ConfiguratorPage: React.FC = () => {
                     className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
                   />
                 </div>
-                <p className="text-[11px] text-zinc-500 leading-snug">{bulkHintForQuantity(orderQuantity)}</p>
-                <p className="text-sm font-semibold text-navy leading-snug">
-                  {checkoutPrice.unitLabel}
-                  {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
-                </p>
                 <p className="text-[11px] text-zinc-500 leading-snug">
-                  {pricingHintForQuantity(selectedProductId, orderQuantity)}
+                  {liveSimple
+                    ? 'Den Preis und die Zahlung siehst du im Shopify-Warenkorb.'
+                    : bulkHintForQuantity(orderQuantity)}
                 </p>
+                {!liveSimple && (
+                  <p className="text-sm font-semibold text-navy leading-snug">
+                    {checkoutPrice.unitLabel}
+                    {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                  </p>
+                )}
+                {!liveSimple && (
+                  <p className="text-[11px] text-zinc-500 leading-snug">
+                    {pricingHintForQuantity(selectedProductId, orderQuantity)}
+                  </p>
+                )}
                 <p className="text-[11px] text-zinc-500 leading-snug">{t('legal.preview.short')}</p>
                 <button
                   type="button"
@@ -1396,9 +1533,7 @@ const ConfiguratorPage: React.FC = () => {
                   className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
                   <ShoppingCart size={18} />
-                  {t('cta.order')}
-                  {orderQuantity > 1 ? ` (${orderQuantity})` : ''}
-                  {` · ${checkoutPrice.totalLabel}`}
+                  {orderCtaLabel}
                 </button>
                 <button
                   type="button"
@@ -1449,19 +1584,24 @@ const ConfiguratorPage: React.FC = () => {
                     className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
                   />
                 </div>
-                <p className="text-sm font-semibold text-navy leading-snug">
-                  {checkoutPrice.unitLabel}
-                  {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
-                </p>
+                {!liveSimple && (
+                  <p className="text-sm font-semibold text-navy leading-snug">
+                    {checkoutPrice.unitLabel}
+                    {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                  </p>
+                )}
+                {liveSimple && (
+                  <p className="text-[11px] text-zinc-500 leading-snug">
+                    Preis und Zahlung im Shopify-Warenkorb.
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={() => void initiateSave()}
                   className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
                   <ShoppingCart size={18} />
-                  {t('cta.order')}
-                  {orderQuantity > 1 ? ` (${orderQuantity})` : ''}
-                  {` · ${checkoutPrice.totalLabel}`}
+                  {orderCtaLabel}
                 </button>
                 <button
                   type="button"
@@ -1474,9 +1614,7 @@ const ConfiguratorPage: React.FC = () => {
             ) : (
               <button type="button" onClick={() => void initiateSave()} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
                 <ShoppingCart size={18} />
-                {t('cta.order')}
-                {orderQuantity > 1 ? ` (${orderQuantity})` : ''}
-                {` · ${checkoutPrice.totalLabel}`}
+                {orderCtaLabel}
               </button>
             )}
           </div>

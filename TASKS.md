@@ -24,6 +24,6 @@ Stand: 2026-07-19
 
 ## Nächster Schritt
 
-1. **[`PHASE0_GO_LIVE.md`](PHASE0_GO_LIVE.md)** – SQL + Edge Functions + Shopify + Smoke
-2. PR mergen / Vercel Env
-3. Stichproben Print-PNG/STL mit der Druckerei
+1. **[`GO_LIVE.md`](GO_LIVE.md)** – Bestellen über Warenkorb (ohne Draft-Secrets)
+2. PR mergen / Vercel: `VITE_SUPABASE_*` (+ optional Variant-ID)
+3. Später Stück für Stück: Webhook, Draft Orders (`PHASE0_GO_LIVE.md`)

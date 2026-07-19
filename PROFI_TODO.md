@@ -1,9 +1,9 @@
 # NUDAIM Profi-To-do – zum Abhaken
 
 Stand: 2026-07-19  
-Ziel: komplette Profi-Software – **Anhänger zuerst**, dann Shop-Ops, dann Microsite.
+Ziel: **erst Shop live (Bestellen)**, dann Stück für Stück ausbauen.
 
-**So nutzen:** von oben nach unten. Ein Block erst abschließen, bevor der nächste groß wird.  
+**Jetzt zuerst:** [`GO_LIVE.md`](GO_LIVE.md) – Warenkorb-Checkout, unfertige Features aus.  
 Legende: **[DU]** = du in Dashboard/Shopify · **[CODE]** = schon im Repo / Agent · **[SPÄTER]** = bewusst nach Go-Live
 
 Doku-Links: [`SHOPIFY_DASHBOARD_WEBHOOK.md`](SHOPIFY_DASHBOARD_WEBHOOK.md) · [`SECURITY_ISSUES.md`](SECURITY_ISSUES.md) · [`LEGAL_COPY.md`](LEGAL_COPY.md) · [`SUPPORT_PLAYBOOK.md`](SUPPORT_PLAYBOOK.md)

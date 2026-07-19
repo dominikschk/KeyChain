@@ -25,7 +25,7 @@ function envVariant(key: string, fallback: string): string {
 }
 
 /** Fallback-IDs – echte Badge-ID per VITE_SHOPIFY_VARIANT_BADGE setzen. */
-export const PRODUCTS: ShopifyProduct[] = [
+const ALL_PRODUCTS: ShopifyProduct[] = [
   {
     id: 'keychain',
     name: 'Schlüsselanhänger',
@@ -41,6 +41,22 @@ export const PRODUCTS: ShopifyProduct[] = [
     plateHeightMm: 150,
   },
 ];
+
+function featuresFullFromEnv(): boolean {
+  try {
+    const v = (import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_FEATURES_FULL;
+    return v === '1' || v === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Live-Shop: nur Schlüsselanhänger (Badge erst mit echter Variant-ID + VITE_FEATURES_FULL=1).
+ */
+export const PRODUCTS: ShopifyProduct[] = featuresFullFromEnv()
+  ? ALL_PRODUCTS
+  : ALL_PRODUCTS.filter((p) => p.id === 'keychain');
 
 /** Öffentliche Microsite-URL (ohne Token). */
 export function buildMicrositeUrl(origin: string, shortId: string): string {
