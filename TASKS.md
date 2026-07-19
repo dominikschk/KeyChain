@@ -24,6 +24,6 @@ Stand: 2026-07-19
 
 ## Nächster Schritt
 
-1. **Phase 0** in `PROFI_TODO.md` (SQL + Edge Function + Shopify Webhook)
+1. **[`PHASE0_GO_LIVE.md`](PHASE0_GO_LIVE.md)** – SQL + Edge Functions + Shopify + Smoke
 2. PR mergen / Vercel Env
 3. Stichproben Print-PNG/STL mit der Druckerei

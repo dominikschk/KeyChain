@@ -34,6 +34,7 @@ GitHub Actions: `.github/workflows/ci.yml` (typecheck, lint, unit, build, Playwr
 | [`SECURITY_ISSUES.md`](SECURITY_ISSUES.md) | Security + Deploy-Checkliste |
 | [`SHOPIFY_WEBHOOK.md`](SHOPIFY_WEBHOOK.md) | Order-Sync deployen |
 | [`SHOPIFY_DRAFT_ORDER.md`](SHOPIFY_DRAFT_ORDER.md) | Berechneter Preis → Draft Order / Kasse |
+| [`PHASE0_GO_LIVE.md`](PHASE0_GO_LIVE.md) | Go-Live Checkliste in einer Sitzung |
 | [`LEGAL_COPY.md`](LEGAL_COPY.md) | Vorschau vs. Druck – Kundentexte |
 
 ## Env

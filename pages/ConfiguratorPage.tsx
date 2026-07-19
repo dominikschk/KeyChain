@@ -40,6 +40,7 @@ import {
 } from '../lib/draftShare';
 import { bulkHintForQuantity, clampOrderQuantity } from '../lib/bulkOrder';
 import { pricingHintForQuantity, resolveCheckoutPrice } from '../lib/shopifyPricing';
+import { buildPricingSnapshot } from '../lib/pricingSnapshot';
 import { createDraftCheckout } from '../lib/shopifyDraftOrderApi';
 import {
   basketTotals,
@@ -549,6 +550,14 @@ const ConfiguratorPage: React.FC = () => {
 
       setSavingStep('db');
       const product = PRODUCTS.find((p) => p.id === selectedProductId) ?? PRODUCTS[0];
+      const priced = resolveCheckoutPrice(selectedProductId, orderQuantity);
+      const pricingSnapshot = buildPricingSnapshot({
+        productId: priced.productId,
+        quantity: priced.quantity,
+        unitPriceCents: priced.unitPriceCents,
+        totalCents: priced.totalCents,
+        tierLabel: priced.tierLabel,
+      });
       const configId = crypto.randomUUID();
       const { error: dbError } = await supabase.from('nfc_configs').insert([{
         id: configId,
@@ -588,6 +597,7 @@ const ConfiguratorPage: React.FC = () => {
           faviconUrl: config.faviconUrl && config.faviconUrl.startsWith('https://') ? config.faviconUrl : null,
           landingMode: isExternal ? 'external' : 'microsite',
           externalUrl: destinationUrl || '',
+          pricing: pricingSnapshot,
         }
       }]);
       if (dbError) throw dbError;
@@ -610,7 +620,6 @@ const ConfiguratorPage: React.FC = () => {
 
       setSavingStep('done');
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      const priced = resolveCheckoutPrice(selectedProductId, orderQuantity);
       const variantId = priced.variantId;
       const micrositeUrl = buildMicrositeUrl(baseUrl, shortId);
       const ccpUrl = buildCcpEditUrl(baseUrl, shortId, writeToken);

@@ -12,6 +12,8 @@ Doku-Links: [`SHOPIFY_DASHBOARD_WEBHOOK.md`](SHOPIFY_DASHBOARD_WEBHOOK.md) · [`
 
 ## Phase 0 – Live schalten (diese Woche)
 
+**Eine Seite zum Durchklicken:** [`PHASE0_GO_LIVE.md`](PHASE0_GO_LIVE.md)
+
 Ohne Phase 0 kein echter Betrieb.
 
 ### 0.1 Datenbank
@@ -71,6 +73,7 @@ Kernprodukt. Hier entscheidet sich Reprint-Rate und Stress in der Druckerei.
 - [x] **[CODE]** Draft Orders Edge Function (`create-draft-order`) + Client-Fallback auf Cart
 - [x] **[CODE]** Per-Line-Staffel: 50× Design A + 1× Design B → B bleibt Einzelpreis (Korb + Server-Check)
 - [x] **[CODE]** Kein Bulk-Variant mehr im Cart-Permalink (Anti-Gaming)
+- [x] **[CODE]** Phase-0-Härte: Preis-Snapshot, Draft-Rate-Limit, Logo-Hinweise, [`PHASE0_GO_LIVE.md`](PHASE0_GO_LIVE.md)
 - [ ] **[DU]** Shopify Custom App (`write_draft_orders`) + Secrets – siehe [`SHOPIFY_DRAFT_ORDER.md`](SHOPIFY_DRAFT_ORDER.md)
 - [ ] **[SPÄTER]** Weitere Materialien/Größen nur mit eigener Variant-ID
 - [ ] **[SPÄTER]** Draft Order: Versandzeilen / Steuer-Feintuning im Shop prüfen

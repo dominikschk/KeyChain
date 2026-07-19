@@ -14,6 +14,59 @@ const SHOP_DOMAIN = (Deno.env.get('SHOPIFY_SHOP_DOMAIN') ?? '')
   .replace(/\/$/, '');
 const ADMIN_TOKEN = (Deno.env.get('SHOPIFY_ADMIN_ACCESS_TOKEN') ?? '').trim();
 const API_VERSION = Deno.env.get('SHOPIFY_API_VERSION')?.trim() || '2024-10';
+const SUPABASE_URL = (Deno.env.get('SUPABASE_URL') ?? '').trim();
+const SERVICE_ROLE = (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '').trim();
+const RATE_LIMIT = Math.max(5, parseInt(Deno.env.get('DRAFT_ORDER_RATE_LIMIT') ?? '15', 10) || 15);
+
+type RateBucket = { count: number; resetAt: number };
+const rateBuckets = new Map<string, RateBucket>();
+
+function clientKey(req: Request): string {
+  const xf = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || '';
+  const ip = xf.split(',')[0]?.trim() || 'unknown';
+  return `draft:${ip}`;
+}
+
+function allowRequest(key: string, limit: number, windowMs = 60_000): { ok: boolean; retryAfterSec: number } {
+  const now = Date.now();
+  if (rateBuckets.size > 4000) {
+    for (const [k, b] of rateBuckets) {
+      if (b.resetAt <= now) rateBuckets.delete(k);
+    }
+  }
+  const b = rateBuckets.get(key);
+  if (!b || b.resetAt <= now) {
+    rateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return { ok: true, retryAfterSec: Math.ceil(windowMs / 1000) };
+  }
+  if (b.count >= limit) {
+    return { ok: false, retryAfterSec: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) };
+  }
+  b.count += 1;
+  return { ok: true, retryAfterSec: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) };
+}
+
+/** Bind quantity to saved pricing snapshot when present (anti-tamper). */
+async function snapshotQuantityForShortId(shortId: string): Promise<number | null> {
+  if (!SUPABASE_URL || !SERVICE_ROLE) return null;
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/nfc_configs?short_id=eq.${encodeURIComponent(shortId)}&select=plate_data`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: SERVICE_ROLE,
+        Authorization: `Bearer ${SERVICE_ROLE}`,
+        Accept: 'application/json',
+      },
+    });
+    if (!res.ok) return null;
+    const rows = (await res.json()) as Array<{ plate_data?: { pricing?: { quantity?: number } } }>;
+    const q = rows[0]?.plate_data?.pricing?.quantity;
+    if (typeof q === 'number' && q >= 1 && q <= 99) return Math.round(q);
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -151,6 +204,14 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Method not allowed' }, 405);
   }
 
+  const rl = allowRequest(clientKey(req), RATE_LIMIT);
+  if (!rl.ok) {
+    return jsonResponse(
+      { error: 'Zu viele Anfragen – bitte kurz warten.', retryAfterSec: rl.retryAfterSec },
+      429
+    );
+  }
+
   if (!SHOP_DOMAIN || !ADMIN_TOKEN) {
     return jsonResponse(
       {
@@ -171,21 +232,28 @@ Deno.serve(async (req) => {
   const parsed = parseLines(body);
   if (!parsed.ok) return jsonResponse({ error: parsed.error }, 400);
 
-  // Pro Zeile eigene Staffel – Summe der Mengen wird bewusst NICHT verwendet
-  const basketQtySum = parsed.lines.reduce((s, l) => s + l.quantity, 0);
+  // Mengen an gespeicherte Snapshots binden, dann erst Staffeln berechnen
+  const boundLines: LineIn[] = [];
+  for (const line of parsed.lines) {
+    const snapQty = await snapshotQuantityForShortId(line.shortId);
+    boundLines.push({ ...line, quantity: snapQty ?? line.quantity });
+  }
+
+  // Summe nur für Defense-Check – nie als Staffel-Eingabe
+  const basketQtySum = boundLines.reduce((s, l) => s + l.quantity, 0);
   const lineItems: Record<string, unknown>[] = [];
   let totalCents = 0;
   const pricedMeta: { shortId: string; quantity: number; unitPriceCents: number }[] = [];
 
-  for (const line of parsed.lines) {
+  for (const boundLine of boundLines) {
     const unitPriceCents = Math.min(
       MAX_UNIT_CENTS,
-      serverUnitPriceForLine(line.productId, line.quantity)
+      serverUnitPriceForLine(boundLine.productId, boundLine.quantity)
     );
     // Defense: Einzelstück darf nie den Preis der Warenkorb-Summe bekommen
-    if (line.quantity === 1 && basketQtySum > 1) {
-      const pooled = serverUnitPriceForLine(line.productId, basketQtySum);
-      const solo = serverUnitPriceForLine(line.productId, 1);
+    if (boundLine.quantity === 1 && basketQtySum > 1) {
+      const pooled = serverUnitPriceForLine(boundLine.productId, basketQtySum);
+      const solo = serverUnitPriceForLine(boundLine.productId, 1);
       if (unitPriceCents !== solo) {
         return jsonResponse({ error: 'Preisregel verletzt (per-line)' }, 500);
       }
@@ -194,7 +262,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const lineTotal = unitPriceCents * line.quantity;
+    const lineTotal = unitPriceCents * boundLine.quantity;
     totalCents += lineTotal;
     if (totalCents > MAX_TOTAL_CENTS) {
       return jsonResponse({ error: 'Gesamtbetrag zu hoch' }, 400);
@@ -202,36 +270,36 @@ Deno.serve(async (req) => {
 
     const priceStr = centsToPrice(unitPriceCents);
     const priceHint =
-      line.quantity > 1
-        ? `${priceStr} € / Stück · ${line.quantity}× = ${centsToPrice(lineTotal)} € (nur diese Config)`
+      boundLine.quantity > 1
+        ? `${priceStr} € / Stück · ${boundLine.quantity}× = ${centsToPrice(lineTotal)} € (nur diese Config)`
         : `${priceStr} € / Stück (Einzelpreis · nur diese Config)`;
 
     const properties: { name: string; value: string }[] = [
-      { name: 'Config-ID', value: line.shortId },
+      { name: 'Config-ID', value: boundLine.shortId },
       { name: 'Preis', value: priceHint },
-      { name: 'Produkt', value: line.productId },
-      { name: 'Staffel-Basis', value: `nur diese Config · ${line.quantity}×` },
+      { name: 'Produkt', value: boundLine.productId },
+      { name: 'Staffel-Basis', value: `nur diese Config · ${boundLine.quantity}×` },
     ];
-    if (line.previewUrl) properties.push({ name: 'Preview', value: line.previewUrl });
-    if (line.micrositeUrl) properties.push({ name: 'Handy-Seite', value: line.micrositeUrl });
-    if (line.destinationUrl) properties.push({ name: 'Ziel-URL', value: line.destinationUrl });
-    if (line.ccpUrl) {
-      properties.push({ name: '_CCP-URL', value: line.ccpUrl });
-      properties.push({ name: 'Bearbeiten-Link', value: line.ccpUrl });
+    if (boundLine.previewUrl) properties.push({ name: 'Preview', value: boundLine.previewUrl });
+    if (boundLine.micrositeUrl) properties.push({ name: 'Handy-Seite', value: boundLine.micrositeUrl });
+    if (boundLine.destinationUrl) properties.push({ name: 'Ziel-URL', value: boundLine.destinationUrl });
+    if (boundLine.ccpUrl) {
+      properties.push({ name: '_CCP-URL', value: boundLine.ccpUrl });
+      properties.push({ name: 'Bearbeiten-Link', value: boundLine.ccpUrl });
     }
-    if (line.variantId) properties.push({ name: 'Variant-ID', value: line.variantId });
+    if (boundLine.variantId) properties.push({ name: 'Variant-ID', value: boundLine.variantId });
 
     lineItems.push({
-      title: `${line.productTitle} – personalisiert`,
+      title: `${boundLine.productTitle} – personalisiert`,
       price: priceStr,
-      quantity: line.quantity,
+      quantity: boundLine.quantity,
       properties,
       requires_shipping: true,
       taxable: true,
     });
     pricedMeta.push({
-      shortId: line.shortId,
-      quantity: line.quantity,
+      shortId: boundLine.shortId,
+      quantity: boundLine.quantity,
       unitPriceCents,
     });
   }
