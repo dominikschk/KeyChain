@@ -284,7 +284,6 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
           <div className="relative aspect-square rounded-2xl bg-white/90 border border-navy/10 shadow-[0_20px_60px_-28px_rgba(17,35,90,0.45)] flex items-center justify-center overflow-hidden">
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10 pointer-events-none">
               <span className="text-[9px] font-black uppercase tracking-[0.2em] text-navy/40">Live-Vorschau</span>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700/80">Originalfarben</span>
             </div>
             <div className="relative w-[86%] max-w-[440px] mt-2">
               <img
@@ -340,8 +339,8 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
               </div>
             </div>
           </div>
-          <p className="mt-3 text-center text-[10px] font-semibold tracking-wide text-navy/45 max-w-sm mx-auto leading-snug">
-            Live-Vorschau in Originalfarben. Der fertige 3D-Druck nutzt eine vereinfachte Version mit max. 3 Farben.
+          <p className="mt-3 text-center text-[10px] font-medium tracking-wide text-navy/40 max-w-sm mx-auto leading-snug">
+            Unverbindliche Vorschau – Farben können im 3D-Druck abweichen.
           </p>
         </div>
       </div>

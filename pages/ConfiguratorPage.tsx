@@ -114,7 +114,7 @@ const DeliveryHandoffModal: React.FC<{
             Kommen auch in der Bestellmail. Warenkorb öffnet in {seconds}s – oder sofort tippen.
           </p>
           <p className="text-[11px] text-zinc-500 mt-2 leading-snug rounded-lg bg-white/70 border border-navy/5 px-2.5 py-2">
-            Hinweis zum Druck: Deine Live-Vorschau zeigte Originalfarben. Für die Produktion nutzen wir die vereinfachte Version (max. 3 Farben).
+            Die Vorschau ist unverbindlich. Für den Druck wird das Logo vereinfacht; Farbtöne können durch das 3D-Druckverfahren teilweise anders aussehen.
           </p>
         </header>
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -563,7 +563,7 @@ const ConfiguratorPage: React.FC = () => {
   const applyEngraveSvg = useCallback((content: string) => {
     if (!content?.trim()) {
       showError(
-        'Tipp: Am besten eine klare Logo-Datei (kein Foto). Die Vorschau bleibt original – für den Druck vereinfachen wir später auf max. 3 Farben.',
+        'Tipp: Am besten eine klare Logo-Datei – kein Foto.',
         'Logo konnte nicht übernommen werden.'
       );
       return false;
@@ -786,7 +786,7 @@ const ConfiguratorPage: React.FC = () => {
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 max-w-xl">
                 {workPhase === 'hardware'
-                  ? 'Links gestaltest du, rechts siehst du die Live-Vorschau (Originalfarben). Beim Bestellen speichern wir automatisch eine druckbare 3-Farben-Version.'
+                  ? 'Gestalte deinen Anhänger – die Live-Vorschau zeigt die Wirkung. Hinweise zur Herstellung findest du unten links.'
                   : (config.landingMode === 'external'
                     ? 'Optional: Website, Instagram oder Shop – wohin der Chip nach dem Scannen öffnet.'
                     : 'Optional: kleine Handy-Seite für deine Kunden – oder eigene URL wählen.')}
