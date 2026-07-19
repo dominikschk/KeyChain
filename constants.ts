@@ -63,7 +63,9 @@ export function buildShopifyCartUrl(
   writeToken?: string,
   /** Optional: echte Ziel-URL bei „eigene Website“ (Chip bleibt trotzdem NUDAIM-Shortlink). */
   destinationUrl?: string,
-  quantity: number = 1
+  quantity: number = 1,
+  /** Optional: Preishinweis aus dem Konfigurator (Shopify rechnet trotzdem über die Variante ab). */
+  priceHint?: string
 ): string {
   const qty = Math.min(99, Math.max(1, Math.round(Number(quantity) || 1)));
   const origin = baseUrl ? baseUrl.replace(/\/$/, '') : '';
@@ -73,6 +75,9 @@ export function buildShopifyCartUrl(
     'properties[Config-ID]': shortId,
     'properties[Preview]': previewImageUrl,
   };
+  if (priceHint?.trim()) {
+    params['properties[Preis]'] = priceHint.trim().slice(0, 255);
+  }
   if (origin) {
     const micrositeUrl = buildMicrositeUrl(origin, shortId);
     // Eine sichtbare Property (deutsch) – kein zweites Synonym im Checkout

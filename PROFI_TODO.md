@@ -65,8 +65,11 @@ Kernprodukt. Hier entscheidet sich Reprint-Rate und Stress in der Druckerei.
 ### 1.3 Produktvarianten
 - [ ] **[DU]** Echte Shopify Variant-ID für **Schlüsselanhänger** in Vercel setzen
 - [ ] **[DU]** Echte Shopify Variant-ID für **Messe-Badge** setzen (sonst gleicher Fallback)
-- [ ] **[DU]** Preise/Varianten im Shop stimmen mit Konfigurator überein
+- [ ] **[DU]** Preise/Varianten im Shop stimmen mit Konfigurator überein (`VITE_PRICE_*` + Shop-Katalog)
+- [ ] **[DU]** Optional: Staffel-Varianten Q10/Q25 anlegen und Env setzen (sonst Rabatt nur im Shop)
+- [x] **[CODE]** Preisschichtung im Konfigurator → passende Variant-ID + Preis-Property an Shopify-Cart
 - [ ] **[SPÄTER]** Weitere Materialien/Größen nur mit eigener Variant-ID
+- [ ] **[SPÄTER]** Draft Orders für völlig freie Beträge (ohne feste Variante)
 - [x] **[CODE]** Reprint-Grund bei QC-Ablehnung + STL-URL-Batch-Liste im Admin
 - [x] **[CODE]** CCP Scan-Insights (verständliche Zusammenfassung)
 

@@ -39,6 +39,7 @@ import {
   readDraftParamFromLocation,
 } from '../lib/draftShare';
 import { bulkHintForQuantity, clampOrderQuantity } from '../lib/bulkOrder';
+import { pricingHintForQuantity, resolveCheckoutPrice } from '../lib/shopifyPricing';
 import { customerSaveError } from '../lib/customerErrors';
 import { t } from '../lib/i18n';
 import { filamentCustomerHint } from '../lib/filamentProfiles';
@@ -274,6 +275,10 @@ const ConfiguratorPage: React.FC = () => {
   }, [svgContent]);
   const logoHealth = useMemo(() => assessLogoHealth(svgContent), [svgContent]);
   const [selectedProductId, setSelectedProductId] = useState<string>(() => PRODUCTS[0]?.id ?? 'keychain');
+  const checkoutPrice = useMemo(
+    () => resolveCheckoutPrice(selectedProductId, orderQuantity),
+    [selectedProductId, orderQuantity]
+  );
   const [activeDept, setActiveDept] = useState<Department>('digital');
   const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('preview');
   const [previewType, setPreviewType] = useState<'3d' | 'digital'>('digital');
@@ -566,7 +571,8 @@ const ConfiguratorPage: React.FC = () => {
 
       setSavingStep('done');
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      const variantId = product?.variantId ?? '56564338262361';
+      const priced = resolveCheckoutPrice(selectedProductId, orderQuantity);
+      const variantId = priced.variantId;
       const micrositeUrl = buildMicrositeUrl(baseUrl, shortId);
       const ccpUrl = buildCcpEditUrl(baseUrl, shortId, writeToken);
       const cartUrl = buildShopifyCartUrl(
@@ -576,7 +582,8 @@ const ConfiguratorPage: React.FC = () => {
         baseUrl,
         writeToken,
         destinationUrl,
-        orderQuantity
+        priced.quantity,
+        priced.cartPropertyValue
       );
       const links: DeliveryLinks = { shortId, micrositeUrl, ccpUrl, cartUrl, destinationUrl };
       try {
@@ -1112,6 +1119,13 @@ const ConfiguratorPage: React.FC = () => {
                   />
                 </div>
                 <p className="text-[11px] text-zinc-500 leading-snug">{bulkHintForQuantity(orderQuantity)}</p>
+                <p className="text-sm font-semibold text-navy leading-snug">
+                  {checkoutPrice.unitLabel}
+                  {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                </p>
+                <p className="text-[11px] text-zinc-500 leading-snug">
+                  {pricingHintForQuantity(selectedProductId, orderQuantity)}
+                </p>
                 <p className="text-[11px] text-zinc-500 leading-snug">{t('legal.preview.short')}</p>
                 <button
                   type="button"
@@ -1119,7 +1133,9 @@ const ConfiguratorPage: React.FC = () => {
                   className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
                   <ShoppingCart size={18} />
-                  {t('cta.order')}{orderQuantity > 1 ? ` (${orderQuantity})` : ''}
+                  {t('cta.order')}
+                  {orderQuantity > 1 ? ` (${orderQuantity})` : ''}
+                  {` · ${checkoutPrice.totalLabel}`}
                 </button>
                 <button
                   type="button"
@@ -1179,6 +1195,13 @@ const ConfiguratorPage: React.FC = () => {
                   />
                 </div>
                 <p className="text-[11px] text-zinc-500 leading-snug">{bulkHintForQuantity(orderQuantity)}</p>
+                <p className="text-sm font-semibold text-navy leading-snug">
+                  {checkoutPrice.unitLabel}
+                  {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                </p>
+                <p className="text-[11px] text-zinc-500 leading-snug">
+                  {pricingHintForQuantity(selectedProductId, orderQuantity)}
+                </p>
                 <p className="text-[11px] text-zinc-500 leading-snug">{t('legal.preview.short')}</p>
                 <button
                   type="button"
@@ -1186,7 +1209,9 @@ const ConfiguratorPage: React.FC = () => {
                   className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
                   <ShoppingCart size={18} />
-                  {t('cta.order')}{orderQuantity > 1 ? ` (${orderQuantity})` : ''}
+                  {t('cta.order')}
+                  {orderQuantity > 1 ? ` (${orderQuantity})` : ''}
+                  {` · ${checkoutPrice.totalLabel}`}
                 </button>
                 <button
                   type="button"
@@ -1237,13 +1262,19 @@ const ConfiguratorPage: React.FC = () => {
                     className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
                   />
                 </div>
+                <p className="text-sm font-semibold text-navy leading-snug">
+                  {checkoutPrice.unitLabel}
+                  {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                </p>
                 <button
                   type="button"
                   onClick={() => void initiateSave()}
                   className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
                   <ShoppingCart size={18} />
-                  {t('cta.order')}{orderQuantity > 1 ? ` (${orderQuantity})` : ''}
+                  {t('cta.order')}
+                  {orderQuantity > 1 ? ` (${orderQuantity})` : ''}
+                  {` · ${checkoutPrice.totalLabel}`}
                 </button>
                 <button
                   type="button"
@@ -1256,7 +1287,9 @@ const ConfiguratorPage: React.FC = () => {
             ) : (
               <button type="button" onClick={() => void initiateSave()} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
                 <ShoppingCart size={18} />
-                {t('cta.order')}{orderQuantity > 1 ? ` (${orderQuantity})` : ''}
+                {t('cta.order')}
+                {orderQuantity > 1 ? ` (${orderQuantity})` : ''}
+                {` · ${checkoutPrice.totalLabel}`}
               </button>
             )}
           </div>
