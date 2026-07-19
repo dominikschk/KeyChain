@@ -40,6 +40,7 @@ import {
 } from '../lib/draftShare';
 import { bulkHintForQuantity, clampOrderQuantity } from '../lib/bulkOrder';
 import { pricingHintForQuantity, resolveCheckoutPrice } from '../lib/shopifyPricing';
+import { createDraftCheckout } from '../lib/shopifyDraftOrderApi';
 import { customerSaveError } from '../lib/customerErrors';
 import { t } from '../lib/i18n';
 import { filamentCustomerHint } from '../lib/filamentProfiles';
@@ -67,7 +68,7 @@ const SAVING_LABELS: Record<string, string> = {
   screenshot: 'Bild vom Anhänger wird gemacht…',
   upload: 'Dein Design wird hochgeladen…',
   db: 'Bestellung wird vorbereitet…',
-  done: 'Weiter zum Warenkorb…',
+  done: 'Weiter zur Kasse…',
 };
 
 function hostnameFromUrl(url: string): string {
@@ -575,7 +576,7 @@ const ConfiguratorPage: React.FC = () => {
       const variantId = priced.variantId;
       const micrositeUrl = buildMicrositeUrl(baseUrl, shortId);
       const ccpUrl = buildCcpEditUrl(baseUrl, shortId, writeToken);
-      const cartUrl = buildShopifyCartUrl(
+      const fallbackCartUrl = buildShopifyCartUrl(
         variantId,
         shortId,
         finalImageUrl,
@@ -585,7 +586,33 @@ const ConfiguratorPage: React.FC = () => {
         priced.quantity,
         priced.cartPropertyValue
       );
-      const links: DeliveryLinks = { shortId, micrositeUrl, ccpUrl, cartUrl, destinationUrl };
+
+      // Prefer Draft Order (echter berechneter Preis) → sonst Cart-Permalink
+      let checkoutUrl = fallbackCartUrl;
+      const draft = await createDraftCheckout({
+        shortId,
+        productId: priced.productId,
+        productTitle: priced.productName,
+        quantity: priced.quantity,
+        unitPriceCents: priced.unitPriceCents,
+        previewUrl: finalImageUrl || undefined,
+        micrositeUrl,
+        ccpUrl,
+        destinationUrl,
+        variantId,
+        priceHint: priced.cartPropertyValue,
+      });
+      if (draft?.invoiceUrl) {
+        checkoutUrl = draft.invoiceUrl;
+      }
+
+      const links: DeliveryLinks = {
+        shortId,
+        micrositeUrl,
+        ccpUrl,
+        cartUrl: checkoutUrl,
+        destinationUrl,
+      };
       try {
         localStorage.setItem(LAST_DELIVERY_KEY, JSON.stringify({ ...links, savedAt: Date.now() }));
       } catch {

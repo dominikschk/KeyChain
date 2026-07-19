@@ -1,11 +1,10 @@
 /**
  * Preisschichtung für den Anhänger-Checkout.
  *
- * Wichtig: Shopify berechnet den Endpreis immer über die Variant-ID.
- * Hier wählen wir die passende Variante (Staffel) und zeigen den
- * erwarteten Preis – die Beträge müssen im Shop gleich eingestellt sein.
+ * Anzeige im Konfigurator + Eingabe für Draft Orders (echter Abrechnungpreis)
+ * bzw. Fallback-Cart (dann muss der Shopify-Katalogpreis passen).
  *
- * Beliebige Euro-Beträge per Cart-Link gehen ohne Draft Order nicht.
+ * Beliebige Euro-Beträge: über Draft Order Edge Function (`create-draft-order`).
  */
 
 import { PRODUCTS } from '../constants'
@@ -176,7 +175,7 @@ export function resolveCheckoutPrice(
 export function pricingHintForQuantity(productId: string, quantity: unknown): string {
   const p = resolveCheckoutPrice(productId, quantity)
   if (p.quantity >= 10) {
-    return `${p.tierLabel}: ${p.unitLabel}. Gesamt ca. ${p.totalLabel} – Endpreis im Warenkorb.`
+    return `${p.tierLabel}: ${p.unitLabel}. Gesamt ca. ${p.totalLabel} – so geht’s an die Kasse.`
   }
-  return `Ca. ${p.unitLabel}. Endpreis siehst du im Warenkorb.`
+  return `Ca. ${p.unitLabel}. Der Betrag wird an der Kasse übernommen.`
 }

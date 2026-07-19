@@ -68,8 +68,10 @@ Kernprodukt. Hier entscheidet sich Reprint-Rate und Stress in der Druckerei.
 - [ ] **[DU]** Preise/Varianten im Shop stimmen mit Konfigurator überein (`VITE_PRICE_*` + Shop-Katalog)
 - [ ] **[DU]** Optional: Staffel-Varianten Q10/Q25 anlegen und Env setzen (sonst Rabatt nur im Shop)
 - [x] **[CODE]** Preisschichtung im Konfigurator → passende Variant-ID + Preis-Property an Shopify-Cart
+- [x] **[CODE]** Draft Orders Edge Function (`create-draft-order`) + Client-Fallback auf Cart
+- [ ] **[DU]** Shopify Custom App (`write_draft_orders`) + Secrets – siehe [`SHOPIFY_DRAFT_ORDER.md`](SHOPIFY_DRAFT_ORDER.md)
 - [ ] **[SPÄTER]** Weitere Materialien/Größen nur mit eigener Variant-ID
-- [ ] **[SPÄTER]** Draft Orders für völlig freie Beträge (ohne feste Variante)
+- [ ] **[SPÄTER]** Draft Order: Versandzeilen / Steuer-Feintuning im Shop prüfen
 - [x] **[CODE]** Reprint-Grund bei QC-Ablehnung + STL-URL-Batch-Liste im Admin
 - [x] **[CODE]** CCP Scan-Insights (verständliche Zusammenfassung)
 

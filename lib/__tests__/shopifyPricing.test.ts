@@ -39,8 +39,8 @@ describe('shopifyPricing', () => {
   })
 
   it('gibt kundenfreundlichen Hinweis', () => {
-    expect(pricingHintForQuantity('keychain', 1)).toMatch(/Warenkorb/i)
-    expect(pricingHintForQuantity('keychain', 12)).toMatch(/10|gesamt|Warenkorb/i)
+    expect(pricingHintForQuantity('keychain', 1)).toMatch(/Kasse/i)
+    expect(pricingHintForQuantity('keychain', 12)).toMatch(/10|gesamt|Kasse/i)
   })
 
   it('hängt Preis-Property an Cart-URL', () => {
