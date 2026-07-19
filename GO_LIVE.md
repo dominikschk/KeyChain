@@ -1,42 +1,50 @@
-# Go-Live – was Kunden jetzt können
+# Go-Live – Überblick
 
-Ziel: **Bestellen funktioniert** über den normalen Shopify-Warenkorb.  
-Unfertiges (Draft Orders, Multi-Design-Korb, Badge, Setup-Hinweise) ist ausgeschaltet.
-
-Später wieder an: in Vercel `VITE_FEATURES_FULL=1` setzen.
+Ziel jetzt: **Kunden können bestellen** (Shopify-Warenkorb).  
+Unfertiges ist ausgeschaltet. Später: `VITE_FEATURES_FULL=1`.
 
 ---
 
-## Kundenpfad (jetzt)
+## Starte hier (extrem detailliert)
 
-1. Logo hochladen / Anhänger gestalten  
-2. Stückzahl wählen  
-3. **Bestellen** → Speichern → Shopify-Warenkorb (`nudaim3d.de/cart/add`)  
+### → [`GO_LIVE_SCHRITT_1_3.md`](GO_LIVE_SCHRITT_1_3.md)
+
+Darin Klick-für-Klick:
+
+1. **PR #1 mergen** (Code auf `main`)  
+2. **Vercel Env** (`VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`) + Redeploy  
+3. **Testbestellung** (Logo → Warenkorb)
+
+Mach nur diese Datei. Nichts anderes parallel.
+
+---
+
+## Kundenpfad (wenn live)
+
+1. Logo / Anhänger gestalten  
+2. Stückzahl  
+3. **In den Warenkorb** → `nudaim3d.de` Shopify-Cart  
 4. Bezahlen im Shop  
 
-Optional: Chip-Ziel (Handy-Seite) – nicht Pflicht für die Bestellung.
+---
+
+## Minimum (Checkliste)
+
+- [ ] PR #1 merged  
+- [ ] Vercel Production: `VITE_SUPABASE_URL`  
+- [ ] Vercel Production: `VITE_SUPABASE_ANON_KEY` (anon, nicht service_role)  
+- [ ] Redeploy Ready  
+- [ ] Eine Testbestellung landet im Cart  
+
+**Nicht nötig für den ersten Erfolg:** Draft-Secrets, Webhook, Admin-Sync.
 
 ---
 
-## Was du für Live brauchst (Minimum)
+## Danach (erst wenn 1–3 grün)
 
-| Wo | Was |
-|----|-----|
-| Vercel | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` |
-| Vercel | optional `VITE_SHOPIFY_VARIANT_KEYCHAIN` = echte Variant-ID |
-| Shopify | Produkt/Variante mit dem Preis, den Kunden zahlen sollen |
-| PR | Diesen Branch mergen oder Preview nutzen |
+1. Echte Variant-ID  
+2. Webhook → Admin `paid` (`PHASE0_GO_LIVE.md`)  
+3. Draft Orders / Staffelpreis  
+4. Print-QC Alltag  
 
-**Nicht nötig für die erste Live-Bestellung:** Draft-Order-Secrets, Webhook, Admin-Sync.
-
----
-
-## Später (Stück für Stück)
-
-1. Webhook → Admin `paid`  
-2. Draft Orders → berechneter Staffelpreis  
-3. Mehrere Designs in einer Kasse  
-4. Messe-Badge  
-5. KI-Assistent  
-
-Siehe `PHASE0_GO_LIVE.md` / `PROFI_TODO.md`.
+Siehe `PROFI_TODO.md`.
