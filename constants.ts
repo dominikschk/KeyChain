@@ -62,12 +62,14 @@ export function buildShopifyCartUrl(
   baseUrl?: string,
   writeToken?: string,
   /** Optional: echte Ziel-URL bei „eigene Website“ (Chip bleibt trotzdem NUDAIM-Shortlink). */
-  destinationUrl?: string
+  destinationUrl?: string,
+  quantity: number = 1
 ): string {
+  const qty = Math.min(99, Math.max(1, Math.round(Number(quantity) || 1)));
   const origin = baseUrl ? baseUrl.replace(/\/$/, '') : '';
   const params: Record<string, string> = {
     id: variantId,
-    quantity: '1',
+    quantity: String(qty),
     'properties[Config-ID]': shortId,
     'properties[Preview]': previewImageUrl,
   };

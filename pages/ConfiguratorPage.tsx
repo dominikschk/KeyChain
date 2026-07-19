@@ -2,7 +2,7 @@
  * Konfigurator – Panel zum Konfigurieren von NFeC-Produkten (3D + Microsite).
  */
 import React, { useState, useRef, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
-import { Loader2, ArrowRight, RefreshCw, Edit3, Smartphone, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown, Copy } from 'lucide-react';
+import { Loader2, ArrowRight, RefreshCw, Edit3, Smartphone, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown, Copy, Share2 } from 'lucide-react';
 import { Controls } from '../components/Controls';
 import { SitePreview } from '../components/SitePreview';
 import { KeychainPreview } from '../components/KeychainPreview';
@@ -33,6 +33,12 @@ import { getConfigByShortId, recordScan, setConfigStlUrl, insertConfigBlocks } f
 import { buildProductionPrintAssets } from '../lib/printAssets';
 import { exportKeychainStl } from '../lib/stlExport';
 import { assessLogoHealth } from '../lib/logoHealth';
+import {
+  buildDraftShareUrl,
+  decodeDraftShare,
+  readDraftParamFromLocation,
+} from '../lib/draftShare';
+import { bulkHintForQuantity, clampOrderQuantity } from '../lib/bulkOrder';
 
 const MicrositeChat = lazy(() =>
   import('../components/MicrositeChat').then((m) => ({ default: m.MicrositeChat }))
@@ -189,6 +195,8 @@ const ConfiguratorPage: React.FC = () => {
   const [viewMode] = useState<'editor' | 'microsite' | 'preview'>(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('preview') === '1') return 'preview';
+    // Geteilter Entwurf hat Vorrang vor id= (kein öffentlicher Microsite-View)
+    if (params.get('draft')) return 'editor';
     return params.get('id') ? 'microsite' : 'editor';
   });
 
@@ -201,6 +209,7 @@ const ConfiguratorPage: React.FC = () => {
   const [workPhase, setWorkPhase] = useState<'site' | 'hardware'>('hardware');
   const [shopifyGuideOpen, setShopifyGuideOpen] = useState(false);
   const [deliveryLinks, setDeliveryLinks] = useState<DeliveryLinks | null>(null);
+  const [orderQuantity, setOrderQuantity] = useState(1);
 
   useEffect(() => {
     getSession().then((s) => {
@@ -285,6 +294,38 @@ const ConfiguratorPage: React.FC = () => {
   const draftSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Geteilten Entwurf aus ?draft= laden (ohne Checkout)
+  useEffect(() => {
+    if (viewMode !== 'editor') return;
+    const encoded = readDraftParamFromLocation(window.location.search);
+    if (!encoded) return;
+    let cancelled = false;
+    void decodeDraftShare(encoded).then((result) => {
+      if (cancelled) return;
+      if (result.success) {
+        setConfig(result.config);
+        setToastMessage('Geteilter Entwurf geladen');
+        if (toastRef.current) clearTimeout(toastRef.current);
+        toastRef.current = setTimeout(() => {
+          setToastMessage(null);
+          toastRef.current = null;
+        }, 2800);
+        try {
+          const u = new URL(window.location.href);
+          u.searchParams.delete('draft');
+          window.history.replaceState({}, '', `${u.pathname}${u.search}${u.hash}`);
+        } catch {
+          /* ignore */
+        }
+      } else {
+        showError(result.error, 'Teilen-Link');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewMode]);
+
   const viewerRef = useRef<KeychainPreviewHandle>(null);
 
   useEffect(() => {
@@ -340,6 +381,28 @@ const ConfiguratorPage: React.FC = () => {
     setPreviewConfig(config);
     const url = `${window.location.origin}${window.location.pathname}?preview=1`;
     window.open(url, '_blank', 'noopener,noreferrer');
+  }, [config]);
+
+  const handleShareDraft = useCallback(async () => {
+    try {
+      const url = await buildDraftShareUrl(window.location.origin, config);
+      if (!url) {
+        showError(
+          'Der Entwurf ist zu groß für einen Link. Weniger Inhalte oder kürzere Texte helfen.',
+          'Teilen'
+        );
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setToastMessage('Teilen-Link kopiert (ohne Bestellung)');
+      if (toastRef.current) clearTimeout(toastRef.current);
+      toastRef.current = setTimeout(() => {
+        setToastMessage(null);
+        toastRef.current = null;
+      }, 2800);
+    } catch {
+      showError('Link konnte nicht kopiert werden.', 'Teilen');
+    }
   }, [config]);
 
   const handleImportConfig = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -511,7 +574,15 @@ const ConfiguratorPage: React.FC = () => {
       const variantId = product?.variantId ?? '56564338262361';
       const micrositeUrl = buildMicrositeUrl(baseUrl, shortId);
       const ccpUrl = buildCcpEditUrl(baseUrl, shortId, writeToken);
-      const cartUrl = buildShopifyCartUrl(variantId, shortId, finalImageUrl, baseUrl, writeToken, destinationUrl);
+      const cartUrl = buildShopifyCartUrl(
+        variantId,
+        shortId,
+        finalImageUrl,
+        baseUrl,
+        writeToken,
+        destinationUrl,
+        orderQuantity
+      );
       const links: DeliveryLinks = { shortId, micrositeUrl, ccpUrl, cartUrl, destinationUrl };
       try {
         localStorage.setItem(LAST_DELIVERY_KEY, JSON.stringify({ ...links, savedAt: Date.now() }));
@@ -540,7 +611,7 @@ const ConfiguratorPage: React.FC = () => {
       const errorDetails = getDetailedError(err);
       showError(errorDetails.msg, errorDetails.title);
     }
-  }, [config, selectedProductId, svgContent]);
+  }, [config, selectedProductId, svgContent, orderQuantity]);
 
   const initiateSave = useCallback(async () => {
     try {
@@ -745,6 +816,7 @@ const ConfiguratorPage: React.FC = () => {
                     <a href="/ccp" className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Smartphone size={14} /> Kunden-Panel</a>
                     <button type="button" onClick={() => { handleExportConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Download size={14} /> Export</button>
                     <label className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"><Upload size={14} /> Import<input type="file" accept=".json,application/json" onChange={(e) => { handleImportConfig(e); setUserMenuOpen(false); }} className="hidden" /></label>
+                    <button type="button" onClick={() => { void handleShareDraft(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Share2 size={14} /> Entwurf teilen</button>
                     <button type="button" onClick={() => { handlePreviewInNewTab(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ExternalLink size={14} /> So sehen es Kunden</button>
                     <button type="button" onClick={() => { setShopifyGuideOpen(true); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ShoppingCart size={14} /> Shopify: Bestellmail</button>
                     <button type="button" onClick={() => { handleResetConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><RotateCcw size={14} /> Zurücksetzen</button>
@@ -1020,13 +1092,28 @@ const ConfiguratorPage: React.FC = () => {
                 </div>
               </div>
               <footer className="hidden md:flex shrink-0 p-4 border-t border-zinc-200/80 bg-white flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="order-qty-site">
+                    Stückzahl
+                  </label>
+                  <input
+                    id="order-qty-site"
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={orderQuantity}
+                    onChange={(e) => setOrderQuantity(clampOrderQuantity(e.target.value))}
+                    className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
+                  />
+                </div>
+                <p className="text-[11px] text-zinc-500 leading-snug">{bulkHintForQuantity(orderQuantity)}</p>
                 <button
                   type="button"
                   onClick={() => void initiateSave()}
                   className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
                   <ShoppingCart size={18} />
-                  Fertig – bestellen
+                  Fertig – bestellen{orderQuantity > 1 ? ` (${orderQuantity})` : ''}
                 </button>
                 <button
                   type="button"
@@ -1068,6 +1155,21 @@ const ConfiguratorPage: React.FC = () => {
                 </div>
               </div>
               <footer className="hidden md:flex shrink-0 p-4 border-t border-zinc-200/80 bg-white flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="order-qty-hw">
+                    Stückzahl
+                  </label>
+                  <input
+                    id="order-qty-hw"
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={orderQuantity}
+                    onChange={(e) => setOrderQuantity(clampOrderQuantity(e.target.value))}
+                    className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
+                  />
+                </div>
+                <p className="text-[11px] text-zinc-500 leading-snug">{bulkHintForQuantity(orderQuantity)}</p>
                 <button
                   type="button"
                   onClick={goToSite}
@@ -1077,7 +1179,7 @@ const ConfiguratorPage: React.FC = () => {
                 </button>
                 <button type="button" onClick={() => void initiateSave()} className="w-full min-h-[44px] rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 flex items-center justify-center gap-2">
                   <ShoppingCart size={16} />
-                  Direkt bestellen
+                  Direkt bestellen{orderQuantity > 1 ? ` (${orderQuantity})` : ''}
                 </button>
               </footer>
             </>

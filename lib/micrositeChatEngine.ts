@@ -4,6 +4,7 @@
 import type { ActionIcon, FontStyle, MagicButtonType, ModelConfig, NFCBlock } from '../types';
 import { generateSecureKey } from './utils';
 import { paletteForIndustry, paletteForVibe } from './brandPalette';
+import type { BrandHints } from './brandScrape';
 
 export type ChatRole = 'assistant' | 'user';
 
@@ -29,6 +30,7 @@ export interface ChatAnswers {
   logoUrl?: string;
   features?: string[];
   vibe?: string;
+  websiteUrl?: string;
 }
 
 export interface ChatSession {
@@ -78,7 +80,7 @@ export function getStepMeta(step: ChatStep): StepMeta {
         title: 'Firmenname',
         hint: 'Tipp: Einfach den Namen tippen, den Kunden auf dem Schild lesen sollen.',
         placeholder: 'z. B. Bäckerei Müller',
-        chips: [],
+        chips: ['Von meiner Website', 'Aus PDF'],
       };
     case 'industry':
       return {
@@ -248,7 +250,7 @@ export function buildConfigFromAnswers(base: ModelConfig, answers: ChatAnswers):
         type: 'magic_button',
         buttonType: 'custom_link',
         title: 'Website',
-        content: 'https://',
+        content: answers.websiteUrl || 'https://',
         settings: { icon: 'globe' },
       });
       continue;
@@ -302,6 +304,72 @@ export function buildConfigFromAnswers(base: ModelConfig, answers: ChatAnswers):
   };
 }
 
+/** Brand-Hints aus URL/PDF in Chat-Antworten übernehmen. */
+export function mergeBrandHintsIntoAnswers(
+  answers: ChatAnswers,
+  hints: BrandHints
+): ChatAnswers {
+  const next = { ...answers };
+  if (hints.company) next.company = hints.company;
+  if (hints.slogan) next.slogan = hints.slogan;
+  if (hints.logoUrl) next.logoUrl = hints.logoUrl;
+  if (hints.industryGuess) next.industry = hints.industryGuess;
+  if (hints.websiteUrl) next.websiteUrl = hints.websiteUrl;
+  if (!next.features?.length && hints.websiteUrl) {
+    next.features = ['web', 'whatsapp', 'phone'];
+  }
+  return next;
+}
+
+/**
+ * Nach Website/PDF: Session vorspulen und erste Config bauen.
+ */
+export function applyBrandHintsToChat(
+  session: ChatSession,
+  hints: BrandHints,
+  baseConfig: ModelConfig
+): StepResult {
+  const answers = mergeBrandHintsIntoAnswers(session.answers, hints);
+  const name = answers.company || 'dein Geschäft';
+  const parts: string[] = [`Ich habe Infos zu „${name}“ übernommen.`];
+  if (hints.slogan) parts.push('Einen kurzen Text für die Startseite auch.');
+  if (hints.logoUrl) parts.push('Ein Bild von der Website als Logo-Vorschlag.');
+  parts.push('\nSchritt: Passt die Branche? Tippe auf einen Vorschlag oder schreib es selbst.');
+
+  let config = buildConfigFromAnswers(baseConfig, {
+    ...answers,
+    slogan: answers.slogan || `Willkommen bei ${name}`,
+    features: answers.features || ['web', 'whatsapp'],
+    vibe: answers.vibe || 'modern',
+  });
+  if (hints.accentColor) {
+    config = { ...config, accentColor: hints.accentColor };
+  }
+  if (hints.websiteUrl) {
+    config = {
+      ...config,
+      nfcBlocks: config.nfcBlocks.map((b) =>
+        b.buttonType === 'custom_link' && (b.title === 'Website' || b.settings?.icon === 'globe')
+          ? { ...b, content: hints.websiteUrl!, link: hints.websiteUrl }
+          : b
+      ),
+    };
+  }
+
+  return {
+    session: {
+      step: answers.industry ? 'slogan' : 'industry',
+      answers,
+      messages: [
+        ...session.messages,
+        msg('assistant', parts.join(' ')),
+      ],
+    },
+    config,
+    applied: true,
+  };
+}
+
 function extractHttpsUrl(text: string): string | undefined {
   const m = text.match(/https:\/\/[^\s<>"']+/i);
   return m?.[0]?.replace(/[.,;)]+$/, '');
@@ -329,6 +397,18 @@ export function advanceChat(
   let applied = false;
 
   if (step === 'welcome') {
+    // reine https-URL → Caller (Chat-UI) soll scrapen; hier nur Hinweis
+    if (/^https:\/\//i.test(text) && text.length < 300) {
+      return {
+        session: {
+          ...session,
+          messages: [
+            ...messages,
+            msg('assistant', 'Einen Moment – ich schaue mir die Website an…'),
+          ],
+        },
+      };
+    }
     answers.company = text.slice(0, 80);
     step = 'industry';
     reply = `Prima – „${answers.company}“ ist notiert.\n\nSchritt 2 von 6: In welcher Branche bist du?\n\nTipp auf einen blauen Knopf unten oder schreib es in eigenen Worten.`;

@@ -56,7 +56,10 @@ Im Projektordner (PowerShell):
 npx supabase login
 npx supabase link --project-ref sujngjfghqzofqkzzkrw
 npx supabase functions deploy microsite-chat --no-verify-jwt
+npx supabase functions deploy brand-scrape --no-verify-jwt
 ```
+
+Optional: `brand-scrape` liest öffentliche https-Websites für „Von meiner Website“ im Assistenten. Ohne Deploy greift ein Domain-Fallback.
 
 ### 4) Danach: Code nach GitHub pushen
 

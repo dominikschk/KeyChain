@@ -6,6 +6,7 @@ import { Sparkles, Send, Loader2, X, RotateCcw, CheckCircle2, Wrench, ImagePlus 
 import type { ModelConfig } from '../types';
 import {
   advanceChat,
+  applyBrandHintsToChat,
   createChatSession,
   getStepMeta,
   type ChatSession,
@@ -15,6 +16,12 @@ import { SITE_TEMPLATES } from '../lib/siteLayouts';
 import { supabase } from '../lib/supabase';
 import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
 import { validateImageFile } from '../lib/validation';
+import { fetchBrandHintsFromUrl } from '../lib/brandScrapeApi';
+import {
+  extractRoughTextFromPdf,
+  hintsFromPdfText,
+  toSafePublicHttpsUrl,
+} from '../lib/brandScrape';
 
 interface MicrositeChatProps {
   config: ModelConfig;
@@ -50,6 +57,7 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const logoFileRef = useRef<HTMLInputElement>(null);
+  const pdfFileRef = useRef<HTMLInputElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
 
@@ -71,6 +79,106 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
     setAppliedOnce(false);
     setStatusLine('Von vorne – zuerst dein Firmenname.');
   }, []);
+
+  const applyHints = useCallback(
+    (hints: import('../lib/brandScrape').BrandHints) => {
+      const result = applyBrandHintsToChat(session, hints, configRef.current);
+      setSession(result.session);
+      if (result.config) {
+        onApplyConfig(result.config);
+        setAppliedOnce(true);
+        setStatusLine('Infos von Website/PDF übernommen – weiter anpassen.');
+      }
+    },
+    [session, onApplyConfig]
+  );
+
+  const scrapeWebsite = useCallback(
+    async (rawUrl: string) => {
+      const url = toSafePublicHttpsUrl(rawUrl);
+      if (!url) {
+        showError('Bitte eine öffentliche https-Adresse eingeben.');
+        return;
+      }
+      setBusy(true);
+      setStatusLine('Website wird gelesen…');
+      setSession((s) => ({
+        ...s,
+        messages: [
+          ...s.messages,
+          { id: crypto.randomUUID(), role: 'user', content: url },
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: 'Einen Moment – ich schaue mir die Website an…',
+          },
+        ],
+      }));
+      try {
+        const hints = await fetchBrandHintsFromUrl(url);
+        if (!hints || (!hints.company && !hints.slogan)) {
+          showError('Von der Seite konnte wenig gelesen werden. Bitte den Firmennamen tippen.');
+          setStatusLine('Website kaum lesbar – Namen tippen.');
+          return;
+        }
+        const result = applyBrandHintsToChat(
+          {
+            ...session,
+            messages: [
+              ...session.messages,
+              { id: crypto.randomUUID(), role: 'user', content: url },
+            ],
+          },
+          hints,
+          configRef.current
+        );
+        setSession(result.session);
+        if (result.config) {
+          onApplyConfig(result.config);
+          setAppliedOnce(true);
+        }
+        setStatusLine('Website-Infos übernommen.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [session, onApplyConfig]
+  );
+
+  const handlePdfUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') {
+        showError('Bitte eine PDF-Datei wählen.');
+        resetFileInput(e.target);
+        return;
+      }
+      if (file.size > 4 * 1024 * 1024) {
+        showError('PDF bitte unter 4 MB.');
+        resetFileInput(e.target);
+        return;
+      }
+      setBusy(true);
+      setStatusLine('PDF wird gelesen…');
+      try {
+        const buf = await file.arrayBuffer();
+        const text = extractRoughTextFromPdf(new Uint8Array(buf));
+        if (text.length < 8) {
+          showError('Aus dem PDF war kaum Text lesbar. Bitte Firmennamen tippen.');
+          return;
+        }
+        const hints = hintsFromPdfText(text);
+        applyHints(hints);
+      } catch {
+        showError('PDF konnte nicht gelesen werden.');
+      } finally {
+        setBusy(false);
+        resetFileInput(e.target);
+      }
+    },
+    [applyHints]
+  );
 
   const runGuided = useCallback(
     (text: string) => {
@@ -130,9 +238,12 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
     const text = (raw ?? input).trim();
     if (!text || busy) return;
     setInput('');
+    if (session.step === 'welcome' && /^https:\/\//i.test(text)) {
+      await scrapeWebsite(text);
+      return;
+    }
     setBusy(true);
     try {
-      // Instant: geführter Flow lokal – kein Warten auf Cloud-KI
       runGuided(text);
     } finally {
       setBusy(false);
@@ -141,6 +252,16 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
 
   const handleChip = (chip: string) => {
     if (busy) return;
+    if (chip === 'Von meiner Website') {
+      setStatusLine('Website-Adresse einfügen (https://…) und senden.');
+      setInput('https://');
+      inputRef.current?.focus();
+      return;
+    }
+    if (chip === 'Aus PDF') {
+      pdfFileRef.current?.click();
+      return;
+    }
     setBusy(true);
     try {
       runGuided(chip);
@@ -369,6 +490,14 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
           <p className="text-xs text-zinc-500 text-center mt-2">PNG, JPG oder WebP – wird sofort in der Vorschau sichtbar.</p>
         </div>
       )}
+
+      <input
+        ref={pdfFileRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        className="hidden"
+        onChange={(e) => void handlePdfUpload(e)}
+      />
 
       <form
         className="shrink-0 p-3 border-t border-zinc-100 flex gap-2 bg-cream"

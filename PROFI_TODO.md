@@ -110,7 +110,7 @@ Erst wenn Phase 0–1 stabil sind. Anhänger bleibt Priorität.
 ### 3.2 Als Nächstes (Produkt)
 - [x] **[CODE]** Anker-Navigation + Mini-Seite Kontakt
 - [x] **[CODE]** Favicon-Upload
-- [ ] Brand-Chat: Website-URL / PDF scrapen (nur https, sanitize)
+- [x] **[CODE]** Brand-Chat: Website-URL / PDF (https, sanitize; Edge `brand-scrape`)
 - [x] **[CODE]** CCP: Versionierung / Rollback (lokal, max. 5)
 
 ### 3.3 Qualität Microsite
@@ -148,8 +148,8 @@ Bewusst optional – nur wenn Kern läuft.
 ### Konfigurator
 - [x] Logo-Health-Check vor Save („zu viele Farben → wird vereinfacht“)
 - [x] Fortschrittsbalken Speichern verständlicher (1/4 … 4/4)
-- [ ] Entwurf teilen-Link (ohne Checkout)
-- [ ] B2B: Mengenrabatt-Hinweis + Sammelbestellung
+- [x] Entwurf teilen-Link (ohne Checkout, `?draft=`)
+- [x] B2B: Mengenrabatt-Hinweis + Stückzahl im Warenkorb
 
 ### Digital
 - [ ] Scan-Insights im CCP (ohne Spam, Rate-Limit schon da)
