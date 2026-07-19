@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatEuroFromCents,
+  priceTiersForProduct,
   pricingHintForQuantity,
   resolveCheckoutPrice,
 } from '../shopifyPricing'
@@ -33,7 +34,6 @@ describe('shopifyPricing', () => {
 
   it('Badge-Staffeln bleiben getrennt von Keychain (auch ohne Live-Katalog)', () => {
     // Live-Simple blendet Badge aus PRODUCTS aus – Staffeln bleiben trotzdem getrennt.
-    const { priceTiersForProduct } = require('../shopifyPricing') as typeof import('../shopifyPricing')
     const badge = priceTiersForProduct('badge')[0]!
     const key = priceTiersForProduct('keychain')[0]!
     expect(badge.unitPriceCents).not.toBe(key.unitPriceCents)
