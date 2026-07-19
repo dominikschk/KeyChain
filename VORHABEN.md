@@ -3,7 +3,8 @@
 Stand: 2026-07-19  
 Prioritäten und offene Themen, damit wir nichts verlieren.
 
-**Langfristig (12 Monate, 40-Personen-Org):** siehe [`ROADMAP_PROFESSIONAL_2026_2027.md`](ROADMAP_PROFESSIONAL_2026_2027.md).
+**Langfristig (12 Monate, 40-Personen-Org):** siehe [`ROADMAP_PROFESSIONAL_2026_2027.md`](ROADMAP_PROFESSIONAL_2026_2027.md).  
+**Deine Abhak-Liste bis Profi-Niveau:** siehe [`PROFI_TODO.md`](PROFI_TODO.md).
 
 ---
 

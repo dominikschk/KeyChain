@@ -250,7 +250,8 @@ Anschluss an `VORHABEN.md`, ohne Anhänger zu verwässern:
 - [ ] Support-Playbooks (Mail/CCP/Order)
 
 **Q2**
-- Design System; WCAG AA Kernflows; Admin-UX für Ops
+- [x] Admin Queue, Filter, Batch-Export, Shopify-Deep-Links (erster Slice)
+- [ ] Weitere UX-Politur / Batch-STL-ZIP
 
 **Q3–Q4**
 - Analytics-Dashboards (Conversion, Scans, Tickets); EN-Copy; CS-Tools
@@ -295,8 +296,10 @@ Ohne **STL + Webhook + CI** keine seriöse Skalierung von Varianten oder Digital
 | Doc | Rolle |
 |-----|--------|
 | [`VORHABEN.md`](VORHABEN.md) | Kurzfristiges Slice-Backlog |
+| [`PROFI_TODO.md`](PROFI_TODO.md) | Abhak-Liste Dominik: Deploy → Fertigung → Support → Microsite → Skala |
 | [`SECURITY_ISSUES.md`](SECURITY_ISSUES.md) | Security-Schuld & Deploy-Checkliste |
 | [`SHOPIFY_EMAIL_TESTEN.md`](SHOPIFY_EMAIL_TESTEN.md) | Mail-Smoke (Live-Test erledigt) |
+| [`SHOPIFY_DASHBOARD_WEBHOOK.md`](SHOPIFY_DASHBOARD_WEBHOOK.md) | Webhook Klick-für-Klick ohne CLI |
 | Diese Datei | Jahres-Org, Quarters, Squads, KPIs |
 
 ---
