@@ -41,6 +41,7 @@ import {
 import { bulkHintForQuantity, clampOrderQuantity } from '../lib/bulkOrder';
 import { customerSaveError } from '../lib/customerErrors';
 import { t } from '../lib/i18n';
+import { filamentCustomerHint } from '../lib/filamentProfiles';
 
 const MicrositeChat = lazy(() =>
   import('../components/MicrositeChat').then((m) => ({ default: m.MicrositeChat }))
@@ -1145,6 +1146,9 @@ const ConfiguratorPage: React.FC = () => {
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                       </select>
+                      <p className="text-[11px] text-zinc-500 mt-2 leading-snug">
+                        {filamentCustomerHint(selectedProductId)}
+                      </p>
                     </div>
                   )}
                   <Controls

@@ -15,26 +15,30 @@ Kein Feature-Friedhof: Digitale Seite wächst kontrolliert. **Print + Shopify-Op
 
 ---
 
-## 2. Ausgangslage (Code-Stand 2026-07)
+## 2. Ausgangslage (Code-Stand 2026-07-19, aktualisiert)
 
 ### Stark heute
 
-- Zwei-Phasen-Konfigurator (`pages/ConfiguratorPage.tsx`)
-- Logo-Pipeline Preview vs. Print (`lib/logoFromRaster.ts`, `lib/logoProcess.ts`)
-- Microsite, CCP, Admin
+- Zwei-Phasen-Konfigurator (`pages/ConfiguratorPage.tsx`) inkl. Kunden-CX (Bestellen primär)
+- Logo-Pipeline Preview vs. Print + Logo-Health
+- **STL headless** (`lib/stlExport.ts`) + **Print-PNG** (`lib/printAssets.ts`) im Save-/Admin-Flow
+- Microsite (Blöcke, Anker-Nav, Favicon, Share-Meta), CCP (Rollback, Scan-Insights), Admin (Print-QC, CSV, STL-Liste)
 - Shopify-Cart-Handoff inkl. Line-Item-Properties
+- **CI** (typecheck, lint, vitest, build, Playwright) · ESLint · Unit-Tests
+- Webhook-**Code** + Scan-Rate-Limit-RPC + optional Sentry
+- Filament-Profile + Fertigungs-Doku (`MANUFACTURING_TOLERANCES.md`)
 - Security-Fixes dokumentiert (`SECURITY_ISSUES.md`)
 - **Erledigt (Dominik, 2026-07-19):** Shopify-Bestellmail/Liquid live + echte Testbestellung (Properties → Mail → CCP)
 
-### Kritische Lücken
+### Noch offen (Betrieb / Skala)
 
 | Bereich | Ist |
 |--------|-----|
-| Fertigung | STL-Export in `KeychainPreview` stubbed (`exportSTL` → `null`); 3D in `Viewer.tsx` nicht im Hauptflow |
-| Betrieb | Admin-Orders manuell; **kein** Shopify-Webhook-Sync Order → Admin |
-| Engineering | Keine Tests/CI/Lint; `README.md` leer |
-| Digital | Mini-Website-Ziel laut `VORHABEN.md` unvollständig |
-| Querschnitt | Observability, Rate-Limits, i18n, A11y fehlen systematisch |
+| Betrieb | Webhook/Schema/Secrets **deployen** (Code liegt bereit) → siehe `PROFI_TODO.md` Phase 0 |
+| Commerce | Echte Shopify Variant-IDs in Env; echte Mengenrabatte im Shop |
+| Engineering | Preview-Deploys, Branch-Schutz, Staging-Trennung |
+| Digital | Stempelkarte serverseitig; Partner-API; volle EN-i18n |
+| Querschnitt | Error-Budgets, Cloudflare-Limits live, DSGVO-Paket |
 
 ---
 
@@ -126,30 +130,26 @@ Fokus: Produktionsfähigkeit und Engineering-Hygiene.
 
 | # | Thema | Status / Hinweis |
 |---|--------|------------------|
-| 1 | **STL/Print-Pipeline wieder live** – Viewer-STL oder neue Engine; `svgForProduction` → Fertigungsjob; Admin zeigt druckfertige Assets | **erledigt 2026-07-19** (headless STL + Print-PNG + Admin) |
-| 2 | **CI/CD** – GitHub Actions: `tsc`, Lint, Build, Preview-Deploys; Branch-Schutz | **größtenteils erledigt** – Actions: typecheck+lint+vitest+build+e2e; Preview-Deploys/Branch-Schutz offen |
-| 3 | **Test-Grundlage** – Unit Logo/Validation; Playwright Smoke (Upload → Save → Cart-URL) | **erledigt** – Unit + Playwright Routing/Cart-URL (voller Upload-Save braucht Staging-Env) |
-| 4 | **Security-Deploy abschließen** – Rest aus `SECURITY_ISSUES.md`; Cloudflare Rate-Limit; Scan-Flooding | **Code erledigt** – `record_nfc_scan`; Cloudflare/Schema-Deploy manuell |
-| 5a | **Shopify Live-Delivery** – Liquid + Smoke Order | **erledigt 2026-07-19** |
-| 5b | **Shopify Order-Sync** – Webhook Order → Status `paid` in Admin (`lib/ordersApi.ts`) | **Code erledigt** – siehe `SHOPIFY_WEBHOOK.md` (Deploy offen) |
-| 6 | **Observability** – Sentry + Basis-Analytics; Error-Budgets | **teilweise** – optional Sentry (`VITE_SENTRY_DSN`); Error-Budgets offen |
-| 4 | **Security-Deploy abschließen** – Rest aus `SECURITY_ISSUES.md`; Cloudflare Rate-Limit; Scan-Flooding | offen |
-| 5a | **Shopify Live-Delivery** – Liquid + Smoke Order | **erledigt 2026-07-19** |
-| 5b | **Shopify Order-Sync** – Webhook Order → Status `paid` in Admin (`lib/ordersApi.ts`) | offen |
-| 6 | **Observability** – Sentry + Basis-Analytics; Error-Budgets | offen |
+| 1 | **STL/Print-Pipeline wieder live** | **erledigt** (headless STL + Print-PNG + Admin) |
+| 2 | **CI/CD** | **größtenteils** – Actions: typecheck+lint+vitest+build+e2e; Preview-Deploys/Branch-Schutz offen |
+| 3 | **Test-Grundlage** | **erledigt** – Unit + Playwright Smoke (voller Upload-Save braucht Staging) |
+| 4 | **Security-Deploy** | **Code erledigt** – Scan-RPC; Cloudflare/Schema-Deploy manuell |
+| 5a | **Shopify Live-Delivery** | **erledigt 2026-07-19** |
+| 5b | **Shopify Order-Sync** | **Code erledigt** – Deploy offen (`SHOPIFY_WEBHOOK.md`) |
+| 6 | **Observability** | **teilweise** – optional Sentry (`VITE_SENTRY_DSN`); Error-Budgets offen |
 
-**Exit-Kriterien Q1:** Admin sieht bezahlte Orders automatisch + Print-Assets; Main immer grün. (Mail/CCP-Smoke bereits grün.)
+**Exit-Kriterien Q1:** Admin sieht bezahlte Orders automatisch + Print-Assets; Main immer grün. (Mail/CCP-Smoke bereits grün. **Deploy = Phase 0 bei Dominik.**)
 
 ---
 
 ### Q2 (Monate 4–6) – Commerce-Profi & Varianten
 
-1. **Produktkatalog** – echte Variant-IDs (Badge, Größen, Materialien); Preisregeln
-2. **B2B/Bulk** – Mengenrabatt, Firmenrechnung, Sammelbestellung
-3. **Print-QC UI** – 3-Farben-Preview für Produktion (getrennt von Kunden-Live-Vorschau); Freigabe-Workflow
-4. **Farbmanagement** – Material-/Filament-Profile; dokumentierte Toleranzen (Legal-Copy bleibt führend)
-5. **Admin 2.0** – Queue, Filter, Batch-Export für Druckerei, Shopify-Deep-Links
-6. **Design System** – Tokens, Komponentenbibliothek, A11y-Pass WCAG 2.2 AA Kernflows
+1. **Produktkatalog** – echte Variant-IDs (Badge, Größen, Materialien); Preisregeln · **[DU/Env]**
+2. **B2B/Bulk** – Mengenrabatt im Shop · **[DU]**; Stückzahl + Hinweis im Konfigurator · **[CODE erledigt]**
+3. **Print-QC UI** · **[CODE erledigt]** inkl. Reprint-Grund + STL-Liste
+4. **Farbmanagement** – Filament-Profile + Toleranz-Doku · **[CODE erledigt]** (`filamentProfiles`, `MANUFACTURING_TOLERANCES.md`)
+5. **Admin 2.0** – Queue/Filter/CSV/STL-Batch · **[CODE erledigt]**; Shopify-Deep-Links vorhanden
+6. **Design System** – Tokens/A11y · teilweise; WCAG-Vollpass offen
 
 **Exit-Kriterien Q2:** ≥2 physische Produktvarianten live; Produktionsqueue ohne manuelles CSV-Chaos.
 
@@ -159,12 +159,12 @@ Fokus: Produktionsfähigkeit und Engineering-Hygiene.
 
 Anschluss an `VORHABEN.md`, ohne Anhänger zu verwässern:
 
-1. Reichere Blöcke (Galerie, FAQ, Preise, Öffnungszeiten)
-2. Section-Builder (Abstände, Ausrichtung, Duplizieren)
-3. Multi-Page/Anker-Nav + SEO/Share-Preview
-4. Brand-Chat 2.0 (URL/PDF scrape, bessere Validierung)
-5. CCP: Versionierung, Rollback, Scan-Insights (ohne Spam)
-6. Stempelkarte serverseitig (Anti-Cheat) – wenn B2B-Nachfrage da
+1. Reichere Blöcke (Galerie, FAQ, Preise, Öffnungszeiten) · **[CODE erledigt]**
+2. Section-Builder (Abstände, Ausrichtung, Duplizieren) · **[CODE erledigt]** (Basis)
+3. Multi-Page/Anker-Nav + SEO/Share-Preview · **[CODE erledigt]**
+4. Brand-Chat 2.0 (URL/PDF scrape) · **[CODE erledigt]** (Edge optional deployen)
+5. CCP: Versionierung, Rollback, Scan-Insights · **[CODE erledigt]** (lokal / einfach)
+6. Stempelkarte serverseitig (Anti-Cheat) · **offen** (bei B2B-Nachfrage)
 
 **Exit-Kriterien Q3:** Microsite wirkt wie „kleine Markenwebsite“; CCP für Nicht-Techniker bedienbar.
 

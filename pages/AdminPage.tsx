@@ -25,13 +25,18 @@ import type { OrderRow } from '../lib/ordersApi';
 import {
   filterOrders,
   buildProductionCsv,
+  buildStlUrlManifest,
   downloadTextFile,
   getPrintQcStatus,
   isSlaOverdue,
   manufacturingSlaHours,
+  formatReprintNote,
+  REPRINT_REASONS,
   type OrderFilter,
+  type ReprintReasonId,
 } from '../lib/adminOps';
 import { getStoredLocale, setStoredLocale, t, toggleLocale, type Locale } from '../lib/i18n';
+import { showError } from '../lib/utils';
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -63,6 +68,7 @@ export const AdminPage: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [orderFilter, setOrderFilter] = useState<OrderFilter>('all');
   const [qcModal, setQcModal] = useState<OrderRow | null>(null);
+  const [rejectReason, setRejectReason] = useState<ReprintReasonId>('colors');
   const [locale, setLocale] = useState<Locale>(() =>
     typeof window !== 'undefined' ? getStoredLocale() : 'de'
   );
@@ -177,10 +183,11 @@ export const AdminPage: React.FC = () => {
   };
 
   const handlePrintQc = async (order: OrderRow, approve: boolean) => {
+    const note = approve ? undefined : formatReprintNote(rejectReason);
     const updated = await updateOrderPrintQc(
       order.id,
       approve ? 'approved' : 'rejected',
-      undefined,
+      note,
       approve && order.status === 'paid'
     );
     if (updated) {
@@ -189,11 +196,27 @@ export const AdminPage: React.FC = () => {
     setQcModal(null);
   };
 
-  const openQcReview = (order: OrderRow) => setQcModal(order);
+  const openQcReview = (order: OrderRow) => {
+    setRejectReason('colors');
+    setQcModal(order);
+  };
 
   const handleExportCsv = () => {
     const csv = buildProductionCsv(filteredOrders, list, baseUrl);
     downloadTextFile(`nudaim-produktion-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  };
+
+  const handleExportStlList = () => {
+    const manifest = buildStlUrlManifest(filteredOrders, list);
+    if (!manifest.includes('https://')) {
+      showError('In diesem Filter gibt es noch keine STL-Links.');
+      return;
+    }
+    downloadTextFile(
+      `nudaim-stl-batch-${new Date().toISOString().slice(0, 10)}.txt`,
+      manifest,
+      'text/plain;charset=utf-8'
+    );
   };
 
   const switchLang = () => {
@@ -337,17 +360,27 @@ export const AdminPage: React.FC = () => {
                 Produktions-Queue
               </h2>
               <p className="text-sm text-zinc-500 mt-1">
-                Filter, Print-QC (48h-SLA), CSV für die Druckerei.
+                Filter, Print-QC (48h-SLA), CSV und STL-Liste für die Druckerei.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-semibold hover:bg-zinc-50"
-            >
-              <Download size={14} aria-hidden />
-              {t('admin.export', locale)}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleExportStlList}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-semibold hover:bg-zinc-50"
+              >
+                <Download size={14} aria-hidden />
+                STL-Liste
+              </button>
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-semibold hover:bg-zinc-50"
+              >
+                <Download size={14} aria-hidden />
+                {t('admin.export', locale)}
+              </button>
+            </div>
           </div>
 
           <div className="px-5 py-3 border-b border-zinc-100 flex flex-wrap gap-2" role="tablist" aria-label="Bestellfilter">
@@ -514,7 +547,7 @@ export const AdminPage: React.FC = () => {
                               {qc !== 'rejected' && (
                                 <button
                                   type="button"
-                                  onClick={() => handlePrintQc(o, false)}
+                                  onClick={() => openQcReview(o)}
                                   className="px-2.5 py-1.5 rounded-lg border border-zinc-200 text-[10px] font-bold uppercase tracking-wide text-zinc-600"
                                 >
                                   {t('admin.qc.reject', locale)}
@@ -731,28 +764,47 @@ export const AdminPage: React.FC = () => {
                 );
               })()}
             </div>
-            <div className="px-5 py-4 border-t border-zinc-200 flex flex-wrap gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setQcModal(null)}
-                className="px-3 py-2 rounded-lg border border-zinc-200 text-xs font-semibold"
-              >
-                Abbrechen
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePrintQc(qcModal, false)}
-                className="px-3 py-2 rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600"
-              >
-                Zurückweisen
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePrintQc(qcModal, true)}
-                className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold uppercase tracking-wide"
-              >
-                Druck freigeben
-              </button>
+            <div className="px-5 py-4 border-t border-zinc-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 shrink-0" htmlFor="reprint-reason">
+                  Bei Ablehnung: Grund
+                </label>
+                <select
+                  id="reprint-reason"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value as ReprintReasonId)}
+                  className="flex-1 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-medium"
+                >
+                  {REPRINT_REASONS.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-wrap gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setQcModal(null)}
+                  className="px-3 py-2 rounded-lg border border-zinc-200 text-xs font-semibold"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePrintQc(qcModal, false)}
+                  className="px-3 py-2 rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600"
+                >
+                  Zurückweisen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePrintQc(qcModal, true)}
+                  className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold uppercase tracking-wide"
+                >
+                  Druck freigeben
+                </button>
+              </div>
             </div>
           </div>
         </div>

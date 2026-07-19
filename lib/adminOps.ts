@@ -102,3 +102,52 @@ export function downloadTextFile(filename: string, content: string, mime = 'text
   a.click();
   URL.revokeObjectURL(url);
 }
+
+/** Gründe bei QC-Ablehnung / Reprint (für Metrik). */
+export const REPRINT_REASONS = [
+  { id: 'colors', label: 'Farben / Logo zu unklar' },
+  { id: 'geometry', label: 'Form / STL-Problem' },
+  { id: 'customer', label: 'Kundenwunsch / Änderung' },
+  { id: 'machine', label: 'Drucker / Material' },
+  { id: 'other', label: 'Sonstiges' },
+] as const;
+
+export type ReprintReasonId = (typeof REPRINT_REASONS)[number]['id'];
+
+export function formatReprintNote(reasonId: ReprintReasonId, extra?: string): string {
+  const label = REPRINT_REASONS.find((r) => r.id === reasonId)?.label || reasonId;
+  const more = (extra || '').trim();
+  return more ? `Reprint: ${label} – ${more}` : `Reprint: ${label}`;
+}
+
+/**
+ * STL-URL-Liste für die gefilterte Queue (Batch für Druckerei, ohne ZIP-Lib).
+ */
+export function buildStlUrlManifest(
+  orders: OrderRow[],
+  configs: ConfigRow[]
+): string {
+  const byShort = new Map(configs.map((c) => [c.short_id, c]));
+  const lines = ['# NUDAIM STL-Batch', `# ${new Date().toISOString()}`, '# short_id\tstl_url', ''];
+  let n = 0;
+  for (const o of orders) {
+    const cfg = byShort.get(o.short_id);
+    const url = cfg?.stl_url;
+    if (url && url.startsWith('https://')) {
+      lines.push(`${o.short_id}\t${url}`);
+      n += 1;
+    }
+  }
+  lines.push('', `# ${n} STL-Links`);
+  return lines.join('\n');
+}
+
+export function collectStlUrls(orders: OrderRow[], configs: ConfigRow[]): string[] {
+  const byShort = new Map(configs.map((c) => [c.short_id, c]));
+  const urls: string[] = [];
+  for (const o of orders) {
+    const url = byShort.get(o.short_id)?.stl_url;
+    if (url && url.startsWith('https://')) urls.push(url);
+  }
+  return urls;
+}

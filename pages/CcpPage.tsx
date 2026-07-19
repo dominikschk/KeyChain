@@ -37,6 +37,7 @@ import {
   pushCcpSnapshot,
   type CcpSnapshot,
 } from '../lib/ccpHistory';
+import { buildScanInsight } from '../lib/scanInsights';
 
 function getShortIdFromUrl(): string | null {
   if (typeof window === 'undefined') return null;
@@ -319,19 +320,31 @@ export const CcpPage: React.FC = () => {
                 <BarChart3 size={18} />
                 Chip-Scans
               </h2>
-              <p className="text-sm text-zinc-500 mb-4">
-                Anzahl Aufrufe über den NFC-Chip.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-center">
-                  <p className="text-2xl font-extrabold text-navy">{scanTotal ?? '—'}</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Gesamt</p>
-                </div>
-                <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-center">
-                  <p className="text-2xl font-extrabold text-navy">{scan30d ?? '—'}</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Letzte 30 Tage</p>
-                </div>
-              </div>
+              {(() => {
+                const insight = buildScanInsight(scanTotal ?? 0, scan30d ?? 0);
+                return (
+                  <>
+                    <p className="text-sm font-semibold text-navy">{insight.headline}</p>
+                    <p className="text-xs text-zinc-500 mt-1 mb-4 leading-snug">{insight.detail}</p>
+                    <div className="h-2 rounded-full bg-zinc-100 overflow-hidden mb-4" aria-hidden>
+                      <div
+                        className="h-full rounded-full bg-petrol transition-all"
+                        style={{ width: `${insight.activityPct}%` }}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-center">
+                        <p className="text-2xl font-extrabold text-navy">{scanTotal ?? '—'}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Gesamt</p>
+                      </div>
+                      <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-center">
+                        <p className="text-2xl font-extrabold text-navy">{scan30d ?? '—'}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Letzte 30 Tage</p>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </section>
 
             {canEdit && config.landingMode === 'external' && (

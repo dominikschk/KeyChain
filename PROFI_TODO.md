@@ -56,17 +56,19 @@ Kernprodukt. Hier entscheidet sich Reprint-Rate und Stress in der Druckerei.
 - [ ] **[DU]** SLA 48h nach `paid` intern kommunizieren (Admin zeigt Überziehung)
 
 ### 1.2 Assets & Qualität
-- [ ] **[CODE]** STL + Print-PNG Pipeline ist im Repo (headless Export)
+- [x] **[CODE]** STL + Print-PNG Pipeline ist im Repo (headless Export)
 - [ ] **[DU]** Stichprobe: Raster-Logo → Print-PNG ok? STL = Platte?
 - [ ] **[DU]** Stichprobe: SVG-Logo → STL mit Logo-Geometrie?
-- [ ] **[DU]** Material-/Farbtoleranzen intern notieren (1 Seite reicht)
-- [ ] **[SPÄTER]** Filament-Profile / Platten pro Produktvariante
+- [x] **[CODE]** Material-/Farbtoleranzen: [`MANUFACTURING_TOLERANCES.md`](MANUFACTURING_TOLERANCES.md)
+- [x] **[CODE]** Filament-Profile (`lib/filamentProfiles.ts`)
 
 ### 1.3 Produktvarianten
 - [ ] **[DU]** Echte Shopify Variant-ID für **Schlüsselanhänger** in Vercel setzen
 - [ ] **[DU]** Echte Shopify Variant-ID für **Messe-Badge** setzen (sonst gleicher Fallback)
 - [ ] **[DU]** Preise/Varianten im Shop stimmen mit Konfigurator überein
 - [ ] **[SPÄTER]** Weitere Materialien/Größen nur mit eigener Variant-ID
+- [x] **[CODE]** Reprint-Grund bei QC-Ablehnung + STL-URL-Batch-Liste im Admin
+- [x] **[CODE]** CCP Scan-Insights (verständliche Zusammenfassung)
 
 **Exit Phase 1:** Druckerei arbeitet aus Admin/CSV ohne Chat-Chaos; ≤ Reprint-Quote intern trackbar.
 

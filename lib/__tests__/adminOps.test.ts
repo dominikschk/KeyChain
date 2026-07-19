@@ -4,10 +4,15 @@ import {
   getPrintQcStatus,
   isSlaOverdue,
   buildProductionCsv,
+  buildStlUrlManifest,
+  formatReprintNote,
 } from '../adminOps';
 import type { OrderRow } from '../ordersApi';
+import type { ConfigRow } from '../configApi';
 import { parseFaqItems, serializeFaqItems, parseGalleryUrls } from '../contentBlocks';
 import { t } from '../i18n';
+import { buildScanInsight } from '../scanInsights';
+import { filamentForProduct, filamentCustomerHint } from '../filamentProfiles';
 
 function order(partial: Partial<OrderRow>): OrderRow {
   return {
@@ -70,5 +75,44 @@ describe('i18n', () => {
   it('liefert DE und EN', () => {
     expect(t('admin.export', 'de')).toContain('CSV');
     expect(t('admin.export', 'en').toLowerCase()).toContain('csv');
+  });
+});
+
+describe('stl batch + reprint', () => {
+  it('formatReprintNote', () => {
+    expect(formatReprintNote('colors')).toMatch(/Reprint/);
+    expect(formatReprintNote('machine', 'Düse verstopft')).toMatch(/Düse/);
+  });
+
+  it('STL-Manifest nur https', () => {
+    const orders = [order({ short_id: 'ABCDEFGHJKLMNPQR' })];
+    const configs: ConfigRow[] = [
+      {
+        id: '1',
+        short_id: 'ABCDEFGHJKLMNPQR',
+        profile_title: 'T',
+        stl_url: 'https://cdn.example.com/a.stl',
+      },
+    ];
+    const text = buildStlUrlManifest(orders, configs);
+    expect(text).toContain('https://cdn.example.com/a.stl');
+    expect(text).toContain('ABCDEFGHJKLMNPQR');
+  });
+});
+
+describe('scanInsights', () => {
+  it('ohne Scans', () => {
+    expect(buildScanInsight(0, 0).headline).toMatch(/Keine|keine/i);
+  });
+  it('aktiv', () => {
+    const i = buildScanInsight(40, 25);
+    expect(i.activityPct).toBeGreaterThan(50);
+  });
+});
+
+describe('filamentProfiles', () => {
+  it('keychain profil', () => {
+    expect(filamentForProduct('keychain').material).toMatch(/PLA/i);
+    expect(filamentCustomerHint('badge')).toMatch(/Badge|PLA/i);
   });
 });
