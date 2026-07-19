@@ -9,6 +9,7 @@ import { SITE_FONTS, SITE_TEMPLATES, type SiteTemplate } from '../lib/siteLayout
 import { paletteForIndustry } from '../lib/brandPalette';
 import { parseFaqItems, serializeFaqItems, type FaqItem } from '../lib/contentBlocks';
 import { parsePriceItems, serializePriceItems, type PriceItem } from '../lib/sectionContent';
+import { t } from '../lib/i18n';
 
 interface ControlsProps {
   activeDept: Department;
@@ -566,11 +567,11 @@ export const Controls: React.FC<ControlsProps> = ({
     const plateColors = ['#F8F5F0', '#FFFFFF', '#2A2A2A', '#11235A', '#12A9E0', '#D6C3A8', '#1F4D3A', '#ff4d4d'];
     const printColors = ['#111111', '#FFFFFF', '#11235A', '#12A9E0', '#d4af37', '#ff4d4d', '#2ecc71', '#8B5E3C'];
     const layout = config.engraveLayout || 'logo_above';
-    const layouts: { id: NonNullable<ModelConfig['engraveLayout']>; label: string; icon: string }[] = [
-      { id: 'logo_above', label: 'Logo oben', icon: '⬆' },
-      { id: 'text_above', label: 'Text oben', icon: '⬇' },
-      { id: 'logo_only', label: 'Nur Logo', icon: '▣' },
-      { id: 'text_only', label: 'Nur Text', icon: 'T' },
+    const layouts: { id: NonNullable<ModelConfig['engraveLayout']>; label: string }[] = [
+      { id: 'logo_above', label: 'Logo oben' },
+      { id: 'text_above', label: 'Text oben' },
+      { id: 'logo_only', label: 'Nur Logo' },
+      { id: 'text_only', label: 'Nur Text' },
     ];
 
     return (
@@ -591,9 +592,6 @@ export const Controls: React.FC<ControlsProps> = ({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-navy">Logo übernommen</p>
-                <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
-                  Hintergrund entfernt. Details zur Herstellung stehen unten.
-                </p>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2.5 text-xs">
                   <label className="text-petrol font-bold cursor-pointer hover:underline relative">
                     Ersetzen
@@ -611,7 +609,7 @@ export const Controls: React.FC<ControlsProps> = ({
                 <>
                   <Loader2 className="animate-spin text-petrol" size={26} />
                   <span className="text-sm font-semibold text-navy">Logo wird vorbereitet…</span>
-                  <span className="text-[11px] text-zinc-500 text-center px-3">Hintergrund wird entfernt</span>
+                  <span className="text-[11px] text-zinc-500 text-center px-3">Einen Moment bitte</span>
                 </>
               ) : (
                 <>
@@ -619,15 +617,14 @@ export const Controls: React.FC<ControlsProps> = ({
                     <ImageIcon className="text-navy/70" size={22} />
                   </div>
                   <span className="text-sm font-bold text-navy">Logo auswählen</span>
-                  <span className="text-[11px] text-zinc-500 text-center px-4 leading-snug">PNG, JPG oder SVG – am besten eine klare Logo-Datei, kein Foto</span>
+                  <span className="text-[11px] text-zinc-500 text-center px-4 leading-snug">
+                    PNG, JPG oder SVG – am besten ein klares Logo, kein Foto
+                  </span>
                 </>
               )}
               <input type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml" onChange={onUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
             </label>
           )}
-          <p className="text-[11px] text-zinc-500 leading-snug">
-            Am besten ein klares Logo. Personen- oder Produktfotos können wir nicht verwenden.
-          </p>
         </section>
 
         <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-2">
@@ -662,27 +659,9 @@ export const Controls: React.FC<ControlsProps> = ({
         <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-4">
           <div>
             <h3 className="text-sm font-bold text-navy">Farben</h3>
-            <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
-              Produktfarbe für den Anhänger. Optional kannst du Logo und Text einfarbig umfärben.
-            </p>
           </div>
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Logo / Text (optional)</p>
-            <div className="flex flex-wrap gap-2">
-              {printColors.map((c) => (
-                <button
-                  key={`print-${c}`}
-                  type="button"
-                  onClick={() => updateConfig('logoColor', c)}
-                  className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${config.logoColor?.toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
-                  style={{ backgroundColor: c }}
-                  aria-label={`Druckfarbe ${c}`}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Produktfarbe</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe vom Anhänger</p>
             <div className="flex flex-wrap gap-2">
               {plateColors.map((c) => (
                 <button
@@ -691,7 +670,22 @@ export const Controls: React.FC<ControlsProps> = ({
                   onClick={() => updateConfig('plateColor', c)}
                   className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${(config.plateColor || '#F8F5F0').toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
                   style={{ backgroundColor: c }}
-                  aria-label={`Produktfarbe ${c}`}
+                  aria-label="Farbe vom Anhänger wählen"
+                />
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe von Logo und Text</p>
+            <div className="flex flex-wrap gap-2">
+              {printColors.map((c) => (
+                <button
+                  key={`print-${c}`}
+                  type="button"
+                  onClick={() => updateConfig('logoColor', c)}
+                  className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${config.logoColor?.toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
+                  style={{ backgroundColor: c }}
+                  aria-label="Farbe von Logo und Text wählen"
                 />
               ))}
             </div>
@@ -700,22 +694,18 @@ export const Controls: React.FC<ControlsProps> = ({
 
         <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-2">
           <h3 className="text-sm font-bold text-navy">Ausrichtung</h3>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {layouts.map((l) => (
               <button
                 key={l.id}
                 type="button"
-                title={l.label}
                 onClick={() => updateConfig('engraveLayout', l.id)}
-                className={`h-12 rounded-xl border text-sm font-bold transition-colors ${layout === l.id ? 'border-navy bg-navy text-white shadow-sm' : 'border-navy/10 bg-cream/40 text-navy hover:border-petrol/40'}`}
+                className={`min-h-[44px] px-3 rounded-xl border text-xs font-bold transition-colors ${layout === l.id ? 'border-navy bg-navy text-white shadow-sm' : 'border-navy/10 bg-cream/40 text-navy hover:border-petrol/40'}`}
               >
-                {l.icon}
+                {l.label}
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-zinc-500">
-            {layouts.find((l) => l.id === layout)?.label}
-          </p>
         </section>
 
         <section className="space-y-2 pt-0.5">
@@ -750,22 +740,8 @@ export const Controls: React.FC<ControlsProps> = ({
           )}
         </section>
 
-        <aside className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-4 space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-wider text-amber-800/80">Hinweise zur Herstellung</p>
-          <ul className="space-y-1.5 text-[11px] text-zinc-600 leading-snug">
-            <li className="flex gap-2">
-              <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-700/50 shrink-0" aria-hidden />
-              <span>Die Bildschirmvorschau dient der Orientierung und ist kein farbverbindlicher Andruck.</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-700/50 shrink-0" aria-hidden />
-              <span>Für den 3D-Druck wird das Logo auf höchstens drei Farben vereinfacht.</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-700/50 shrink-0" aria-hidden />
-              <span>Durch das 3D-Druckverfahren können Farbtöne und Oberflächen teilweise anders aussehen als am Bildschirm.</span>
-            </li>
-          </ul>
+        <aside className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-4">
+          <p className="text-[11px] text-zinc-600 leading-snug">{t('legal.preview')}</p>
         </aside>
       </div>
     );

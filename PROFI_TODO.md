@@ -78,6 +78,7 @@ Kernprodukt. Hier entscheidet sich Reprint-Rate und Stress in der Druckerei.
 - [ ] **[DU]** Liquid-Mail noch einmal live prüfen (CCP + Handy-Seite)
 - [ ] **[DU]** Optional: Property `CCP-URL` sichtbar (statt nur `_CCP-URL`)
 - [ ] **[DU]** Support-Playbook lesen/anpassen: [`SUPPORT_PLAYBOOK.md`](SUPPORT_PLAYBOOK.md)
+- [x] **[CODE]** Kunden-CX: Bestellen primär, Legal einmal, klare Speichern-Texte, freundliche Fehler
 - [ ] **[DU]** Legal-Texte in Konfigurator/Checkout gegen [`LEGAL_COPY.md`](LEGAL_COPY.md) prüfen
 
 ### 2.2 Observability

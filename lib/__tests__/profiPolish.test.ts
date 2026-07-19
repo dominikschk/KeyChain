@@ -3,9 +3,9 @@ import { assessLogoHealth } from '../logoHealth';
 import { isProbablyOpenNow, parsePriceItems, serializePriceItems } from '../sectionContent';
 
 describe('logoHealth', () => {
-  it('ohne Logo: info', () => {
+  it('ohne Logo: ok (kein Dauer-Hinweis)', () => {
     const h = assessLogoHealth(null);
-    expect(h.level).toBe('info');
+    expect(h.level).toBe('ok');
     expect(h.willSimplifyForPrint).toBe(false);
   });
 

@@ -17,8 +17,8 @@ export function assessLogoHealth(svgContent: string | null | undefined): LogoHea
   const svg = svgContent?.trim() || '';
   if (!svg) {
     return {
-      level: 'info',
-      message: 'Ohne Logo wird nur die Platte gefertigt. Du kannst trotzdem bestellen.',
+      level: 'ok',
+      message: '',
       willSimplifyForPrint: false,
     };
   }
@@ -29,13 +29,13 @@ export function assessLogoHealth(svgContent: string | null | undefined): LogoHea
       return {
         level: 'info',
         message:
-          'Für den Druck wird dein Logo auf höchstens 3 Farben vereinfacht. Die Vorschau am Bildschirm bleibt unverbindlich.',
+          'Für den Druck wird dein Logo auf höchstens 3 Farben vereinfacht.',
         willSimplifyForPrint: true,
       };
     }
     return {
       level: 'ok',
-      message: 'Logo ist druckbereit.',
+      message: '',
       willSimplifyForPrint: false,
     };
   }
@@ -51,14 +51,14 @@ export function assessLogoHealth(svgContent: string | null | undefined): LogoHea
   if (fills.size > 3) {
     return {
       level: 'warn',
-      message: `Dein Logo hat viele Farben (${fills.size}). Beim Druck bleiben höchstens 3 – die Vorschau ist unverbindlich.`,
+      message: `Dein Logo hat viele Farben (${fills.size}). Beim Druck bleiben höchstens 3.`,
       willSimplifyForPrint: true,
     };
   }
 
   return {
     level: 'ok',
-    message: 'Logo wirkt druckgeeignet.',
+    message: '',
     willSimplifyForPrint: false,
   };
 }
