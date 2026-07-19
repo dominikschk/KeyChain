@@ -8,6 +8,13 @@ import { isValidEmail, toSafeHttpUrl } from '../lib/validation';
 import { brandButtonStyle, resolveSurface } from '../lib/brandPalette';
 import { fontClassFor, splitBlocksForLanding } from '../lib/siteLayouts';
 import { parseFaqItems, parseGalleryUrls } from '../lib/contentBlocks';
+import {
+  alignClass,
+  isProbablyOpenNow,
+  normalizeAlign,
+  parsePriceItems,
+} from '../lib/sectionContent';
+import { applyMicrositeShareMeta } from '../lib/shareMeta';
 
 interface MicrositeProps {
   config: ModelConfig;
@@ -152,11 +159,17 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string, accentColor: stri
 
 export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accentColor: string, theme: string }> = ({ block, configId, accentColor, theme }) => {
   const isDark = theme === 'dark';
-  
+  const align = normalizeAlign(block.settings?.align);
+  const padY = Math.max(0, Math.min(80, Number(block.settings?.padY) || 0));
+  const wrapStyle = padY ? { paddingTop: padY, paddingBottom: padY } : undefined;
+  const alignCls = alignClass(align);
+  const titleAlign =
+    align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center';
+
   if (block.type === 'headline') {
     if (!block.title && !block.content) return null;
     return (
-      <div className="py-2 text-center animate-in slide-in-from-bottom-2 duration-500">
+      <div className={`py-2 ${alignCls} animate-in slide-in-from-bottom-2 duration-500`} style={wrapStyle}>
         {(block.title || block.content) && (
           <p className={`text-lg sm:text-xl font-medium leading-snug px-2 ${isDark ? 'text-zinc-200' : 'text-zinc-700'}`}>
             {block.title || block.content}
@@ -175,8 +188,8 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
 
   if (block.type === 'map' && block.settings?.address) {
     return (
-      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-4 rounded-[2.5rem] border shadow-sm pointer-events-auto hover:shadow-xl transition-all animate-in fade-in duration-500`}>
-        {block.title && <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest mb-4 px-2`}>{block.title}</h3>}
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-4 rounded-[2.5rem] border shadow-sm pointer-events-auto hover:shadow-xl transition-all animate-in fade-in duration-500`} style={wrapStyle}>
+        {block.title && <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest mb-4 px-2 ${titleAlign}`}>{block.title}</h3>}
         <div className="w-full h-48 bg-zinc-50 rounded-2xl flex flex-col items-center justify-center text-zinc-300 gap-2 border border-navy/5 overflow-hidden relative group cursor-pointer" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(block.settings?.address || '')}`, '_blank')}>
            <MapIcon size={32} className="group-hover:scale-110 transition-transform" />
            <span className="text-[9px] font-black uppercase text-center px-6 leading-tight max-w-[200px]">{block.settings.address}</span>
@@ -188,7 +201,7 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
 
   if (block.type === 'text') {
     return (
-      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-8 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto text-center animate-in fade-in duration-500`}>
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-8 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto ${alignCls} animate-in fade-in duration-500`} style={wrapStyle}>
         {block.title && <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest`}>{block.title}</h3>}
         <p className={`${isDark ? 'text-zinc-400' : 'text-zinc-500'} text-[13px] leading-relaxed font-medium whitespace-pre-line`}>{block.content}</p>
       </div>
@@ -197,7 +210,7 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
 
   if (block.type === 'image' && block.imageUrl) {
     return (
-      <div className="rounded-[2.5rem] overflow-hidden border border-navy/5 shadow-lg pointer-events-auto relative group animate-in zoom-in duration-500">
+      <div className="rounded-[2.5rem] overflow-hidden border border-navy/5 shadow-lg pointer-events-auto relative group animate-in zoom-in duration-500" style={wrapStyle}>
         <img src={block.imageUrl} alt={block.title || ''} className="w-full h-auto group-hover:scale-105 transition-transform duration-700" />
         {block.title && <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-8"><p className="text-white text-[11px] font-black uppercase tracking-widest">{block.title}</p></div>}
       </div>
@@ -208,8 +221,8 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
     const items = parseFaqItems(block.content || block.settings?.faqJson);
     if (!items.length) return null;
     return (
-      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-6 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto`}>
-        <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest px-1`}>
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-6 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto`} style={wrapStyle}>
+        <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest px-1 ${titleAlign}`}>
           {block.title || 'FAQ'}
         </h3>
         <div className="space-y-2">
@@ -231,11 +244,17 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
   if (block.type === 'hours') {
     const text = (block.settings?.hoursText || block.content || '').trim();
     if (!text) return null;
+    const openNow = isProbablyOpenNow(text);
     return (
-      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-6 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto text-center`}>
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-6 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto ${alignCls}`} style={wrapStyle}>
         <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest`}>
           {block.title || 'Öffnungszeiten'}
         </h3>
+        {openNow && (
+          <span className="inline-flex text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">
+            Jetzt geöffnet
+          </span>
+        )}
         <p className={`${isDark ? 'text-zinc-400' : 'text-zinc-600'} text-sm leading-relaxed whitespace-pre-line`}>
           {text}
         </p>
@@ -247,9 +266,9 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
     const urls = parseGalleryUrls(block.settings?.galleryUrls || block.content);
     if (!urls.length) return null;
     return (
-      <div className="space-y-3 pointer-events-auto">
+      <div className="space-y-3 pointer-events-auto" style={wrapStyle}>
         {block.title && (
-          <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest text-center`}>
+          <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest ${titleAlign}`}>
             {block.title}
           </h3>
         )}
@@ -270,7 +289,35 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
     );
   }
 
+  if (block.type === 'prices') {
+    const items = parsePriceItems(block.content);
+    if (!items.length) return null;
+    return (
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-6 rounded-[2.5rem] border shadow-sm space-y-4 pointer-events-auto`} style={wrapStyle}>
+        <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest ${titleAlign}`}>
+          {block.title || 'Preise'}
+        </h3>
+        <ul className="space-y-3">
+          {items.map((item, i) => (
+            <li key={i} className="flex items-baseline justify-between gap-3 border-b border-navy/5 pb-2 last:border-0">
+              <div className="min-w-0 text-left">
+                <p className={`${isDark ? 'text-zinc-100' : 'text-navy'} text-sm font-bold truncate`}>{item.name}</p>
+                {item.note && (
+                  <p className={`${isDark ? 'text-zinc-500' : 'text-zinc-500'} text-xs mt-0.5`}>{item.note}</p>
+                )}
+              </div>
+              <p className="text-sm font-black shrink-0" style={{ color: accentColor }}>
+                {item.price}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   if (block.type === 'magic_button') {
+
     if (block.buttonType === 'stamp_card') return <StampCard block={block} configId={configId} accentColor={accentColor} />;
 
     const handleAction = () => {
@@ -387,6 +434,23 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
   const fontClass = fontClassFor(config.fontStyle);
   const layoutMode = config.layoutMode || 'landing';
   const { heroLine, stories, actions, extras } = splitBlocksForLanding(config.nfcBlocks || []);
+
+  useEffect(() => {
+    if (embedded) return;
+    const story = stories[0]?.content || stories[0]?.title || '';
+    applyMicrositeShareMeta({
+      title: config.profileTitle || 'NUDAIM',
+      description: story || 'NFC-Seite',
+      imageUrl: config.profileLogoUrl || config.headerImageUrl || null,
+      pageUrl: typeof window !== 'undefined' ? window.location.href : undefined,
+    });
+  }, [
+    embedded,
+    config.profileTitle,
+    config.profileLogoUrl,
+    config.headerImageUrl,
+    stories,
+  ]);
 
   if (error) {
     return (

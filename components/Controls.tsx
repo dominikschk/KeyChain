@@ -8,6 +8,7 @@ import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
 import { SITE_FONTS, SITE_TEMPLATES, type SiteTemplate } from '../lib/siteLayouts';
 import { paletteForIndustry } from '../lib/brandPalette';
 import { parseFaqItems, serializeFaqItems, type FaqItem } from '../lib/contentBlocks';
+import { parsePriceItems, serializePriceItems, type PriceItem } from '../lib/sectionContent';
 
 interface ControlsProps {
   activeDept: Department;
@@ -212,6 +213,106 @@ const PropertyPanel: React.FC<{ block: NFCBlock; onUpdate: (u: Partial<NFCBlock>
           </div>
         )}
 
+        {block.type === 'prices' && (
+          <div className="space-y-3">
+            <p className="text-[10px] text-zinc-500 px-1">Leistung und Preis – klar für Kunden.</p>
+            {parsePriceItems(block.content).map((item, idx) => (
+              <div key={idx} className="space-y-2 p-3 rounded-2xl bg-cream/80 border border-navy/5">
+                <input
+                  type="text"
+                  value={item.name}
+                  placeholder="Leistung"
+                  onChange={(e) => {
+                    const next: PriceItem[] = parsePriceItems(block.content).map((it, i) =>
+                      i === idx ? { ...it, name: e.target.value } : it
+                    );
+                    onUpdate({ content: serializePriceItems(next) });
+                  }}
+                  className="w-full p-3 rounded-xl border border-navy/5 text-xs bg-white font-bold outline-none"
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={item.price}
+                    placeholder="Preis z. B. 12 €"
+                    onChange={(e) => {
+                      const next: PriceItem[] = parsePriceItems(block.content).map((it, i) =>
+                        i === idx ? { ...it, price: e.target.value } : it
+                      );
+                      onUpdate({ content: serializePriceItems(next) });
+                    }}
+                    className="w-1/3 p-3 rounded-xl border border-navy/5 text-xs bg-white font-bold outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={item.note || ''}
+                    placeholder="Hinweis (optional)"
+                    onChange={(e) => {
+                      const next: PriceItem[] = parsePriceItems(block.content).map((it, i) =>
+                        i === idx ? { ...it, note: e.target.value } : it
+                      );
+                      onUpdate({ content: serializePriceItems(next) });
+                    }}
+                    className="flex-1 p-3 rounded-xl border border-navy/5 text-xs bg-white outline-none"
+                  />
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="text-[10px] font-black uppercase tracking-wider text-petrol"
+              onClick={() => {
+                const next = [...parsePriceItems(block.content), { name: '', price: '' }];
+                onUpdate({ content: serializePriceItems(next) });
+              }}
+            >
+              + Preis hinzufügen
+            </button>
+          </div>
+        )}
+
+        {(block.type === 'text' ||
+          block.type === 'headline' ||
+          block.type === 'faq' ||
+          block.type === 'hours' ||
+          block.type === 'prices' ||
+          block.type === 'gallery') && (
+          <div className="space-y-3 pt-2 border-t border-navy/5">
+            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Ausrichtung</label>
+            <div className="flex gap-2">
+              {(['left', 'center', 'right'] as const).map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => onUpdate({ settings: { ...block.settings, align: a } })}
+                  className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
+                    (block.settings?.align || 'center') === a
+                      ? 'bg-navy text-white border-navy'
+                      : 'bg-white text-zinc-500 border-navy/10'
+                  }`}
+                >
+                  {a === 'left' ? 'Links' : a === 'right' ? 'Rechts' : 'Mitte'}
+                </button>
+              ))}
+            </div>
+            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Abstand oben/unten</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min="0"
+                max="48"
+                step="4"
+                value={block.settings?.padY ?? 0}
+                onChange={(e) =>
+                  onUpdate({ settings: { ...block.settings, padY: parseInt(e.target.value, 10) } })
+                }
+                className="flex-1 accent-petrol"
+              />
+              <span className="text-[10px] font-black text-navy w-8">{block.settings?.padY ?? 0}</span>
+            </div>
+          </div>
+        )}
+
         {block.type === 'magic_button' && (
           <div className="space-y-6">
             {block.buttonType === 'wifi' && (
@@ -373,7 +474,7 @@ export const Controls: React.FC<ControlsProps> = ({
     updateConfig('nfcBlocks', [...config.nfcBlocks, newBlock]);
   };
 
-  const addContentBlock = (type: 'faq' | 'hours' | 'gallery', title: string) => {
+  const addContentBlock = (type: 'faq' | 'hours' | 'gallery' | 'prices', title: string) => {
     const newBlock: NFCBlock = {
       id: `${type}_${Date.now()}`,
       type,
@@ -383,13 +484,15 @@ export const Controls: React.FC<ControlsProps> = ({
           ? serializeFaqItems([{ q: 'Beispiel-Frage?', a: 'Kurze Antwort für Kunden.' }])
           : type === 'hours'
             ? 'Mo–Fr 9–18 Uhr\nSa 10–14 Uhr'
-            : '',
+            : type === 'prices'
+              ? serializePriceItems([{ name: 'Beispiel', price: '12 €', note: 'pro Person' }])
+              : '',
       settings:
         type === 'hours'
-          ? { hoursText: 'Mo–Fr 9–18 Uhr\nSa 10–14 Uhr' }
+          ? { hoursText: 'Mo–Fr 9–18 Uhr\nSa 10–14 Uhr', align: 'center' }
           : type === 'gallery'
-            ? { galleryUrls: '' }
-            : {},
+            ? { galleryUrls: '', align: 'center' }
+            : { align: 'center' },
     };
     updateConfig('nfcBlocks', [...config.nfcBlocks, newBlock]);
   };
@@ -790,6 +893,9 @@ export const Controls: React.FC<ControlsProps> = ({
             </button>
             <button type="button" onClick={() => addContentBlock('gallery', 'Galerie')} className="card p-3 flex items-center gap-2 text-zinc-500 hover:border-petrol/25 transition-all text-[8px] font-black uppercase tracking-wider min-h-[44px]">
               Galerie
+            </button>
+            <button type="button" onClick={() => addContentBlock('prices', 'Preise')} className="card p-3 flex items-center gap-2 text-zinc-500 hover:border-petrol/25 transition-all text-[8px] font-black uppercase tracking-wider min-h-[44px]">
+              Preise
             </button>
           </div>
           <div className="space-y-6">

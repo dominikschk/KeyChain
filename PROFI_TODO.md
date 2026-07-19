@@ -100,15 +100,18 @@ Erst wenn Phase 0–1 stabil sind. Anhänger bleibt Priorität.
 
 ### 3.1 Schon nutzbar
 - [x] **[CODE]** FAQ-, Öffnungszeiten-, Galerie-Blöcke
+- [x] **[CODE]** Preise-Block + Ausrichtung/Abstand pro Section
+- [x] **[CODE]** Share-Meta (Titel/Beschreibung/og:image) für öffentliche Microsite
+- [x] **[CODE]** „Jetzt geöffnet“-Hinweis bei Öffnungszeiten (grob)
+- [x] **[CODE]** Logo-Health-Check vor Speichern + Hinweis in der Anhänger-Vorschau
+- [x] **[CODE]** Print-QC Side-by-Side (Vorschau vs. Print-PNG) im Admin
 - [x] **[CODE]** Landing-Layout, Schriften, Branchen-Vorlagen, Brand-Chat MVP
 
 ### 3.2 Als Nächstes (Produkt)
-- [ ] Section-Abstände / Ausrichtung links–mitte–rechts
-- [ ] Reicher Block: Preise / Leistungskarte
 - [ ] Anker-Navigation oder Mini-Seiten (Home / Kontakt)
-- [ ] Favicon + Share-Preview (Titel/Bild)
+- [ ] Favicon-Upload
 - [ ] Brand-Chat: Website-URL / PDF scrapen (nur https, sanitize)
-- [ ] CCP: klare Erfolgsmeldungen, weniger Technik-Jargon
+- [ ] CCP: Versionierung / Rollback
 
 ### 3.3 Qualität Microsite
 - [ ] Mobile Smoke auf echtem Handy (iOS + Android)

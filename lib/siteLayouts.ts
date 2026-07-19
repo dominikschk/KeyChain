@@ -249,7 +249,8 @@ export function splitBlocksForLanding(blocks: NFCBlock[]): {
       b.type === 'spacer' ||
       b.type === 'faq' ||
       b.type === 'hours' ||
-      b.type === 'gallery'
+      b.type === 'gallery' ||
+      b.type === 'prices'
   );
   return { heroLine, stories, actions, extras };
 }

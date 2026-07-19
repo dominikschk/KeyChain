@@ -32,6 +32,7 @@ import {
 import { getConfigByShortId, recordScan, setConfigStlUrl, insertConfigBlocks } from '../lib/configApi';
 import { buildProductionPrintAssets } from '../lib/printAssets';
 import { exportKeychainStl } from '../lib/stlExport';
+import { assessLogoHealth } from '../lib/logoHealth';
 
 const MicrositeChat = lazy(() =>
   import('../components/MicrositeChat').then((m) => ({ default: m.MicrositeChat }))
@@ -267,6 +268,7 @@ const ConfiguratorPage: React.FC = () => {
       return null;
     }
   }, [svgContent]);
+  const logoHealth = useMemo(() => assessLogoHealth(svgContent), [svgContent]);
   const [selectedProductId, setSelectedProductId] = useState<string>(() => PRODUCTS[0]?.id ?? 'keychain');
   const [activeDept, setActiveDept] = useState<Department>('digital');
   const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('preview');
@@ -551,6 +553,13 @@ const ConfiguratorPage: React.FC = () => {
         }
         setConfig((prev) => ({ ...prev, externalUrl: url }));
       }
+      const health = assessLogoHealth(svgContent);
+      if (health.willSimplifyForPrint) {
+        const ok = window.confirm(
+          `${health.message}\n\nTrotzdem speichern und zur Bestellung weiter?`
+        );
+        if (!ok) return;
+      }
       setSavingStep('screenshot');
       const screenshot = (await viewerRef.current?.takeScreenshot()) || null;
       await executeSave(screenshot);
@@ -559,7 +568,7 @@ const ConfiguratorPage: React.FC = () => {
       setSavingStep('idle');
       showError('Bitte versuche es erneut.', 'Fehler beim Erstellen des Screenshots.');
     }
-  }, [config.landingMode, config.externalUrl, executeSave]);
+  }, [config.landingMode, config.externalUrl, executeSave, svgContent]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1083,6 +1092,18 @@ const ConfiguratorPage: React.FC = () => {
               />
             ) : (
               <KeychainPreview ref={viewerRef} config={config} svgContent={svgContent} />
+            )}
+            {workPhase === 'hardware' && logoHealth.level !== 'ok' && (
+              <div
+                className={`absolute left-3 right-3 bottom-3 md:left-6 md:right-auto md:max-w-md rounded-xl px-3 py-2 text-xs font-medium shadow-sm border ${
+                  logoHealth.level === 'warn'
+                    ? 'bg-amber-50 border-amber-200 text-amber-950'
+                    : 'bg-white/95 border-zinc-200 text-zinc-700'
+                }`}
+                role="status"
+              >
+                {logoHealth.message}
+              </div>
             )}
           </div>
           <div className="md:hidden shrink-0 p-4 bg-white border-t border-zinc-200 safe-bottom">

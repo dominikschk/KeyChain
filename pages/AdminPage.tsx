@@ -62,6 +62,7 @@ export const AdminPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [orderFilter, setOrderFilter] = useState<OrderFilter>('all');
+  const [qcModal, setQcModal] = useState<OrderRow | null>(null);
   const [locale, setLocale] = useState<Locale>(() =>
     typeof window !== 'undefined' ? getStoredLocale() : 'de'
   );
@@ -185,7 +186,10 @@ export const AdminPage: React.FC = () => {
     if (updated) {
       setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
     }
+    setQcModal(null);
   };
+
+  const openQcReview = (order: OrderRow) => setQcModal(order);
 
   const handleExportCsv = () => {
     const csv = buildProductionCsv(filteredOrders, list, baseUrl);
@@ -501,7 +505,7 @@ export const AdminPage: React.FC = () => {
                               {qc !== 'approved' && (
                                 <button
                                   type="button"
-                                  onClick={() => handlePrintQc(o, true)}
+                                  onClick={() => openQcReview(o)}
                                   className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wide"
                                 >
                                   {t('admin.qc.approve', locale)}
@@ -666,6 +670,93 @@ export const AdminPage: React.FC = () => {
           )}
         </section>
       </main>
+
+      {qcModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="qc-title"
+        >
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-200">
+              <h3 id="qc-title" className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy">
+                Druck prüfen · {qcModal.short_id}
+              </h3>
+              <p className="text-xs text-zinc-500 mt-1">
+                Links Kunden-Vorschau, rechts Druckversion (max. 3 Farben). Freigabe setzt bei bezahlt → in Produktion.
+              </p>
+            </div>
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {(() => {
+                const cfg = list.find((c) => c.short_id === qcModal.short_id);
+                const printPng = cfg ? getPrintPngUrl(cfg) : null;
+                return (
+                  <>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Vorschau</p>
+                      {cfg?.preview_image ? (
+                        <img
+                          src={cfg.preview_image}
+                          alt="Kunden-Vorschau"
+                          className="w-full rounded-xl border border-zinc-200 object-contain max-h-56 bg-zinc-50"
+                        />
+                      ) : (
+                        <p className="text-sm text-zinc-400">Kein Vorschaubild</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Print-PNG</p>
+                      {printPng ? (
+                        <img
+                          src={printPng}
+                          alt="Druckversion"
+                          className="w-full rounded-xl border border-zinc-200 object-contain max-h-56 bg-zinc-50"
+                        />
+                      ) : (
+                        <p className="text-sm text-zinc-400">Kein Print-PNG – STL ggf. prüfen</p>
+                      )}
+                      {cfg?.stl_url && (
+                        <a
+                          href={cfg.stl_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex mt-2 text-xs font-semibold text-petrol hover:underline"
+                        >
+                          STL öffnen
+                        </a>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+            <div className="px-5 py-4 border-t border-zinc-200 flex flex-wrap gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setQcModal(null)}
+                className="px-3 py-2 rounded-lg border border-zinc-200 text-xs font-semibold"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePrintQc(qcModal, false)}
+                className="px-3 py-2 rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-600"
+              >
+                Zurückweisen
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePrintQc(qcModal, true)}
+                className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold uppercase tracking-wide"
+              >
+                Druck freigeben
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
