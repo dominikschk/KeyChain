@@ -81,6 +81,10 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     surfaceColor: (plate.surfaceColor as string | undefined) ?? base.surfaceColor,
     textColor: (plate.textColor as string | undefined) ?? base.textColor,
     layoutMode: (plate.layoutMode as ModelConfig['layoutMode']) ?? base.layoutMode ?? 'landing',
+    navEnabled: plate.navEnabled !== false,
+    faviconUrl: typeof plate.faviconUrl === 'string' && plate.faviconUrl.startsWith('https://')
+      ? plate.faviconUrl
+      : undefined,
     landingMode: (plate.landingMode as ModelConfig['landingMode']) === 'external' ? 'external' : 'microsite',
     externalUrl: typeof plate.externalUrl === 'string' ? plate.externalUrl : '',
     nfcBlocks: blocksError ? [] : (blocks || []).map((b: BlockRow) => mapBlockRow(b)),

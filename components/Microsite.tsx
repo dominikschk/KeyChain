@@ -15,6 +15,13 @@ import {
   parsePriceItems,
 } from '../lib/sectionContent';
 import { applyMicrositeShareMeta } from '../lib/shareMeta';
+import {
+  buildSiteNavItems,
+  filterBlocksForPage,
+  navHrefForPage,
+  resolveActivePage,
+  type SitePageSlug,
+} from '../lib/siteNav';
 
 interface MicrositeProps {
   config: ModelConfig;
@@ -433,7 +440,49 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
   const textColor = config.textColor || (isDark ? '#F5F5F4' : '#1C1917');
   const fontClass = fontClassFor(config.fontStyle);
   const layoutMode = config.layoutMode || 'landing';
-  const { heroLine, stories, actions, extras } = splitBlocksForLanding(config.nfcBlocks || []);
+  const [activePage, setActivePage] = useState<SitePageSlug>(() =>
+    resolveActivePage(window.location.search, window.location.hash)
+  );
+
+  useEffect(() => {
+    const sync = () => setActivePage(resolveActivePage(window.location.search, window.location.hash));
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
+  }, []);
+
+  const pageBlocks = filterBlocksForPage(config.nfcBlocks || [], activePage);
+  const { heroLine, stories, actions, extras } = splitBlocksForLanding(pageBlocks);
+  const navItems = buildSiteNavItems(config);
+  const showNav = !embedded && navItems.length > 1 && config.navEnabled !== false;
+
+  const goNav = (item: { href: string; isPage?: boolean; id: string }) => {
+    if (item.isPage || item.id === 'kontakt') {
+      const next = navHrefForPage('kontakt', window.location.search);
+      window.history.pushState({}, '', next);
+      setActivePage('kontakt');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    if (activePage !== 'home') {
+      const home = navHrefForPage('home', window.location.search);
+      window.history.pushState({}, '', home.split('#')[0] + (item.href.startsWith('#') ? item.href : '#top'));
+      setActivePage('home');
+      requestAnimationFrame(() => {
+        const el = document.querySelector(item.href);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      return;
+    }
+    if (item.href === '#top') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    document.querySelector(item.href)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   useEffect(() => {
     if (embedded) return;
@@ -443,14 +492,50 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
       description: story || 'NFC-Seite',
       imageUrl: config.profileLogoUrl || config.headerImageUrl || null,
       pageUrl: typeof window !== 'undefined' ? window.location.href : undefined,
+      faviconUrl: config.faviconUrl || null,
     });
   }, [
     embedded,
     config.profileTitle,
     config.profileLogoUrl,
     config.headerImageUrl,
+    config.faviconUrl,
     stories,
   ]);
+
+  const navBar = showNav ? (
+    <nav
+      className="sticky top-0 z-30 w-full backdrop-blur-md border-b"
+      style={{
+        backgroundColor: isDark ? 'rgba(12,10,9,0.88)' : 'rgba(255,255,255,0.9)',
+        borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+      }}
+      aria-label="Seitenmenü"
+    >
+      <div className="max-w-lg mx-auto px-3 py-2.5 flex gap-1 overflow-x-auto">
+        {navItems.map((item) => {
+          const isActive =
+            (item.isPage && activePage === 'kontakt') ||
+            (!item.isPage && activePage === 'home' && item.id === 'top');
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => goNav(item)}
+              className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition-colors"
+              style={{
+                backgroundColor: isActive ? config.accentColor : 'transparent',
+                color: isActive ? '#fff' : textColor,
+                opacity: isActive ? 1 : 0.7,
+              }}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  ) : null;
 
   if (error) {
     return (
@@ -470,9 +555,11 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
   if (layoutMode === 'stack') {
     return (
       <div
+        id="top"
         className={`${embedded ? 'min-h-0 pb-6' : 'min-h-screen pb-40'} w-full selection:bg-petrol flex flex-col items-center overflow-y-auto overflow-x-hidden ${fontClass}`}
         style={{ backgroundColor: surface, color: textColor }}
       >
+        {navBar}
         <header className="px-6 flex flex-col items-center text-center w-full relative pt-14 pb-8">
           <div className="w-24 h-24 rounded-3xl bg-white shadow-lg flex items-center justify-center border border-black/5 overflow-hidden relative z-10">
             {(googleLogoUrl || config.profileLogoUrl) ? (
@@ -484,11 +571,17 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
           <h1 className="mt-6 text-3xl font-bold tracking-tight px-4" style={{ color: isDark ? '#fff' : config.accentColor }}>
             {config.profileTitle}
           </h1>
+          {activePage === 'kontakt' && (
+            <p className="mt-2 text-sm opacity-70">Kontakt</p>
+          )}
         </header>
         <main className="max-w-md w-full px-5 flex-1 relative z-10 space-y-4 pb-8">
-          {config.nfcBlocks.map((block) => (
+          {pageBlocks.map((block) => (
             <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
           ))}
+          {pageBlocks.length === 0 && (
+            <p className="text-center text-sm opacity-50 py-8">Hier ist noch kein Kontakt hinterlegt.</p>
+          )}
         </main>
       </div>
     );
@@ -497,9 +590,11 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
   // Landing = Mini-Website mit Hero + Sections
   return (
     <div
+      id="top"
       className={`${embedded ? 'min-h-0 pb-8' : 'min-h-screen pb-36'} w-full selection:bg-petrol overflow-y-auto overflow-x-hidden ${fontClass}`}
       style={{ backgroundColor: surface, color: textColor }}
     >
+      {navBar}
       {/* Hero */}
       <section className="relative w-full overflow-hidden">
         <div
@@ -530,62 +625,83 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
           >
             {config.profileTitle}
           </h1>
-          {(heroLine?.title || heroLine?.content) && (
+          {activePage === 'kontakt' ? (
             <p className="mt-4 text-lg sm:text-xl leading-snug max-w-sm opacity-90" style={{ color: textColor }}>
-              {heroLine.title || heroLine.content}
+              So erreichst du uns
             </p>
+          ) : (
+            (heroLine?.title || heroLine?.content) && (
+              <p className="mt-4 text-lg sm:text-xl leading-snug max-w-sm opacity-90" style={{ color: textColor }}>
+                {heroLine.title || heroLine.content}
+              </p>
+            )
           )}
         </div>
       </section>
 
       <div className="max-w-lg mx-auto px-5 space-y-6 pb-10 relative z-10 -mt-2">
-        {/* Story / Text sections */}
-        {stories.length > 0 && (
-          <section
-            className="rounded-3xl px-5 py-6 space-y-5 shadow-sm border"
-            style={{
-              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
-              borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-            }}
-          >
-            {stories.map((block) => (
+        {activePage === 'kontakt' ? (
+          <section className="space-y-3" id="kontakt">
+            {pageBlocks.map((block) => (
               <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
             ))}
+            {pageBlocks.length === 0 && (
+              <p className="text-center text-sm opacity-50 py-8">Hier ist noch kein Kontakt hinterlegt.</p>
+            )}
           </section>
-        )}
+        ) : (
+          <>
+            {/* Story / Text sections */}
+            {stories.length > 0 && (
+              <section
+                id="section-stories"
+                className="rounded-3xl px-5 py-6 space-y-5 shadow-sm border scroll-mt-16"
+                style={{
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                }}
+              >
+                {stories.map((block) => (
+                  <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
+                ))}
+              </section>
+            )}
 
-        {/* Actions grid */}
-        {actions.length > 0 && (
-          <section
-            className="rounded-3xl px-4 py-5 shadow-sm border"
-            style={{
-              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
-              borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-            }}
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] opacity-50 px-2 mb-3">Schnell zu</p>
-            <div className={`grid gap-3 ${actions.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-              {actions.map((block) => (
-                <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
-              ))}
-            </div>
-          </section>
-        )}
+            {/* Actions grid */}
+            {actions.length > 0 && (
+              <section
+                id="section-actions"
+                className="rounded-3xl px-4 py-5 shadow-sm border scroll-mt-16"
+                style={{
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.15em] opacity-50 px-2 mb-3">Schnell zu</p>
+                <div className={`grid gap-3 ${actions.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+                  {actions.map((block) => (
+                    <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
+                  ))}
+                </div>
+              </section>
+            )}
 
-        {/* Map / extras */}
-        {extras.length > 0 && (
-          <section className="space-y-3">
-            {extras.map((block) => (
-              <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
-            ))}
-          </section>
-        )}
+            {/* Map / extras */}
+            {extras.length > 0 && (
+              <section id="section-extras" className="space-y-3 scroll-mt-16">
+                {extras.map((block) => (
+                  <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
+                ))}
+              </section>
+            )}
 
-        {/* Fallback if empty */}
-        {!heroLine && stories.length === 0 && actions.length === 0 && extras.length === 0 && (
-          <p className="text-center text-sm opacity-50 py-8">
-            {embedded ? 'Noch leer – links Inhalte hinzufügen.' : 'Bald findest du hier mehr Infos.'}
-          </p>
+            {/* Fallback if empty */}
+            {!heroLine && stories.length === 0 && actions.length === 0 && extras.length === 0 && (
+              <p className="text-center text-sm opacity-50 py-8">
+                {embedded ? 'Noch leer – links Inhalte hinzufügen.' : 'Bald findest du hier mehr Infos.'}
+              </p>
+            )}
+          </>
         )}
       </div>
 

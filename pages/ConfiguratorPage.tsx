@@ -54,10 +54,10 @@ type DeliveryLinks = {
 };
 
 const SAVING_LABELS: Record<string, string> = {
-  screenshot: 'Vorschau wird vorbereitet…',
-  upload: 'Bild wird hochgeladen…',
-  db: 'Wird gespeichert…',
-  done: 'Fast fertig…',
+  screenshot: '1/4 · Vorschau wird erstellt…',
+  upload: '2/4 · Druckdaten werden hochgeladen…',
+  db: '3/4 · Konfiguration wird gespeichert…',
+  done: '4/4 · Links werden vorbereitet…',
 };
 
 function hostnameFromUrl(url: string): string {
@@ -482,6 +482,8 @@ const ConfiguratorPage: React.FC = () => {
           surfaceColor: config.surfaceColor || null,
           textColor: config.textColor || null,
           layoutMode: config.layoutMode || 'landing',
+          navEnabled: config.navEnabled !== false,
+          faviconUrl: config.faviconUrl && config.faviconUrl.startsWith('https://') ? config.faviconUrl : null,
           landingMode: isExternal ? 'external' : 'microsite',
           externalUrl: destinationUrl || '',
         }

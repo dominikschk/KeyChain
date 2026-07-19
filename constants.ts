@@ -113,6 +113,8 @@ export const DEFAULT_CONFIG: ModelConfig = {
   fontStyle: 'modern',
   theme: 'light',
   layoutMode: 'landing',
+  navEnabled: true,
+  faviconUrl: '',
   landingMode: 'microsite',
   externalUrl: '',
   engraveText: '',

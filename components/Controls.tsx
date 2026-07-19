@@ -71,6 +71,45 @@ const PropertyPanel: React.FC<{ block: NFCBlock; onUpdate: (u: Partial<NFCBlock>
           <input type="text" value={block.title || ''} placeholder="z. B. WhatsApp schreiben" onChange={e => onUpdate({ title: e.target.value })} className="w-full p-4 rounded-2xl border border-navy/5 text-xs bg-cream font-bold outline-none focus:border-petrol/30 transition-colors" />
         </div>
 
+        {block.type !== 'spacer' && block.type !== 'headline' && (
+          <div className="space-y-2">
+            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Auf welcher Seite?</label>
+            <div className="flex gap-2 flex-wrap">
+              {([
+                { id: 'auto' as const, label: 'Automatisch' },
+                { id: 'home' as const, label: 'Nur Start' },
+                { id: 'kontakt' as const, label: 'Nur Kontakt' },
+              ]).map((opt) => {
+                const current = block.settings?.page || 'auto';
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() =>
+                      onUpdate({
+                        settings: {
+                          ...block.settings,
+                          page: opt.id === 'auto' ? undefined : opt.id,
+                        },
+                      })
+                    }
+                    className={`flex-1 min-w-[30%] py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${
+                      current === opt.id || (opt.id === 'auto' && !block.settings?.page)
+                        ? 'bg-navy text-white border-navy'
+                        : 'bg-cream border-navy/10 text-zinc-500'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-zinc-500 px-1">
+              Automatisch: Kontakt-Inhalte erscheinen auch unter „Kontakt“ im Menü.
+            </p>
+          </div>
+        )}
+
         {(block.type === 'text' || block.type === 'headline') && (
           <div className="space-y-2">
             <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Inhaltstext</label>
@@ -781,6 +820,12 @@ export const Controls: React.FC<ControlsProps> = ({
                <button type="button" onClick={() => updateConfig('layoutMode', 'stack')} className={`flex-1 min-w-0 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${config.layoutMode === 'stack' ? 'bg-navy text-white border-navy' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}>Einfache Liste</button>
              </div>
              <div className="flex gap-2 flex-wrap mt-2">
+               <span className="text-[7px] font-bold text-zinc-400 uppercase w-full px-1">Menü oben</span>
+               <button type="button" onClick={() => updateConfig('navEnabled', true)} className={`flex-1 min-w-0 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${config.navEnabled !== false ? 'bg-navy text-white border-navy' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}>An</button>
+               <button type="button" onClick={() => updateConfig('navEnabled', false)} className={`flex-1 min-w-0 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${config.navEnabled === false ? 'bg-navy text-white border-navy' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}>Aus</button>
+             </div>
+             <p className="text-[10px] text-zinc-500 px-1">Menü springt zu Abschnitten und zur Kontakt-Seite.</p>
+             <div className="flex gap-2 flex-wrap mt-2">
                <span className="text-[7px] font-bold text-zinc-400 uppercase w-full px-1">Hell oder dunkel</span>
                <button type="button" onClick={() => updateConfig('theme', 'light')} className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${config.theme === 'light' ? 'bg-navy text-white border-navy' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}><Sun size={12} /> Hell</button>
                <button type="button" onClick={() => updateConfig('theme', 'dark')} className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${config.theme === 'dark' ? 'bg-navy text-white border-navy' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}><Moon size={12} /> Dunkel</button>
@@ -872,6 +917,56 @@ export const Controls: React.FC<ControlsProps> = ({
                   }} className="absolute inset-0 opacity-0 cursor-pointer" />
                </div>
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[8px] font-black uppercase text-zinc-500 px-1">Favicon (Browser-Tab, optional)</label>
+            <div className="relative min-h-[56px] rounded-xl border border-dashed border-navy/10 bg-cream/80 flex items-center gap-3 px-3 overflow-hidden cursor-pointer">
+              {config.faviconUrl ? (
+                <img src={config.faviconUrl} alt="" className="w-8 h-8 object-contain shrink-0" />
+              ) : (
+                <Globe size={18} className="text-zinc-300 shrink-0" />
+              )}
+              <span className="text-[10px] text-zinc-500 font-medium truncate">
+                {config.faviconUrl ? 'Tippen zum Austauschen' : 'Kleines Icon hochladen'}
+              </span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/x-icon,image/vnd.microsoft.icon,.ico"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file || !supabase) {
+                    resetFileInput(e.target);
+                    return;
+                  }
+                  if (file.size > 512 * 1024) {
+                    showError('Bitte ein Bild unter 512 KB wählen.');
+                    resetFileInput(e.target);
+                    return;
+                  }
+                  try {
+                    const path = storagePath('fav_', file.name);
+                    const url = await uploadAndGetPublicUrl(supabase, path, file);
+                    if (url) updateConfig('faviconUrl', url);
+                  } catch (err) {
+                    console.error('Favicon upload:', err);
+                    showError('Bitte versuche es erneut.', 'Favicon konnte nicht hochgeladen werden.');
+                  } finally {
+                    resetFileInput(e.target);
+                  }
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+              />
+            </div>
+            {config.faviconUrl && (
+              <button
+                type="button"
+                onClick={() => updateConfig('faviconUrl', '')}
+                className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-1 hover:text-red-500"
+              >
+                Favicon entfernen
+              </button>
+            )}
           </div>
       </section>
 

@@ -6,6 +6,7 @@ export function applyMicrositeShareMeta(opts: {
   description?: string;
   imageUrl?: string | null;
   pageUrl?: string;
+  faviconUrl?: string | null;
 }): void {
   if (typeof document === 'undefined') return;
   const title = (opts.title || 'NUDAIM').trim().slice(0, 80);
@@ -20,6 +21,25 @@ export function applyMicrositeShareMeta(opts: {
   if (opts.imageUrl && opts.imageUrl.startsWith('https://')) {
     upsertMeta('property', 'og:image', opts.imageUrl);
   }
+  applyFavicon(opts.faviconUrl);
+}
+
+/** Favicon setzen (nur https). */
+export function applyFavicon(url?: string | null): void {
+  if (typeof document === 'undefined') return;
+  const href = url && url.startsWith('https://') ? url : null;
+  let link = document.head.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+  if (!href) {
+    if (link && link.dataset.nudaim === '1') link.remove();
+    return;
+  }
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    link.dataset.nudaim = '1';
+    document.head.appendChild(link);
+  }
+  link.href = href;
 }
 
 function upsertMeta(attr: 'name' | 'property', key: string, content: string): void {

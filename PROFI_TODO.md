@@ -108,10 +108,10 @@ Erst wenn Phase 0–1 stabil sind. Anhänger bleibt Priorität.
 - [x] **[CODE]** Landing-Layout, Schriften, Branchen-Vorlagen, Brand-Chat MVP
 
 ### 3.2 Als Nächstes (Produkt)
-- [ ] Anker-Navigation oder Mini-Seiten (Home / Kontakt)
-- [ ] Favicon-Upload
+- [x] **[CODE]** Anker-Navigation + Mini-Seite Kontakt
+- [x] **[CODE]** Favicon-Upload
 - [ ] Brand-Chat: Website-URL / PDF scrapen (nur https, sanitize)
-- [ ] CCP: Versionierung / Rollback
+- [x] **[CODE]** CCP: Versionierung / Rollback (lokal, max. 5)
 
 ### 3.3 Qualität Microsite
 - [ ] Mobile Smoke auf echtem Handy (iOS + Android)
@@ -147,13 +147,13 @@ Bewusst optional – nur wenn Kern läuft.
 
 ### Konfigurator
 - [x] Logo-Health-Check vor Save („zu viele Farben → wird vereinfacht“)
-- [ ] Fortschrittsbalken Speichern verständlicher
+- [x] Fortschrittsbalken Speichern verständlicher (1/4 … 4/4)
 - [ ] Entwurf teilen-Link (ohne Checkout)
 - [ ] B2B: Mengenrabatt-Hinweis + Sammelbestellung
 
 ### Digital
 - [ ] Scan-Insights im CCP (ohne Spam, Rate-Limit schon da)
-- [ ] Versionierung Microsite (Rollback eine Version)
+- [x] Versionierung Microsite (Rollback, lokal max. 5)
 - [x] Öffnungszeiten mit „jetzt geöffnet“-Badge
 
 ### Betrieb
