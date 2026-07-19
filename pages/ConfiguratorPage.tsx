@@ -41,6 +41,14 @@ import {
 import { bulkHintForQuantity, clampOrderQuantity } from '../lib/bulkOrder';
 import { pricingHintForQuantity, resolveCheckoutPrice } from '../lib/shopifyPricing';
 import { createDraftCheckout } from '../lib/shopifyDraftOrderApi';
+import {
+  basketTotals,
+  clearCheckoutBasket,
+  loadCheckoutBasket,
+  saveCheckoutBasket,
+  upsertBasketLine,
+  type CheckoutBasketLine,
+} from '../lib/checkoutBasket';
 import { customerSaveError } from '../lib/customerErrors';
 import { t } from '../lib/i18n';
 import { filamentCustomerHint } from '../lib/filamentProfiles';
@@ -59,16 +67,17 @@ type DeliveryLinks = {
   shortId: string;
   micrositeUrl: string;
   ccpUrl: string;
+  /** Fallback wenn Draft Order fehlt (nur letzte Zeile) */
   cartUrl: string;
-  /** Bei eigener Website: wohin der Chip wirklich weiterleitet */
   destinationUrl?: string;
+  basket: CheckoutBasketLine[];
 };
 
 const SAVING_LABELS: Record<string, string> = {
   screenshot: 'Bild vom Anhänger wird gemacht…',
   upload: 'Dein Design wird hochgeladen…',
   db: 'Bestellung wird vorbereitet…',
-  done: 'Weiter zur Kasse…',
+  done: 'In den Warenkorb gelegt…',
 };
 
 function hostnameFromUrl(url: string): string {
@@ -79,34 +88,16 @@ function hostnameFromUrl(url: string): string {
   }
 }
 
-/** Nach dem Speichern: Warenkorb zuerst, Links optional. */
+/** Nach dem Speichern: Korb prüfen, weiteren Anhänger oder zur Kasse. */
 const DeliveryHandoffModal: React.FC<{
   links: DeliveryLinks;
-  onContinue: () => void;
-}> = ({ links, onContinue }) => {
+  onCheckout: () => void;
+  onAddAnother: () => void;
+  checkoutBusy?: boolean;
+}> = ({ links, onCheckout, onAddAnother, checkoutBusy }) => {
   const [copied, setCopied] = useState<'ms' | 'ccp' | null>(null);
-  const [seconds, setSeconds] = useState(8);
   const [showLinks, setShowLinks] = useState(false);
-  const continueRef = useRef(onContinue);
-  continueRef.current = onContinue;
-  const doneRef = useRef(false);
-
-  useEffect(() => {
-    if (seconds > 0) {
-      const t = window.setTimeout(() => setSeconds((s) => s - 1), 1000);
-      return () => window.clearTimeout(t);
-    }
-    if (!doneRef.current) {
-      doneRef.current = true;
-      continueRef.current();
-    }
-  }, [seconds]);
-
-  const go = () => {
-    if (doneRef.current) return;
-    doneRef.current = true;
-    onContinue();
-  };
+  const totals = basketTotals(links.basket);
 
   const copy = async (which: 'ms' | 'ccp', value: string) => {
     try {
@@ -122,24 +113,65 @@ const DeliveryHandoffModal: React.FC<{
     <div className="fixed inset-0 z-[2500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md">
       <div className="card w-full max-w-lg flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300">
         <header className="px-5 py-4 border-b border-navy/5 bg-cream">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-petrol mb-1">Geschafft</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-petrol mb-1">Im Warenkorb</p>
           <h2 className="font-headline text-lg font-extrabold uppercase tracking-tight text-navy">
-            {t('handoff.title')}
+            Design gespeichert
           </h2>
-          <p className="text-sm text-zinc-600 mt-1 leading-snug">{t('handoff.sub')}</p>
+          <p className="text-sm text-zinc-600 mt-1 leading-snug">
+            Mengenrabatt gilt nur je Design – nicht über verschiedene Anhänger hinweg.
+          </p>
         </header>
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <ul className="space-y-2">
+            {links.basket.map((line) => (
+              <li
+                key={line.shortId}
+                className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 flex gap-3 items-center"
+              >
+                {line.previewUrl ? (
+                  <img src={line.previewUrl} alt="" className="w-12 h-12 rounded-lg object-cover bg-zinc-100" />
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-zinc-100" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-navy truncate">{line.productTitle}</p>
+                  <p className="text-[11px] text-zinc-500">
+                    {line.quantity}× · {line.unitLabel}
+                    <span className="text-zinc-400"> · {line.tierLabel}</span>
+                  </p>
+                  <p className="text-[10px] text-zinc-400 font-mono truncate">{line.shortId}</p>
+                </div>
+                <p className="text-sm font-semibold text-navy shrink-0">{line.totalLabel}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm font-semibold text-navy text-right">
+            Gesamt {totals.totalLabel}
+            <span className="block text-[11px] font-medium text-zinc-500">
+              {totals.lineCount} Design{totals.lineCount === 1 ? '' : 's'} · {totals.pieceCount} Stück
+            </span>
+          </p>
+
           <button
             type="button"
-            onClick={go}
-            className="w-full min-h-[56px] bg-navy text-white rounded-xl font-semibold text-base flex items-center justify-center gap-2 active:scale-[0.98]"
+            disabled={checkoutBusy}
+            onClick={onCheckout}
+            className="w-full min-h-[56px] bg-navy text-white rounded-xl font-semibold text-base flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60"
           >
-            <ShoppingCart size={20} />
-            {t('cta.order')}
+            {checkoutBusy ? <Loader2 size={20} className="animate-spin" /> : <ShoppingCart size={20} />}
+            Zur Kasse · {totals.totalLabel}
             <ArrowRight size={18} />
           </button>
-          <p className="text-center text-xs text-zinc-500">
-            Öffnet automatisch in {seconds}s · Bestell-Code: <strong className="text-navy">{links.shortId}</strong>
+          <button
+            type="button"
+            disabled={checkoutBusy}
+            onClick={onAddAnother}
+            className="w-full min-h-[48px] rounded-xl border border-zinc-200 text-sm font-semibold text-navy"
+          >
+            Weiteren Anhänger gestalten
+          </button>
+          <p className="text-center text-[11px] text-zinc-500 leading-snug">
+            Ein einzelnes Design mit 1 Stück bleibt beim Einzelpreis – auch wenn ein anderes Design 50× im Korb liegt.
           </p>
 
           <button
@@ -147,7 +179,7 @@ const DeliveryHandoffModal: React.FC<{
             onClick={() => setShowLinks((v) => !v)}
             className="w-full text-left text-sm font-semibold text-petrol py-2"
           >
-            {showLinks ? '− Links ausblenden' : '+ Handy-Seite & Bearbeiten-Link'}
+            {showLinks ? '− Links ausblenden' : '+ Links zum letzten Design'}
           </button>
 
           {showLinks && (
@@ -157,16 +189,14 @@ const DeliveryHandoffModal: React.FC<{
                   {links.destinationUrl ? 'NFC-Link (Chip)' : 'Handy-Seite'}
                 </p>
                 <p className="text-xs text-zinc-500 break-all">{links.micrositeUrl}</p>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => void copy('ms', links.micrositeUrl)}
-                    className="min-h-[44px] px-4 rounded-xl border border-zinc-200 text-sm font-semibold text-navy inline-flex items-center gap-2"
-                  >
-                    {copied === 'ms' ? <Check size={16} /> : <Copy size={16} />}
-                    {copied === 'ms' ? 'Kopiert' : 'Kopieren'}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => void copy('ms', links.micrositeUrl)}
+                  className="min-h-[44px] px-4 rounded-xl border border-zinc-200 text-sm font-semibold text-navy inline-flex items-center gap-2"
+                >
+                  {copied === 'ms' ? <Check size={16} /> : <Copy size={16} />}
+                  {copied === 'ms' ? 'Kopiert' : 'Kopieren'}
+                </button>
               </div>
               <div className="rounded-2xl border border-petrol/20 bg-petrol/5 p-4 space-y-2">
                 <p className="text-sm font-semibold text-navy">Später ändern</p>
@@ -207,6 +237,14 @@ const ConfiguratorPage: React.FC = () => {
   const [shopifyGuideOpen, setShopifyGuideOpen] = useState(false);
   const [deliveryLinks, setDeliveryLinks] = useState<DeliveryLinks | null>(null);
   const [orderQuantity, setOrderQuantity] = useState(1);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [basketCount, setBasketCount] = useState(() => {
+    try {
+      return loadCheckoutBasket().length;
+    } catch {
+      return 0;
+    }
+  });
 
   useEffect(() => {
     getSession().then((s) => {
@@ -587,31 +625,34 @@ const ConfiguratorPage: React.FC = () => {
         priced.cartPropertyValue
       );
 
-      // Prefer Draft Order (echter berechneter Preis) → sonst Cart-Permalink
-      let checkoutUrl = fallbackCartUrl;
-      const draft = await createDraftCheckout({
+      const basketLine: CheckoutBasketLine = {
         shortId,
         productId: priced.productId,
         productTitle: priced.productName,
         quantity: priced.quantity,
         unitPriceCents: priced.unitPriceCents,
+        totalCents: priced.totalCents,
+        tierLabel: priced.tierLabel,
+        unitLabel: priced.unitLabel,
+        totalLabel: priced.totalLabel,
+        priceHint: priced.cartPropertyValue,
         previewUrl: finalImageUrl || undefined,
         micrositeUrl,
         ccpUrl,
         destinationUrl,
         variantId,
-        priceHint: priced.cartPropertyValue,
-      });
-      if (draft?.invoiceUrl) {
-        checkoutUrl = draft.invoiceUrl;
-      }
+      };
+      const nextBasket = upsertBasketLine(loadCheckoutBasket(), basketLine);
+      saveCheckoutBasket(nextBasket);
+      setBasketCount(nextBasket.length);
 
       const links: DeliveryLinks = {
         shortId,
         micrositeUrl,
         ccpUrl,
-        cartUrl: checkoutUrl,
+        cartUrl: fallbackCartUrl,
         destinationUrl,
+        basket: nextBasket,
       };
       try {
         localStorage.setItem(LAST_DELIVERY_KEY, JSON.stringify({ ...links, savedAt: Date.now() }));
@@ -641,6 +682,60 @@ const ConfiguratorPage: React.FC = () => {
       showError(friendly.msg, friendly.title);
     }
   }, [config, selectedProductId, svgContent, orderQuantity]);
+
+  const handleBasketCheckout = useCallback(async () => {
+    if (!deliveryLinks?.basket.length) return;
+    setCheckoutBusy(true);
+    try {
+      const lines = deliveryLinks.basket.map((l) => ({
+        shortId: l.shortId,
+        productId: l.productId,
+        productTitle: l.productTitle,
+        quantity: l.quantity,
+        unitPriceCents: l.unitPriceCents,
+        previewUrl: l.previewUrl,
+        micrositeUrl: l.micrositeUrl,
+        ccpUrl: l.ccpUrl,
+        destinationUrl: l.destinationUrl,
+        variantId: l.variantId,
+        priceHint: l.priceHint,
+      }));
+      const draft = await createDraftCheckout({ lines });
+      if (draft?.invoiceUrl) {
+        clearCheckoutBasket();
+        setBasketCount(0);
+        setDeliveryLinks(null);
+        window.location.href = draft.invoiceUrl;
+        return;
+      }
+      // Fallback: nur eine Position → alter Cart-Link; mehrere → Hinweis
+      if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
+        clearCheckoutBasket();
+        setBasketCount(0);
+        setDeliveryLinks(null);
+        window.location.href = deliveryLinks.cartUrl;
+        return;
+      }
+      showError(
+        'Für mehrere Designs brauchst du Draft Orders in Shopify. Oder bestelle jedes Design einzeln.',
+        'Kasse nicht bereit'
+      );
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }, [deliveryLinks]);
+
+  const handleAddAnotherDesign = useCallback(() => {
+    setDeliveryLinks(null);
+    setOrderQuantity(1);
+    setWorkPhase('hardware');
+    setToastMessage('Nächstes Design – Stückzahl wieder 1 (eigener Preis)');
+    if (toastRef.current) clearTimeout(toastRef.current);
+    toastRef.current = setTimeout(() => {
+      setToastMessage(null);
+      toastRef.current = null;
+    }, 3200);
+  }, []);
 
   const initiateSave = useCallback(async () => {
     try {
@@ -793,11 +888,9 @@ const ConfiguratorPage: React.FC = () => {
       {deliveryLinks && (
         <DeliveryHandoffModal
           links={deliveryLinks}
-          onContinue={() => {
-            const url = deliveryLinks.cartUrl;
-            setDeliveryLinks(null);
-            window.location.href = url;
-          }}
+          checkoutBusy={checkoutBusy}
+          onCheckout={() => void handleBasketCheckout()}
+          onAddAnother={handleAddAnotherDesign}
         />
       )}
       {toastMessage && (
@@ -822,6 +915,7 @@ const ConfiguratorPage: React.FC = () => {
               >
                 <ShoppingCart size={14} />
                 Bestellen
+                {basketCount > 0 ? ` (${basketCount})` : ''}
               </button>
             )}
             <div className="relative">

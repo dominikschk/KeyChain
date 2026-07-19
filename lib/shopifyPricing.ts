@@ -1,22 +1,17 @@
 /**
- * Preisschichtung für den Anhänger-Checkout.
+ * Preisschichtung – Staffel gilt NUR pro Bestellzeile / Konfiguration.
  *
- * Anzeige im Konfigurator + Eingabe für Draft Orders (echter Abrechnungpreis)
- * bzw. Fallback-Cart (dann muss der Shopify-Katalogpreis passen).
- *
- * Beliebige Euro-Beträge: über Draft Order Edge Function (`create-draft-order`).
+ * Sicherheit: 50× Design A + 1× Design B → B bleibt Einzelpreis.
+ * Mengen werden nie über Designs hinweg addiert.
+ * Cart-Fallback nutzt immer die Basis-Variante (kein günstiger Bulk-Variant × 1).
  */
 
 import { PRODUCTS } from '../constants'
 import { clampOrderQuantity } from './bulkOrder'
 
 export type PriceTier = {
-  /** Ab dieser Stückzahl gilt die Staffel */
   minQty: number
-  /** Bruttopreis pro Stück in Cent */
   unitPriceCents: number
-  /** Optionale Shopify-Variant-ID für diese Staffel */
-  variantId?: string
   label: string
 }
 
@@ -26,14 +21,17 @@ export type ResolvedCheckoutPrice = {
   quantity: number
   unitPriceCents: number
   totalCents: number
+  /** Immer Basis-Variante – nie Staffel-Variant (Anti-Gaming). */
   variantId: string
   tierLabel: string
-  /** Kurzer Text für UI, z. B. „24,90 € / Stück“ */
   unitLabel: string
-  /** z. B. „74,70 €“ */
   totalLabel: string
-  /** Property für Shopify-Warenkorb (nur Hinweis, kein Abbuchungsbetrag) */
   cartPropertyValue: string
+}
+
+export type BasketPriceLineInput = {
+  productId: string
+  quantity: unknown
 }
 
 function envString(key: string): string | undefined {
@@ -48,7 +46,6 @@ function envString(key: string): string | undefined {
 function envCents(key: string, fallback: number): number {
   const raw = envString(key)
   if (!raw) return fallback
-  // Erlaubt "24.90", "24,90" oder reine Cent "2490"
   if (/^\d+$/.test(raw) && raw.length >= 3) {
     const n = parseInt(raw, 10)
     return Number.isFinite(n) && n > 0 ? n : fallback
@@ -58,68 +55,54 @@ function envCents(key: string, fallback: number): number {
   return Math.round(euros * 100)
 }
 
-function envVariantId(key: string): string | undefined {
-  const v = envString(key)
-  return v && /^\d+$/.test(v) ? v : undefined
-}
-
 export function formatEuroFromCents(cents: number): string {
   const n = Math.max(0, Math.round(cents)) / 100
   return `${n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
 }
 
-/**
- * Default-Staffeln (über Env überschreibbar).
- * Variant-Overrides nur setzen, wenn im Shop eigene Staffel-Varianten existieren.
- */
 export function priceTiersForProduct(productId: string): PriceTier[] {
   if (productId === 'badge') {
     return [
       {
         minQty: 1,
         unitPriceCents: envCents('VITE_PRICE_BADGE_CENTS', 3990),
-        variantId: envVariantId('VITE_SHOPIFY_VARIANT_BADGE'),
         label: 'Einzelpreis',
       },
       {
         minQty: 10,
         unitPriceCents: envCents('VITE_PRICE_BADGE_Q10_CENTS', 3490),
-        variantId: envVariantId('VITE_SHOPIFY_VARIANT_BADGE_Q10'),
         label: 'Ab 10 Stück',
       },
       {
         minQty: 25,
         unitPriceCents: envCents('VITE_PRICE_BADGE_Q25_CENTS', 2990),
-        variantId: envVariantId('VITE_SHOPIFY_VARIANT_BADGE_Q25'),
         label: 'Ab 25 Stück',
       },
     ]
   }
 
-  // keychain (default)
   return [
     {
       minQty: 1,
       unitPriceCents: envCents('VITE_PRICE_KEYCHAIN_CENTS', 2490),
-      variantId: envVariantId('VITE_SHOPIFY_VARIANT_KEYCHAIN'),
       label: 'Einzelpreis',
     },
     {
       minQty: 10,
       unitPriceCents: envCents('VITE_PRICE_KEYCHAIN_Q10_CENTS', 2190),
-      variantId: envVariantId('VITE_SHOPIFY_VARIANT_KEYCHAIN_Q10'),
       label: 'Ab 10 Stück',
     },
     {
       minQty: 25,
       unitPriceCents: envCents('VITE_PRICE_KEYCHAIN_Q25_CENTS', 1890),
-      variantId: envVariantId('VITE_SHOPIFY_VARIANT_KEYCHAIN_Q25'),
       label: 'Ab 25 Stück',
     },
   ]
 }
 
-function pickTier(productId: string, qty: number): PriceTier {
+/** Staffel nur aus der Stückzahl DIESER Zeile – nie aus Warenkorb-Summe. */
+export function pickTierForLineQuantity(productId: string, lineQuantity: number): PriceTier {
+  const qty = clampOrderQuantity(lineQuantity)
   const tiers = [...priceTiersForProduct(productId)].sort((a, b) => a.minQty - b.minQty)
   let chosen = tiers[0]!
   for (const t of tiers) {
@@ -128,15 +111,18 @@ function pickTier(productId: string, qty: number): PriceTier {
   return chosen
 }
 
+export function unitPriceCentsForLine(productId: string, lineQuantity: unknown): number {
+  return pickTierForLineQuantity(productId, clampOrderQuantity(lineQuantity)).unitPriceCents
+}
+
 function baseVariantId(productId: string): string {
   const product = PRODUCTS.find((p) => p.id === productId) ?? PRODUCTS[0]
   return product?.variantId ?? '56564338262361'
 }
 
 /**
- * Löst Stückpreis, Gesamtsumme und Shopify-Variant für den Checkout auf.
- * Ohne Staffel-Variant-ID fällt auf die Basis-Variante zurück
- * (dann müssen Mengenrabatte im Shopify-Admin liegen).
+ * Preis für genau eine Konfiguration / Zeile.
+ * `quantity` = Stückzahl dieses Designs, nicht die Summe anderer Designs.
  */
 export function resolveCheckoutPrice(
   productId: string,
@@ -145,10 +131,11 @@ export function resolveCheckoutPrice(
   const qty = clampOrderQuantity(quantity)
   const product = PRODUCTS.find((p) => p.id === productId) ?? PRODUCTS[0]
   const pid = product?.id ?? 'keychain'
-  const tier = pickTier(pid, qty)
-  const variantId = tier.variantId || baseVariantId(pid)
+  const tier = pickTierForLineQuantity(pid, qty)
   const unit = tier.unitPriceCents
   const total = unit * qty
+  // Wichtig: nie Staffel-Variant-ID – sonst qty=1 + günstige Variant = Preis-Lücke
+  const variantId = baseVariantId(pid)
 
   const unitLabel = `${formatEuroFromCents(unit)} / Stück`
   const totalLabel = formatEuroFromCents(total)
@@ -171,11 +158,54 @@ export function resolveCheckoutPrice(
   }
 }
 
-/** Kurzer UI-Hinweis unter der Stückzahl. */
+/**
+ * Mehrere Designs: jede Zeile eigene Staffel.
+ * Summe der Mengen darf die Staffel anderer Zeilen nicht beeinflussen.
+ */
+export function resolveBasketLinePrices(lines: BasketPriceLineInput[]): ResolvedCheckoutPrice[] {
+  return lines.map((line) => resolveCheckoutPrice(line.productId, line.quantity))
+}
+
+/** Sicherheits-Check: Einzelstück darf nicht die Mengen-Staffel einer anderen Zeile erben. */
+export function assertPerLinePricing(lines: BasketPriceLineInput[]): {
+  ok: boolean
+  priced: ResolvedCheckoutPrice[]
+  reason?: string
+} {
+  const priced = resolveBasketLinePrices(lines)
+  const totalQty = priced.reduce((s, p) => s + p.quantity, 0)
+  for (let i = 0; i < priced.length; i++) {
+    const line = priced[i]!
+    const alone = resolveCheckoutPrice(line.productId, line.quantity)
+    if (line.unitPriceCents !== alone.unitPriceCents) {
+      return {
+        ok: false,
+        priced,
+        reason: `Zeile ${i}: Stückpreis weicht von Solo-Staffel ab`,
+      }
+    }
+    // Wenn diese Zeile qty=1 hat, darf sie nicht den Preis der Warenkorb-Summe bekommen
+    if (line.quantity === 1 && totalQty > 1) {
+      const ifPooled = resolveCheckoutPrice(line.productId, totalQty)
+      if (line.unitPriceCents === ifPooled.unitPriceCents && alone.unitPriceCents !== ifPooled.unitPriceCents) {
+        return {
+          ok: false,
+          priced,
+          reason: `Zeile ${i}: würde fälschlich Mengen-Staffel aus Warenkorb-Summe erben`,
+        }
+      }
+      if (line.unitPriceCents !== alone.unitPriceCents) {
+        return { ok: false, priced, reason: `Zeile ${i}: Einzelstück nicht am Einzelpreis` }
+      }
+    }
+  }
+  return { ok: true, priced }
+}
+
 export function pricingHintForQuantity(productId: string, quantity: unknown): string {
   const p = resolveCheckoutPrice(productId, quantity)
   if (p.quantity >= 10) {
-    return `${p.tierLabel}: ${p.unitLabel}. Gesamt ca. ${p.totalLabel} – so geht’s an die Kasse.`
+    return `${p.tierLabel} nur für dieses Design (${p.quantity}×): ${p.unitLabel}. Gesamt ca. ${p.totalLabel}.`
   }
-  return `Ca. ${p.unitLabel}. Der Betrag wird an der Kasse übernommen.`
+  return `Ca. ${p.unitLabel}. Mengenrabatt gilt nur für dieselbe Konfiguration, nicht für andere Designs.`
 }

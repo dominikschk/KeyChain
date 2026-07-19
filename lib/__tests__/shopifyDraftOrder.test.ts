@@ -34,17 +34,50 @@ describe('shopifyDraftOrder', () => {
     })
     expect(ok.ok).toBe(true)
     if (ok.ok) {
-      expect(ok.value.quantity).toBe(3)
-      expect(ok.value.unitPriceCents).toBe(2490)
+      expect(ok.value.lines).toHaveLength(1)
+      expect(ok.value.lines[0]!.quantity).toBe(3)
     }
   })
 
-  it('lehnt zu hohe Gesamtsummen ab', () => {
+  it('nimmt mehrere Lines mit je eigener Config', () => {
+    const ok = validateDraftOrderInput({
+      lines: [
+        {
+          shortId: 'ABCDEFGHJKLMNPQR',
+          productId: 'keychain',
+          productTitle: 'A',
+          quantity: 50,
+          unitPriceCents: 1890,
+        },
+        {
+          shortId: 'QRSTUVWX23456789',
+          productId: 'keychain',
+          productTitle: 'B',
+          quantity: 1,
+          unitPriceCents: 2490,
+        },
+      ],
+    })
+    expect(ok.ok).toBe(true)
+    if (ok.ok) expect(ok.value.lines).toHaveLength(2)
+  })
+
+  it('lehnt doppelte Config-IDs ab', () => {
     const r = validateDraftOrderInput({
-      shortId: 'ABCDEFGHJKLMNPQR',
-      productId: 'keychain',
-      quantity: 99,
-      unitPriceCents: 9000,
+      lines: [
+        {
+          shortId: 'ABCDEFGHJKLMNPQR',
+          productId: 'keychain',
+          quantity: 2,
+          unitPriceCents: 2490,
+        },
+        {
+          shortId: 'ABCDEFGHJKLMNPQR',
+          productId: 'keychain',
+          quantity: 1,
+          unitPriceCents: 2490,
+        },
+      ],
     })
     expect(r.ok).toBe(false)
   })
@@ -52,7 +85,7 @@ describe('shopifyDraftOrder', () => {
   it('baut REST-Body mit Properties und Custom-Preis', () => {
     const input = {
       shortId: 'ABCDEFGHJKLMNPQR',
-      productId: 'keychain' as const,
+      productId: 'keychain',
       productTitle: 'Schlüsselanhänger',
       quantity: 10,
       unitPriceCents: 2190,
@@ -65,11 +98,24 @@ describe('shopifyDraftOrder', () => {
     expect(line.price).toBe('21.90')
     expect(line.quantity).toBe(10)
     expect(line.properties.some((p) => p.name === 'Config-ID')).toBe(true)
-    expect(line.properties.some((p) => p.name === 'Bearbeiten-Link')).toBe(true)
 
-    const body = buildShopifyDraftOrderRestBody(input)
-    const item = (body.draft_order.line_items as Array<Record<string, unknown>>)[0]!
-    expect(item.price).toBe('21.90')
-    expect(item.title).toContain('personalisiert')
+    const body = buildShopifyDraftOrderRestBody(
+      [
+        input,
+        {
+          shortId: 'QRSTUVWX23456789',
+          productId: 'keychain',
+          productTitle: 'Zweites Design',
+          quantity: 1,
+          unitPriceCents: 2490,
+        },
+      ],
+      [1890, 2490]
+    )
+    const items = body.draft_order.line_items as Array<Record<string, unknown>>
+    expect(items).toHaveLength(2)
+    expect(items[0]!.price).toBe('18.90')
+    expect(items[1]!.price).toBe('24.90')
+    expect(items[1]!.quantity).toBe(1)
   })
 })

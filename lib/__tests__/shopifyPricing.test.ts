@@ -38,9 +38,9 @@ describe('shopifyPricing', () => {
     expect(badge.productId).toBe('badge')
   })
 
-  it('gibt kundenfreundlichen Hinweis', () => {
-    expect(pricingHintForQuantity('keychain', 1)).toMatch(/Kasse/i)
-    expect(pricingHintForQuantity('keychain', 12)).toMatch(/10|gesamt|Kasse/i)
+  it('gibt kundenfreundlichen Hinweis zur per-line Staffel', () => {
+    expect(pricingHintForQuantity('keychain', 1)).toMatch(/Konfiguration|Design/i)
+    expect(pricingHintForQuantity('keychain', 12)).toMatch(/10|Design|dieses/i)
   })
 
   it('hängt Preis-Property an Cart-URL', () => {

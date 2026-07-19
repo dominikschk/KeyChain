@@ -57,13 +57,22 @@ JWT-Verify kann **an** bleiben (Client sendet anon key).
 
 ## 4. Flow
 
-1. Kunde konfiguriert → Speichern in Supabase  
-2. Frontend ruft `POST /functions/v1/create-draft-order` auf  
-3. Function berechnet Stückpreis **serverseitig** (Staffel)  
-4. Shopify Draft Order mit Custom-Line-Item + Properties (`Config-ID`, Preview, Handy-Seite, …)  
-5. Redirect zur `invoice_url` → Kunde zahlt den berechneten Betrag  
+1. Kunde konfiguriert → Speichern → Design landet im Korb (mehrere Designs möglich)  
+2. „Zur Kasse“ → `POST /functions/v1/create-draft-order` mit `lines: [...]`  
+3. Function berechnet **pro Zeile** den Stückpreis (Staffel nur aus `line.quantity`)  
+4. Shopify Draft Order mit mehreren Custom-Line-Items + Properties  
+5. Redirect zur `invoice_url`
 
-Wenn Secrets fehlen → **503** → Frontend nutzt Cart-Permalink (wie bisher).
+Wenn Secrets fehlen → **503** → bei einer Position Cart-Permalink; bei mehreren Designs Fehlerhinweis.
+
+## 4b. Sicherheit: Preis pro Design
+
+Mengenstaffeln gelten **nur für die Stückzahl einer Config-ID / Zeile**.
+
+Beispiel: 50× Design A + 1× Design B → A bekommt Mengenpreis, B bleibt Einzelpreis.
+Die Summe (51) wird für die Staffel **nicht** verwendet.
+
+Cart-Fallback nutzt immer die **Basis-Variante** (kein günstiger Bulk-Variant × 1).
 
 ---
 

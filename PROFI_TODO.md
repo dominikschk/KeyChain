@@ -69,6 +69,8 @@ Kernprodukt. Hier entscheidet sich Reprint-Rate und Stress in der Druckerei.
 - [ ] **[DU]** Optional: Staffel-Varianten Q10/Q25 anlegen und Env setzen (sonst Rabatt nur im Shop)
 - [x] **[CODE]** Preisschichtung im Konfigurator → passende Variant-ID + Preis-Property an Shopify-Cart
 - [x] **[CODE]** Draft Orders Edge Function (`create-draft-order`) + Client-Fallback auf Cart
+- [x] **[CODE]** Per-Line-Staffel: 50× Design A + 1× Design B → B bleibt Einzelpreis (Korb + Server-Check)
+- [x] **[CODE]** Kein Bulk-Variant mehr im Cart-Permalink (Anti-Gaming)
 - [ ] **[DU]** Shopify Custom App (`write_draft_orders`) + Secrets – siehe [`SHOPIFY_DRAFT_ORDER.md`](SHOPIFY_DRAFT_ORDER.md)
 - [ ] **[SPÄTER]** Weitere Materialien/Größen nur mit eigener Variant-ID
 - [ ] **[SPÄTER]** Draft Order: Versandzeilen / Steuer-Feintuning im Shop prüfen

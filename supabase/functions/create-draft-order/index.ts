@@ -1,7 +1,7 @@
-// Supabase Edge Function: Shopify Draft Order mit berechnetem Stückpreis
-// POST JSON → { invoiceUrl, draftOrderId, draftOrderName }
+// Supabase Edge Function: Shopify Draft Order mit Preis PRO ZEILE / Config
+// POST { lines: [...] } oder Legacy-Einzelobjekt
 // Secrets: SHOPIFY_SHOP_DOMAIN, SHOPIFY_ADMIN_ACCESS_TOKEN
-// Optional: PRICE_*_CENTS (Server überschreibt Client-Preis mit Staffel)
+// Sicherheit: Staffel nur aus quantity DIESER Zeile – nie Warenkorb-Summe
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -51,11 +51,12 @@ function tiersForProduct(productId: string): Tier[] {
   ];
 }
 
-function serverUnitPrice(productId: string, qty: number): number {
+/** Staffel ausschließlich aus der Stückzahl dieser einen Zeile. */
+function serverUnitPriceForLine(productId: string, lineQty: number): number {
   const tiers = [...tiersForProduct(productId)].sort((a, b) => a.minQty - b.minQty);
   let chosen = tiers[0]!;
   for (const t of tiers) {
-    if (qty >= t.minQty) chosen = t;
+    if (lineQty >= t.minQty) chosen = t;
   }
   return chosen.unitPriceCents;
 }
@@ -63,6 +64,7 @@ function serverUnitPrice(productId: string, qty: number): number {
 const SHORT_ID_RE = /^[A-HJ-NP-Z2-9]{8,24}$/i;
 const MAX_UNIT_CENTS = 99_999;
 const MAX_TOTAL_CENTS = 500_000;
+const MAX_LINES = 20;
 
 function clampQty(n: unknown): number {
   const x = typeof n === 'number' ? n : parseInt(String(n), 10);
@@ -79,6 +81,66 @@ function optHttps(v: unknown, max = 2048): string | undefined {
   const t = v.trim();
   if (!t || t.length > max || !/^https:\/\//i.test(t)) return undefined;
   return t;
+}
+
+type LineIn = {
+  shortId: string;
+  productId: string;
+  productTitle: string;
+  quantity: number;
+  previewUrl?: string;
+  micrositeUrl?: string;
+  ccpUrl?: string;
+  destinationUrl?: string;
+  variantId?: string;
+};
+
+function parseLines(body: Record<string, unknown>): { ok: true; lines: LineIn[] } | { ok: false; error: string } {
+  const rawList: unknown[] = Array.isArray(body.lines) ? body.lines : [body];
+  if (rawList.length === 0) return { ok: false, error: 'Keine Positionen' };
+  if (rawList.length > MAX_LINES) return { ok: false, error: `Maximal ${MAX_LINES} Designs` };
+
+  const lines: LineIn[] = [];
+  const seen = new Set<string>();
+
+  for (const row of rawList) {
+    if (!row || typeof row !== 'object') return { ok: false, error: 'Ungültige Zeile' };
+    const b = row as Record<string, unknown>;
+    const shortId = String(b.shortId ?? '').trim();
+    if (!SHORT_ID_RE.test(shortId)) return { ok: false, error: 'Config-ID ungültig' };
+    if (seen.has(shortId)) return { ok: false, error: 'Doppelte Config-ID' };
+    seen.add(shortId);
+
+    const productId = String(b.productId ?? 'keychain').trim() || 'keychain';
+    if (!['keychain', 'badge'].includes(productId)) {
+      return { ok: false, error: 'Unbekanntes Produkt' };
+    }
+
+    const quantity = clampQty(b.quantity);
+    const productTitle =
+      String(b.productTitle ?? (productId === 'badge' ? 'Messe-Badge' : 'Schlüsselanhänger'))
+        .trim()
+        .slice(0, 120) || 'NFC Schlüsselanhänger';
+
+    const variantId =
+      typeof b.variantId === 'string' && /^\d+$/.test(b.variantId.trim())
+        ? b.variantId.trim()
+        : undefined;
+
+    lines.push({
+      shortId,
+      productId,
+      productTitle,
+      quantity,
+      previewUrl: optHttps(b.previewUrl),
+      micrositeUrl: optHttps(b.micrositeUrl),
+      ccpUrl: optHttps(b.ccpUrl),
+      destinationUrl: optHttps(b.destinationUrl),
+      variantId,
+    });
+  }
+
+  return { ok: true, lines };
 }
 
 Deno.serve(async (req) => {
@@ -106,70 +168,81 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'JSON erwartet' }, 400);
   }
 
-  const shortId = String(body.shortId ?? '').trim();
-  if (!SHORT_ID_RE.test(shortId)) {
-    return jsonResponse({ error: 'Config-ID ungültig' }, 400);
+  const parsed = parseLines(body);
+  if (!parsed.ok) return jsonResponse({ error: parsed.error }, 400);
+
+  // Pro Zeile eigene Staffel – Summe der Mengen wird bewusst NICHT verwendet
+  const basketQtySum = parsed.lines.reduce((s, l) => s + l.quantity, 0);
+  const lineItems: Record<string, unknown>[] = [];
+  let totalCents = 0;
+  const pricedMeta: { shortId: string; quantity: number; unitPriceCents: number }[] = [];
+
+  for (const line of parsed.lines) {
+    const unitPriceCents = Math.min(
+      MAX_UNIT_CENTS,
+      serverUnitPriceForLine(line.productId, line.quantity)
+    );
+    // Defense: Einzelstück darf nie den Preis der Warenkorb-Summe bekommen
+    if (line.quantity === 1 && basketQtySum > 1) {
+      const pooled = serverUnitPriceForLine(line.productId, basketQtySum);
+      const solo = serverUnitPriceForLine(line.productId, 1);
+      if (unitPriceCents !== solo) {
+        return jsonResponse({ error: 'Preisregel verletzt (per-line)' }, 500);
+      }
+      if (solo !== pooled && unitPriceCents === pooled) {
+        return jsonResponse({ error: 'Preisregel verletzt (pooled tier)' }, 500);
+      }
+    }
+
+    const lineTotal = unitPriceCents * line.quantity;
+    totalCents += lineTotal;
+    if (totalCents > MAX_TOTAL_CENTS) {
+      return jsonResponse({ error: 'Gesamtbetrag zu hoch' }, 400);
+    }
+
+    const priceStr = centsToPrice(unitPriceCents);
+    const priceHint =
+      line.quantity > 1
+        ? `${priceStr} € / Stück · ${line.quantity}× = ${centsToPrice(lineTotal)} € (nur diese Config)`
+        : `${priceStr} € / Stück (Einzelpreis · nur diese Config)`;
+
+    const properties: { name: string; value: string }[] = [
+      { name: 'Config-ID', value: line.shortId },
+      { name: 'Preis', value: priceHint },
+      { name: 'Produkt', value: line.productId },
+      { name: 'Staffel-Basis', value: `nur diese Config · ${line.quantity}×` },
+    ];
+    if (line.previewUrl) properties.push({ name: 'Preview', value: line.previewUrl });
+    if (line.micrositeUrl) properties.push({ name: 'Handy-Seite', value: line.micrositeUrl });
+    if (line.destinationUrl) properties.push({ name: 'Ziel-URL', value: line.destinationUrl });
+    if (line.ccpUrl) {
+      properties.push({ name: '_CCP-URL', value: line.ccpUrl });
+      properties.push({ name: 'Bearbeiten-Link', value: line.ccpUrl });
+    }
+    if (line.variantId) properties.push({ name: 'Variant-ID', value: line.variantId });
+
+    lineItems.push({
+      title: `${line.productTitle} – personalisiert`,
+      price: priceStr,
+      quantity: line.quantity,
+      properties,
+      requires_shipping: true,
+      taxable: true,
+    });
+    pricedMeta.push({
+      shortId: line.shortId,
+      quantity: line.quantity,
+      unitPriceCents,
+    });
   }
-
-  const productId = String(body.productId ?? 'keychain').trim() || 'keychain';
-  if (!['keychain', 'badge'].includes(productId)) {
-    return jsonResponse({ error: 'Unbekanntes Produkt' }, 400);
-  }
-
-  const quantity = clampQty(body.quantity);
-  const unitPriceCents = Math.min(MAX_UNIT_CENTS, serverUnitPrice(productId, quantity));
-  if (unitPriceCents * quantity > MAX_TOTAL_CENTS) {
-    return jsonResponse({ error: 'Gesamtbetrag zu hoch' }, 400);
-  }
-
-  const productTitle =
-    String(body.productTitle ?? (productId === 'badge' ? 'Messe-Badge' : 'Schlüsselanhänger'))
-      .trim()
-      .slice(0, 120) || 'NFC Schlüsselanhänger';
-
-  const previewUrl = optHttps(body.previewUrl);
-  const micrositeUrl = optHttps(body.micrositeUrl);
-  const ccpUrl = optHttps(body.ccpUrl);
-  const destinationUrl = optHttps(body.destinationUrl);
-  const variantId =
-    typeof body.variantId === 'string' && /^\d+$/.test(body.variantId.trim())
-      ? body.variantId.trim()
-      : undefined;
-
-  const priceStr = centsToPrice(unitPriceCents);
-  const priceHint =
-    quantity > 1
-      ? `${priceStr} € / Stück · ${quantity}× = ${centsToPrice(unitPriceCents * quantity)} €`
-      : `${priceStr} € / Stück`;
-
-  const properties: { name: string; value: string }[] = [
-    { name: 'Config-ID', value: shortId },
-    { name: 'Preis', value: priceHint },
-    { name: 'Produkt', value: productId },
-  ];
-  if (previewUrl) properties.push({ name: 'Preview', value: previewUrl });
-  if (micrositeUrl) properties.push({ name: 'Handy-Seite', value: micrositeUrl });
-  if (destinationUrl) properties.push({ name: 'Ziel-URL', value: destinationUrl });
-  if (ccpUrl) {
-    properties.push({ name: '_CCP-URL', value: ccpUrl });
-    properties.push({ name: 'Bearbeiten-Link', value: ccpUrl });
-  }
-  if (variantId) properties.push({ name: 'Variant-ID', value: variantId });
 
   const payload = {
     draft_order: {
-      line_items: [
-        {
-          title: `${productTitle} – personalisiert`,
-          price: priceStr,
-          quantity,
-          properties,
-          requires_shipping: true,
-          taxable: true,
-        },
-      ],
-      note: `NUDAIM Konfigurator · Config ${shortId} · ${quantity}× · ${priceHint}`,
-      tags: 'nudaim,konfigurator,draft-price',
+      line_items: lineItems,
+      note: `NUDAIM · per-line · ${pricedMeta
+        .map((m) => `${m.shortId}:${m.quantity}×@${centsToPrice(m.unitPriceCents)}`)
+        .join(' · ')}`,
+      tags: 'nudaim,konfigurator,draft-price,per-line',
     },
   };
 
@@ -219,9 +292,9 @@ Deno.serve(async (req) => {
       invoiceUrl,
       draftOrderId: data.draft_order?.id ?? null,
       draftOrderName: data.draft_order?.name ?? null,
-      unitPriceCents,
-      quantity,
-      totalCents: unitPriceCents * quantity,
+      lineCount: pricedMeta.length,
+      totalCents,
+      lines: pricedMeta,
     });
   } catch (e) {
     console.error('Draft order fetch failed', e);

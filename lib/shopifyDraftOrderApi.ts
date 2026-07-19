@@ -1,21 +1,24 @@
 /**
- * Client: Shopify Draft Order Checkout über Supabase Edge Function.
- * Ohne Deploy / Secrets → null (Caller fällt auf Cart-Permalink zurück).
+ * Client: Shopify Draft Order Checkout (eine oder mehrere Configs).
+ * Staffel immer pro Zeile – Server rechnet neu.
  */
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from './supabase'
-import type { DraftOrderCreateInput } from './shopifyDraftOrder'
+import type { DraftOrderLineInput } from './shopifyDraftOrder'
 import { validateDraftOrderInput } from './shopifyDraftOrder'
 
 export type DraftCheckoutResult = {
   invoiceUrl: string
   draftOrderId: string | number | null
   draftOrderName: string | null
+  lineCount: number
+  totalCents: number | null
 }
 
 export async function createDraftCheckout(
-  input: DraftOrderCreateInput
+  input: DraftOrderLineInput | { lines: DraftOrderLineInput[] }
 ): Promise<DraftCheckoutResult | null> {
-  const checked = validateDraftOrderInput(input)
+  const payload = 'lines' in input && Array.isArray(input.lines) ? input : { lines: [input] }
+  const checked = validateDraftOrderInput(payload)
   if (!checked.ok) {
     console.warn('Draft checkout invalid:', checked.error)
     return null
@@ -30,13 +33,10 @@ export async function createDraftCheckout(
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         apikey: SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify(checked.value),
+      body: JSON.stringify({ lines: checked.value.lines }),
     })
 
-    if (res.status === 503) {
-      // Secrets noch nicht gesetzt – erwarteter Fallback
-      return null
-    }
+    if (res.status === 503) return null
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
       console.warn('Draft checkout failed:', res.status, errText.slice(0, 200))
@@ -47,6 +47,8 @@ export async function createDraftCheckout(
       invoiceUrl?: string
       draftOrderId?: string | number
       draftOrderName?: string
+      lineCount?: number
+      totalCents?: number
     }
     const invoiceUrl = data.invoiceUrl?.trim()
     if (!invoiceUrl || !/^https:\/\//i.test(invoiceUrl)) return null
@@ -54,6 +56,8 @@ export async function createDraftCheckout(
       invoiceUrl,
       draftOrderId: data.draftOrderId ?? null,
       draftOrderName: data.draftOrderName ?? null,
+      lineCount: data.lineCount ?? checked.value.lines.length,
+      totalCents: typeof data.totalCents === 'number' ? data.totalCents : null,
     }
   } catch (e) {
     console.warn('Draft checkout error:', e)
