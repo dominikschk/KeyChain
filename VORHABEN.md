@@ -1,7 +1,9 @@
 # Vorhaben – KeyChain / NUDAIM Konfigurator
 
-Stand: 2026-07-17  
+Stand: 2026-07-19  
 Prioritäten und offene Themen, damit wir nichts verlieren.
+
+**Langfristig (12 Monate, 40-Personen-Org):** siehe [`ROADMAP_PROFESSIONAL_2026_2027.md`](ROADMAP_PROFESSIONAL_2026_2027.md).
 
 ---
 
@@ -9,22 +11,25 @@ Prioritäten und offene Themen, damit wir nichts verlieren.
 
 ### Kunden-Zugang: `_CCP-URL` / Bestellmail
 
-CCP-Edit funktioniert. Zustellung über Shopify-Liquid ist vorbereitet.
+CCP-Edit funktioniert. Zustellung über Shopify-Liquid ist **live**.
 
 - [x] Prüfen / absichern: Properties `Microsite-URL`, `Bearbeiten-Link`, `_CCP-URL` am Cart
 - [ ] Optional Property sichtbar machen (`CCP-URL` statt `_CCP-URL`), falls Warenkorb-Anzeige gewünscht
 - [x] Shopify-Bestellbestätigung (Liquid) fertig (`Shopify besttel,txt` + App-Menü)
 - [x] Edge Function `send-microsite-email` Texte Uwe-freundlich inkl. `ccp_url` (Deploy optional)
-- [ ] Liquid in Shopify Admin einmalig einfügen / speichern
+- [x] Liquid in Shopify Admin einmalig einfügen / speichern
 - [x] Link-Übergabe im Konfigurator vor Warenkorb (Handy-Seite + Bearbeiten kopieren)
-- [ ] Live-Smoke: echte Order → Properties in Admin → Mail erneut senden → CCP testen
+- [x] Live-Smoke: echte Order → Properties in Admin → Mail erneut senden → CCP testen (Dominik, 2026-07-19)
 
-**Warum teilweise offen:** Code ist fertig; Shopify-Speichern + eine echte Testbestellung musst du/Dominik machen (siehe `SHOPIFY_EMAIL_TESTEN.md`).
+**Offen danach:** automatischer Shopify-Order-Webhook → Admin-Status (`paid`) – siehe Jahres-Roadmap Q1.
+
 ---
 
 ## Als Nächstes (Fokus): Design-Freiheit & „kleine Website“
 
 Ziel: Weg von starren Baustein-Listen hin zu **deutlich mehr Anpassung** und **freierem Layout** – näher an einer kleinen Website als an einer Linktree-Kachelreihe.
+
+> Hinweis: Laut Jahres-Roadmap haben **STL/Print + CI + Shopify-Webhook** in Q1 Vorrang vor großen Microsite-Slices – Anhänger zuerst.
 
 ### 0. AI Brand-Chat (in Arbeit)
 
@@ -81,23 +86,29 @@ Geführtes Gespräch → Microsite-Config (kein freies HTML).
 
 ## Bewusst nicht im nächsten Slice
 
-- Shopify `_CCP-URL`-Mail-Feinschliff (siehe „Später“)
 - Vollständiger Website-Builder à la Webflow
 - Serverseitige Stempelkarten / Anti-Cheat
-- Shopify-Order-Sync
+- Shopify-Order-Sync (→ Jahres-Roadmap Q1, Squad Commerce)
 
 ---
 
 ## Vorgeschlagene Reihenfolge (nächste Sessions)
 
-1. **Farben + Schriften erweitern** (schnell spürbar, überschaubar)
-2. **Section-Modell** (Hero / Inhalt / Footer) statt nur `nfcBlocks`-Liste
-3. **Reichere Blöcke + Vorlagen**
-4. **Multi-Section-Layout / leichte Navigation**
-5. Dann `_CCP-URL`-Delivery nachziehen
+1. **STL/Print-Pipeline + CI** (Jahres-Roadmap Q1)
+2. **Shopify-Order-Webhook** → Admin
+3. Dann Microsite-Slices laut unten / `VORHABEN` (Farben, Sections, Blöcke) – ohne Print zu blockieren
+
+Kurzfristig Digital (wenn Kapazität frei):
+
+1. Farben + Schriften erweitern
+2. Section-Modell vertiefen
+3. Reichere Blöcke + Vorlagen
+4. Multi-Section-Layout / leichte Navigation
 
 ---
 
 ## Kurznotiz Produktziel
 
 > Kunden sollen ihre NFC-Microsite wie eine **kleine, eigene Website** gestalten können – mit echter Markenwirkung (Schrift, Farbe, Layout) – ohne den 3D/STL-Teil zu vermischen.
+
+> Kernprodukt bleibt der **physische Anhänger**; siehe Jahres-Roadmap.
