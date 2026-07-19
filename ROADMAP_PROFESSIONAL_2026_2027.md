@@ -126,9 +126,9 @@ Fokus: Produktionsfähigkeit und Engineering-Hygiene.
 
 | # | Thema | Status / Hinweis |
 |---|--------|------------------|
-| 1 | **STL/Print-Pipeline wieder live** – Viewer-STL oder neue Engine; `svgForProduction` → Fertigungsjob; Admin zeigt druckfertige Assets | offen |
-| 2 | **CI/CD** – GitHub Actions: `tsc`, Lint, Build, Preview-Deploys; Branch-Schutz | offen |
-| 3 | **Test-Grundlage** – Unit Logo/Validation; Playwright Smoke (Upload → Save → Cart-URL) | offen |
+| 1 | **STL/Print-Pipeline wieder live** – Viewer-STL oder neue Engine; `svgForProduction` → Fertigungsjob; Admin zeigt druckfertige Assets | **teilweise erledigt 2026-07-19** – headless STL + Print-PNG + Admin-Downloads; Lint/Preview-Deploys folgen |
+| 2 | **CI/CD** – GitHub Actions: `tsc`, Lint, Build, Preview-Deploys; Branch-Schutz | **teilweise erledigt 2026-07-19** – Actions: typecheck + vitest + build; Lint/Preview/Branch-Schutz offen |
+| 3 | **Test-Grundlage** – Unit Logo/Validation; Playwright Smoke (Upload → Save → Cart-URL) | **teilweise erledigt 2026-07-19** – Unit Utils/Validation/STL/Print; Playwright offen |
 | 4 | **Security-Deploy abschließen** – Rest aus `SECURITY_ISSUES.md`; Cloudflare Rate-Limit; Scan-Flooding | offen |
 | 5a | **Shopify Live-Delivery** – Liquid + Smoke Order | **erledigt 2026-07-19** |
 | 5b | **Shopify Order-Sync** – Webhook Order → Status `paid` in Admin (`lib/ordersApi.ts`) | offen |
@@ -184,10 +184,10 @@ Anschluss an `VORHABEN.md`, ohne Anhänger zu verwässern:
 ### 8.1 Print & Manufacturing (8)
 
 **Q1**
-- STL-Pipeline an Save-/Admin-Flow anbinden (statt Stub in `KeychainPreview`)
-- Produktions-PNG aus `svgForProduction` / Print-Raster exportieren & speichern
-- Admin: Druck-Assets + Status sichtbar
-- Materialliste + Farbtoleranz-Doku (intern)
+- [x] STL-Pipeline an Save-/Admin-Flow anbinden (statt Stub in `KeychainPreview`) – headless `lib/stlExport.ts`
+- [x] Produktions-PNG aus `svgForProduction` / Print-Raster exportieren & speichern (`print_png_url` in `plate_data`)
+- [x] Admin: Druck-Assets + Status sichtbar (STL + Print-PNG Downloads)
+- [ ] Materialliste + Farbtoleranz-Doku (intern)
 
 **Q2**
 - Print-QC-Freigabe (Mensch-in-the-Loop optional)
@@ -228,9 +228,9 @@ Anschluss an `VORHABEN.md`, ohne Anhänger zu verwässern:
 ### 8.4 Platform, Security, DevOps (6)
 
 **Q1**
-- GitHub Actions CI; Preview-Deploys; Branch-Schutz
-- Sentry; Rate-Limits (Cloudflare/Supabase)
-- Rest-Checkliste `SECURITY_ISSUES.md`
+- [x] GitHub Actions CI (typecheck + vitest + build); Preview-Deploys & Branch-Schutz offen
+- [ ] Sentry; Rate-Limits (Cloudflare/Supabase)
+- [ ] Rest-Checkliste `SECURITY_ISSUES.md`
 
 **Q2**
 - Staging/Prod-Trennung; Secrets-Rotation; Backup-Drills
@@ -241,9 +241,9 @@ Anschluss an `VORHABEN.md`, ohne Anhänger zu verwässern:
 ### 8.5 QA, Design, Support, Data (9)
 
 **Q1**
-- Unit + Playwright Smoke
-- Legal-Copy zentral pflegen (Vorschau vs. Druck)
-- Support-Playbooks (Mail/CCP/Order)
+- [x] Unit (Utils/Validation/STL/Print); Playwright Smoke offen
+- [ ] Legal-Copy zentral pflegen (Vorschau vs. Druck)
+- [ ] Support-Playbooks (Mail/CCP/Order)
 
 **Q2**
 - Design System; WCAG AA Kernflows; Admin-UX für Ops
@@ -299,6 +299,7 @@ Ohne **STL + Webhook + CI** keine seriöse Skalierung von Varianten oder Digital
 
 ## 12. Nächster konkreter Schritt (nach Roadmap-Commit)
 
-1. Q1 starten mit **STL-Pipeline** + **CI** parallel zu **Shopify-Webhook**
-2. `VORHABEN.md`-Slices nur so weit, dass sie Print/Commerce nicht blockieren
-3. Quartals-Review an Exit-Kriterien – Scope streichen statt strecken
+1. ~~Q1 starten mit **STL-Pipeline** + **CI**~~ – erster Slice erledigt (siehe `TASKS.md`)
+2. Als Nächstes: **Shopify-Webhook** → Admin `paid`
+3. `VORHABEN.md`-Slices nur so weit, dass sie Print/Commerce nicht blockieren
+4. Quartals-Review an Exit-Kriterien – Scope streichen statt strecken

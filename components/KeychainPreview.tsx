@@ -4,6 +4,7 @@
 import React, { forwardRef, useImperativeHandle, useRef, useEffect, useCallback } from 'react';
 import type { ModelConfig } from '../types';
 import { extractRasterPngFromSvg, isRasterLogoSvg, shouldShowOriginalLogoColors } from '../lib/logoFromRaster';
+import { exportKeychainStl } from '../lib/stlExport';
 
 const BASE_IMG = '/keychain-base.png';
 
@@ -259,7 +260,7 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
 
     useImperativeHandle(ref, () => ({
       takeScreenshot: () => paintCanvas(),
-      exportSTL: async () => null,
+      exportSTL: () => exportKeychainStl(config, svgContent),
     }));
 
     return (

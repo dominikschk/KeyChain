@@ -14,7 +14,6 @@ import { ModelConfig, Department } from '../types';
 import { supabase, getDetailedError } from '../lib/supabase';
 import { generateShortId, generateWriteToken, showError, resetFileInput } from '../lib/utils';
 import { validateLogoEngraveFile, validateProfileTitle, toSafeHttpUrl, isRasterLogoFile, isSvgLogoFile } from '../lib/validation';
-import { svgForProduction } from '../lib/logoFromRaster';
 import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
 import { getSession, onAuthStateChange, signOut } from '../lib/auth';
 import type { AuthSession } from '../lib/auth';
@@ -31,6 +30,8 @@ import {
   getPreviewConfig,
 } from '../lib/configStorage';
 import { getConfigByShortId, recordScan, setConfigStlUrl, insertConfigBlocks } from '../lib/configApi';
+import { buildProductionPrintAssets } from '../lib/printAssets';
+import { exportKeychainStl } from '../lib/stlExport';
 
 const MicrositeChat = lazy(() =>
   import('../components/MicrositeChat').then((m) => ({ default: m.MicrositeChat }))
@@ -414,17 +415,19 @@ const ConfiguratorPage: React.FC = () => {
     setSavingStep('screenshot');
     const shortId = generateShortId();
     const writeToken = generateWriteToken();
-    // STL parallel starten – wartet nicht auf Critical Path
-    const stlExportPromise =
-      viewerRef.current?.exportSTL?.().catch((e) => {
-        console.warn('STL export failed:', e);
-        return null;
-      }) ?? Promise.resolve(null);
+    const printAssets = buildProductionPrintAssets(svgContent);
+    const productionSvg = printAssets?.productionSvg ?? null;
+    // STL parallel starten – wartet nicht auf Critical Path (Druck-SVG als Quelle)
+    const stlExportPromise = exportKeychainStl(config, productionSvg).catch((e) => {
+      console.warn('STL export failed:', e);
+      return null;
+    });
 
     try {
       let finalImageUrl = '';
+      let printPngUrl: string | null = null;
+      setSavingStep('upload');
       if (screenshotDataUrl) {
-        setSavingStep('upload');
         const res = await fetch(screenshotDataUrl);
         if (!res.ok) throw new Error('Screenshot konnte nicht geladen werden');
         const blob = await res.blob();
@@ -433,6 +436,11 @@ const ConfiguratorPage: React.FC = () => {
         const url = await uploadAndGetPublicUrl(supabase, path, blob);
         if (!url) throw new Error('Upload fehlgeschlagen');
         finalImageUrl = url;
+      }
+
+      if (printAssets?.printPngBlob && supabase) {
+        const printPath = storagePath(`print/${shortId}_`, 'logo.png');
+        printPngUrl = await uploadAndGetPublicUrl(supabase, printPath, printAssets.printPngBlob);
       }
 
       setSavingStep('db');
@@ -464,7 +472,8 @@ const ConfiguratorPage: React.FC = () => {
           logoRotation: config.logoRotation,
           mirrorX: !!config.mirrorX,
           hasChain: config.hasChain !== false,
-          logo_svg: svgContent ? svgForProduction(svgContent) : null,
+          logo_svg: productionSvg,
+          print_png_url: printPngUrl,
           engraveText: config.engraveText || '',
           engraveLayout: config.engraveLayout || 'logo_above',
           engraveGap: config.engraveGap ?? 40,

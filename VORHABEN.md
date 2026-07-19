@@ -94,7 +94,7 @@ Geführtes Gespräch → Microsite-Config (kein freies HTML).
 
 ## Vorgeschlagene Reihenfolge (nächste Sessions)
 
-1. **STL/Print-Pipeline + CI** (Jahres-Roadmap Q1)
+1. ~~**STL/Print-Pipeline + CI** (Jahres-Roadmap Q1)~~ – erster Slice erledigt (siehe [`TASKS.md`](TASKS.md) T1–T3)
 2. **Shopify-Order-Webhook** → Admin
 3. Dann Microsite-Slices laut unten / `VORHABEN` (Farben, Sections, Blöcke) – ohne Print zu blockieren
 

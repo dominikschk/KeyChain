@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ShoppingCart, ExternalLink, Loader2, Lock, LogOut, Copy, Check, Package, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { getConfigsList } from '../lib/configApi';
+import { getConfigsList, getPrintPngUrl } from '../lib/configApi';
 import { getOrdersList, createOrder, updateOrderStatus, getOrderStatusOptions } from '../lib/ordersApi';
 import { SHOPIFY_ADMIN_ORDERS_URL } from '../constants';
 import {
@@ -282,7 +282,7 @@ export const AdminPage: React.FC = () => {
               Konfigurationen / Bestellungen
             </h2>
             <p className="text-sm text-zinc-500 mt-1">
-              Microsite- und Kunden-Panel-Links zum Kopieren.
+              Druck-Assets (STL, Print-PNG) und Links zum Kopieren.
             </p>
           </div>
 
@@ -307,7 +307,7 @@ export const AdminPage: React.FC = () => {
                     <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Short-ID</th>
                     <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Profil</th>
                     <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Erstellt</th>
-                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">STL</th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Druck</th>
                     <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Aktionen</th>
                   </tr>
                 </thead>
@@ -322,26 +322,42 @@ export const AdminPage: React.FC = () => {
                     list.map((row) => {
                       const micrositeUrl = `${baseUrl}/?id=${encodeURIComponent(row.short_id)}`;
                       const ccpUrl = `${baseUrl}/ccp?id=${encodeURIComponent(row.short_id)}`;
+                      const printPng = getPrintPngUrl(row);
                       return (
                         <tr key={row.id} className="border-b border-zinc-100 hover:bg-zinc-50/50">
                           <td className="px-4 py-3 font-mono text-xs text-navy">{row.short_id}</td>
                           <td className="px-4 py-3 font-medium text-navy truncate max-w-[200px]">{row.profile_title}</td>
                           <td className="px-4 py-3 text-zinc-500 text-xs">{formatDate(row.created_at)}</td>
                           <td className="px-4 py-3">
-                            {row.stl_url ? (
-                              <a
-                                href={row.stl_url}
-                                download={`${row.short_id}.stl`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                              >
-                                <Download size={12} />
-                                STL
-                              </a>
-                            ) : (
-                              <span className="text-zinc-400 text-xs">—</span>
-                            )}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {row.stl_url ? (
+                                <a
+                                  href={row.stl_url}
+                                  download={`${row.short_id}.stl`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                                >
+                                  <Download size={12} />
+                                  STL
+                                </a>
+                              ) : null}
+                              {printPng ? (
+                                <a
+                                  href={printPng}
+                                  download={`${row.short_id}-print.png`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                                >
+                                  <Download size={12} />
+                                  Print-PNG
+                                </a>
+                              ) : null}
+                              {!row.stl_url && !printPng ? (
+                                <span className="text-zinc-400 text-xs">—</span>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap items-center gap-2">

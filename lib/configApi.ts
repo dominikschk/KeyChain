@@ -113,11 +113,17 @@ export async function getConfigsList(): Promise<ConfigRow[]> {
 
   const { data, error } = await supabase
     .from('nfc_configs')
-    .select('id, short_id, profile_title, preview_image, stl_url, created_at')
+    .select('id, short_id, profile_title, preview_image, stl_url, plate_data, created_at')
     .order('created_at', { ascending: false });
 
   if (error) return [];
   return (data as ConfigRow[]) || [];
+}
+
+/** Druck-PNG-URL aus plate_data (falls beim Speichern hochgeladen). */
+export function getPrintPngUrl(row: ConfigRow): string | null {
+  const url = row.plate_data?.print_png_url;
+  return typeof url === 'string' && url.startsWith('https://') ? url : null;
 }
 
 /**
