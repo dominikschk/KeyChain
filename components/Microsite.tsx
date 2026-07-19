@@ -7,6 +7,21 @@ import { showError } from '../lib/utils';
 import { isValidEmail, toSafeHttpUrl } from '../lib/validation';
 import { brandButtonStyle, resolveSurface } from '../lib/brandPalette';
 import { fontClassFor, splitBlocksForLanding } from '../lib/siteLayouts';
+import { parseFaqItems, parseGalleryUrls } from '../lib/contentBlocks';
+import {
+  alignClass,
+  isProbablyOpenNow,
+  normalizeAlign,
+  parsePriceItems,
+} from '../lib/sectionContent';
+import { applyMicrositeShareMeta } from '../lib/shareMeta';
+import {
+  buildSiteNavItems,
+  filterBlocksForPage,
+  navHrefForPage,
+  resolveActivePage,
+  type SitePageSlug,
+} from '../lib/siteNav';
 
 interface MicrositeProps {
   config: ModelConfig;
@@ -151,11 +166,17 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string, accentColor: stri
 
 export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accentColor: string, theme: string }> = ({ block, configId, accentColor, theme }) => {
   const isDark = theme === 'dark';
-  
+  const align = normalizeAlign(block.settings?.align);
+  const padY = Math.max(0, Math.min(80, Number(block.settings?.padY) || 0));
+  const wrapStyle = padY ? { paddingTop: padY, paddingBottom: padY } : undefined;
+  const alignCls = alignClass(align);
+  const titleAlign =
+    align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center';
+
   if (block.type === 'headline') {
     if (!block.title && !block.content) return null;
     return (
-      <div className="py-2 text-center animate-in slide-in-from-bottom-2 duration-500">
+      <div className={`py-2 ${alignCls} animate-in slide-in-from-bottom-2 duration-500`} style={wrapStyle}>
         {(block.title || block.content) && (
           <p className={`text-lg sm:text-xl font-medium leading-snug px-2 ${isDark ? 'text-zinc-200' : 'text-zinc-700'}`}>
             {block.title || block.content}
@@ -174,8 +195,8 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
 
   if (block.type === 'map' && block.settings?.address) {
     return (
-      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-4 rounded-[2.5rem] border shadow-sm pointer-events-auto hover:shadow-xl transition-all animate-in fade-in duration-500`}>
-        {block.title && <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest mb-4 px-2`}>{block.title}</h3>}
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-4 rounded-[2.5rem] border shadow-sm pointer-events-auto hover:shadow-xl transition-all animate-in fade-in duration-500`} style={wrapStyle}>
+        {block.title && <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest mb-4 px-2 ${titleAlign}`}>{block.title}</h3>}
         <div className="w-full h-48 bg-zinc-50 rounded-2xl flex flex-col items-center justify-center text-zinc-300 gap-2 border border-navy/5 overflow-hidden relative group cursor-pointer" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(block.settings?.address || '')}`, '_blank')}>
            <MapIcon size={32} className="group-hover:scale-110 transition-transform" />
            <span className="text-[9px] font-black uppercase text-center px-6 leading-tight max-w-[200px]">{block.settings.address}</span>
@@ -187,7 +208,7 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
 
   if (block.type === 'text') {
     return (
-      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-8 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto text-center animate-in fade-in duration-500`}>
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-8 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto ${alignCls} animate-in fade-in duration-500`} style={wrapStyle}>
         {block.title && <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest`}>{block.title}</h3>}
         <p className={`${isDark ? 'text-zinc-400' : 'text-zinc-500'} text-[13px] leading-relaxed font-medium whitespace-pre-line`}>{block.content}</p>
       </div>
@@ -196,14 +217,114 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
 
   if (block.type === 'image' && block.imageUrl) {
     return (
-      <div className="rounded-[2.5rem] overflow-hidden border border-navy/5 shadow-lg pointer-events-auto relative group animate-in zoom-in duration-500">
-        <img src={block.imageUrl} alt={block.title} className="w-full h-auto group-hover:scale-105 transition-transform duration-700" />
+      <div className="rounded-[2.5rem] overflow-hidden border border-navy/5 shadow-lg pointer-events-auto relative group animate-in zoom-in duration-500" style={wrapStyle}>
+        <img src={block.imageUrl} alt={block.title || ''} className="w-full h-auto group-hover:scale-105 transition-transform duration-700" />
         {block.title && <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-8"><p className="text-white text-[11px] font-black uppercase tracking-widest">{block.title}</p></div>}
       </div>
     );
   }
 
+  if (block.type === 'faq') {
+    const items = parseFaqItems(block.content || block.settings?.faqJson);
+    if (!items.length) return null;
+    return (
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-6 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto`} style={wrapStyle}>
+        <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest px-1 ${titleAlign}`}>
+          {block.title || 'FAQ'}
+        </h3>
+        <div className="space-y-2">
+          {items.map((item, i) => (
+            <details key={i} className={`${isDark ? 'bg-zinc-950/60' : 'bg-cream/80'} rounded-2xl px-4 py-3`}>
+              <summary className={`${isDark ? 'text-zinc-100' : 'text-navy'} text-sm font-bold cursor-pointer list-none`}>
+                {item.q || 'Frage'}
+              </summary>
+              <p className={`${isDark ? 'text-zinc-400' : 'text-zinc-600'} text-sm mt-2 leading-relaxed whitespace-pre-line`}>
+                {item.a}
+              </p>
+            </details>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (block.type === 'hours') {
+    const text = (block.settings?.hoursText || block.content || '').trim();
+    if (!text) return null;
+    const openNow = isProbablyOpenNow(text);
+    return (
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-6 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto ${alignCls}`} style={wrapStyle}>
+        <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest`}>
+          {block.title || 'Öffnungszeiten'}
+        </h3>
+        {openNow && (
+          <span className="inline-flex text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">
+            Jetzt geöffnet
+          </span>
+        )}
+        <p className={`${isDark ? 'text-zinc-400' : 'text-zinc-600'} text-sm leading-relaxed whitespace-pre-line`}>
+          {text}
+        </p>
+      </div>
+    );
+  }
+
+  if (block.type === 'gallery') {
+    const urls = parseGalleryUrls(block.settings?.galleryUrls || block.content);
+    if (!urls.length) return null;
+    return (
+      <div className="space-y-3 pointer-events-auto" style={wrapStyle}>
+        {block.title && (
+          <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest ${titleAlign}`}>
+            {block.title}
+          </h3>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          {urls.map((url) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-2xl overflow-hidden border border-navy/5 aspect-square bg-zinc-100"
+            >
+              <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+            </a>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (block.type === 'prices') {
+    const items = parsePriceItems(block.content);
+    if (!items.length) return null;
+    return (
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-6 rounded-[2.5rem] border shadow-sm space-y-4 pointer-events-auto`} style={wrapStyle}>
+        <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest ${titleAlign}`}>
+          {block.title || 'Preise'}
+        </h3>
+        <ul className="space-y-3">
+          {items.map((item, i) => (
+            <li key={i} className="flex items-baseline justify-between gap-3 border-b border-navy/5 pb-2 last:border-0">
+              <div className="min-w-0 text-left">
+                <p className={`${isDark ? 'text-zinc-100' : 'text-navy'} text-sm font-bold truncate`}>{item.name}</p>
+                {item.note && (
+                  <p className={`${isDark ? 'text-zinc-500' : 'text-zinc-500'} text-xs mt-0.5`}>{item.note}</p>
+                )}
+              </div>
+              <p className="text-sm font-black shrink-0" style={{ color: accentColor }}>
+                {item.price}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   if (block.type === 'magic_button') {
+
     if (block.buttonType === 'stamp_card') return <StampCard block={block} configId={configId} accentColor={accentColor} />;
 
     const handleAction = () => {
@@ -319,7 +440,102 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
   const textColor = config.textColor || (isDark ? '#F5F5F4' : '#1C1917');
   const fontClass = fontClassFor(config.fontStyle);
   const layoutMode = config.layoutMode || 'landing';
-  const { heroLine, stories, actions, extras } = splitBlocksForLanding(config.nfcBlocks || []);
+  const [activePage, setActivePage] = useState<SitePageSlug>(() =>
+    resolveActivePage(window.location.search, window.location.hash)
+  );
+
+  useEffect(() => {
+    const sync = () => setActivePage(resolveActivePage(window.location.search, window.location.hash));
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    return () => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+    };
+  }, []);
+
+  const pageBlocks = filterBlocksForPage(config.nfcBlocks || [], activePage);
+  const { heroLine, stories, actions, extras } = splitBlocksForLanding(pageBlocks);
+  const navItems = buildSiteNavItems(config);
+  const showNav = !embedded && navItems.length > 1 && config.navEnabled !== false;
+
+  const goNav = (item: { href: string; isPage?: boolean; id: string }) => {
+    if (item.isPage || item.id === 'kontakt') {
+      const next = navHrefForPage('kontakt', window.location.search);
+      window.history.pushState({}, '', next);
+      setActivePage('kontakt');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    if (activePage !== 'home') {
+      const home = navHrefForPage('home', window.location.search);
+      window.history.pushState({}, '', home.split('#')[0] + (item.href.startsWith('#') ? item.href : '#top'));
+      setActivePage('home');
+      requestAnimationFrame(() => {
+        const el = document.querySelector(item.href);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      return;
+    }
+    if (item.href === '#top') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    document.querySelector(item.href)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  useEffect(() => {
+    if (embedded) return;
+    const story = stories[0]?.content || stories[0]?.title || '';
+    applyMicrositeShareMeta({
+      title: config.profileTitle || 'NUDAIM',
+      description: story || 'NFC-Seite',
+      imageUrl: config.profileLogoUrl || config.headerImageUrl || null,
+      pageUrl: typeof window !== 'undefined' ? window.location.href : undefined,
+      faviconUrl: config.faviconUrl || null,
+    });
+  }, [
+    embedded,
+    config.profileTitle,
+    config.profileLogoUrl,
+    config.headerImageUrl,
+    config.faviconUrl,
+    stories,
+  ]);
+
+  const navBar = showNav ? (
+    <nav
+      className="sticky top-0 z-30 w-full backdrop-blur-md border-b"
+      style={{
+        backgroundColor: isDark ? 'rgba(12,10,9,0.88)' : 'rgba(255,255,255,0.9)',
+        borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+      }}
+      aria-label="Seitenmenü"
+    >
+      <div className="max-w-lg mx-auto px-3 py-2.5 flex gap-1 overflow-x-auto">
+        {navItems.map((item) => {
+          const isActive =
+            (item.isPage && activePage === 'kontakt') ||
+            (!item.isPage && activePage === 'home' && item.id === 'top');
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => goNav(item)}
+              className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition-colors"
+              style={{
+                backgroundColor: isActive ? config.accentColor : 'transparent',
+                color: isActive ? '#fff' : textColor,
+                opacity: isActive ? 1 : 0.7,
+              }}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  ) : null;
 
   if (error) {
     return (
@@ -339,9 +555,11 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
   if (layoutMode === 'stack') {
     return (
       <div
+        id="top"
         className={`${embedded ? 'min-h-0 pb-6' : 'min-h-screen pb-40'} w-full selection:bg-petrol flex flex-col items-center overflow-y-auto overflow-x-hidden ${fontClass}`}
         style={{ backgroundColor: surface, color: textColor }}
       >
+        {navBar}
         <header className="px-6 flex flex-col items-center text-center w-full relative pt-14 pb-8">
           <div className="w-24 h-24 rounded-3xl bg-white shadow-lg flex items-center justify-center border border-black/5 overflow-hidden relative z-10">
             {(googleLogoUrl || config.profileLogoUrl) ? (
@@ -353,11 +571,17 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
           <h1 className="mt-6 text-3xl font-bold tracking-tight px-4" style={{ color: isDark ? '#fff' : config.accentColor }}>
             {config.profileTitle}
           </h1>
+          {activePage === 'kontakt' && (
+            <p className="mt-2 text-sm opacity-70">Kontakt</p>
+          )}
         </header>
         <main className="max-w-md w-full px-5 flex-1 relative z-10 space-y-4 pb-8">
-          {config.nfcBlocks.map((block) => (
+          {pageBlocks.map((block) => (
             <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
           ))}
+          {pageBlocks.length === 0 && (
+            <p className="text-center text-sm opacity-50 py-8">Hier ist noch kein Kontakt hinterlegt.</p>
+          )}
         </main>
       </div>
     );
@@ -366,9 +590,11 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
   // Landing = Mini-Website mit Hero + Sections
   return (
     <div
+      id="top"
       className={`${embedded ? 'min-h-0 pb-8' : 'min-h-screen pb-36'} w-full selection:bg-petrol overflow-y-auto overflow-x-hidden ${fontClass}`}
       style={{ backgroundColor: surface, color: textColor }}
     >
+      {navBar}
       {/* Hero */}
       <section className="relative w-full overflow-hidden">
         <div
@@ -399,62 +625,83 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
           >
             {config.profileTitle}
           </h1>
-          {(heroLine?.title || heroLine?.content) && (
+          {activePage === 'kontakt' ? (
             <p className="mt-4 text-lg sm:text-xl leading-snug max-w-sm opacity-90" style={{ color: textColor }}>
-              {heroLine.title || heroLine.content}
+              So erreichst du uns
             </p>
+          ) : (
+            (heroLine?.title || heroLine?.content) && (
+              <p className="mt-4 text-lg sm:text-xl leading-snug max-w-sm opacity-90" style={{ color: textColor }}>
+                {heroLine.title || heroLine.content}
+              </p>
+            )
           )}
         </div>
       </section>
 
       <div className="max-w-lg mx-auto px-5 space-y-6 pb-10 relative z-10 -mt-2">
-        {/* Story / Text sections */}
-        {stories.length > 0 && (
-          <section
-            className="rounded-3xl px-5 py-6 space-y-5 shadow-sm border"
-            style={{
-              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
-              borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-            }}
-          >
-            {stories.map((block) => (
+        {activePage === 'kontakt' ? (
+          <section className="space-y-3" id="kontakt">
+            {pageBlocks.map((block) => (
               <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
             ))}
+            {pageBlocks.length === 0 && (
+              <p className="text-center text-sm opacity-50 py-8">Hier ist noch kein Kontakt hinterlegt.</p>
+            )}
           </section>
-        )}
+        ) : (
+          <>
+            {/* Story / Text sections */}
+            {stories.length > 0 && (
+              <section
+                id="section-stories"
+                className="rounded-3xl px-5 py-6 space-y-5 shadow-sm border scroll-mt-16"
+                style={{
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                }}
+              >
+                {stories.map((block) => (
+                  <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
+                ))}
+              </section>
+            )}
 
-        {/* Actions grid */}
-        {actions.length > 0 && (
-          <section
-            className="rounded-3xl px-4 py-5 shadow-sm border"
-            style={{
-              backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
-              borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-            }}
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] opacity-50 px-2 mb-3">Schnell zu</p>
-            <div className={`grid gap-3 ${actions.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-              {actions.map((block) => (
-                <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
-              ))}
-            </div>
-          </section>
-        )}
+            {/* Actions grid */}
+            {actions.length > 0 && (
+              <section
+                id="section-actions"
+                className="rounded-3xl px-4 py-5 shadow-sm border scroll-mt-16"
+                style={{
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.15em] opacity-50 px-2 mb-3">Schnell zu</p>
+                <div className={`grid gap-3 ${actions.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+                  {actions.map((block) => (
+                    <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
+                  ))}
+                </div>
+              </section>
+            )}
 
-        {/* Map / extras */}
-        {extras.length > 0 && (
-          <section className="space-y-3">
-            {extras.map((block) => (
-              <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
-            ))}
-          </section>
-        )}
+            {/* Map / extras */}
+            {extras.length > 0 && (
+              <section id="section-extras" className="space-y-3 scroll-mt-16">
+                {extras.map((block) => (
+                  <BlockRenderer key={block.id} block={block} configId={currentId} accentColor={config.accentColor} theme={config.theme} />
+                ))}
+              </section>
+            )}
 
-        {/* Fallback if empty */}
-        {!heroLine && stories.length === 0 && actions.length === 0 && extras.length === 0 && (
-          <p className="text-center text-sm opacity-50 py-8">
-            {embedded ? 'Noch leer – links Inhalte hinzufügen.' : 'Bald findest du hier mehr Infos.'}
-          </p>
+            {/* Fallback if empty */}
+            {!heroLine && stories.length === 0 && actions.length === 0 && extras.length === 0 && (
+              <p className="text-center text-sm opacity-50 py-8">
+                {embedded ? 'Noch leer – links Inhalte hinzufügen.' : 'Bald findest du hier mehr Infos.'}
+              </p>
+            )}
+          </>
         )}
       </div>
 

@@ -2,7 +2,7 @@
  * Konfigurator – Panel zum Konfigurieren von NFeC-Produkten (3D + Microsite).
  */
 import React, { useState, useRef, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
-import { Loader2, ArrowRight, RefreshCw, Edit3, Smartphone, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown, Copy } from 'lucide-react';
+import { Loader2, ArrowRight, RefreshCw, Edit3, Smartphone, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown, Copy, Share2 } from 'lucide-react';
 import { Controls } from '../components/Controls';
 import { SitePreview } from '../components/SitePreview';
 import { KeychainPreview } from '../components/KeychainPreview';
@@ -11,10 +11,9 @@ import { LoginScreen } from '../components/LoginScreen';
 import { ShopifyGuide } from '../components/ShopifyGuide';
 import { DEFAULT_CONFIG, buildShopifyCartUrl, buildMicrositeUrl, buildCcpEditUrl, PRODUCTS } from '../constants';
 import { ModelConfig, Department } from '../types';
-import { supabase, getDetailedError } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { generateShortId, generateWriteToken, showError, resetFileInput } from '../lib/utils';
 import { validateLogoEngraveFile, validateProfileTitle, toSafeHttpUrl, isRasterLogoFile, isSvgLogoFile } from '../lib/validation';
-import { svgForProduction } from '../lib/logoFromRaster';
 import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
 import { getSession, onAuthStateChange, signOut } from '../lib/auth';
 import type { AuthSession } from '../lib/auth';
@@ -31,6 +30,30 @@ import {
   getPreviewConfig,
 } from '../lib/configStorage';
 import { getConfigByShortId, recordScan, setConfigStlUrl, insertConfigBlocks } from '../lib/configApi';
+import { buildProductionPrintAssets } from '../lib/printAssets';
+import { exportKeychainStl } from '../lib/stlExport';
+import { assessLogoHealth } from '../lib/logoHealth';
+import {
+  buildDraftShareUrl,
+  decodeDraftShare,
+  readDraftParamFromLocation,
+} from '../lib/draftShare';
+import { bulkHintForQuantity, clampOrderQuantity } from '../lib/bulkOrder';
+import { pricingHintForQuantity, resolveCheckoutPrice } from '../lib/shopifyPricing';
+import { buildPricingSnapshot } from '../lib/pricingSnapshot';
+import { createDraftCheckoutResult, probeDraftOrderFunction } from '../lib/shopifyDraftOrderApi';
+import {
+  basketTotals,
+  clearCheckoutBasket,
+  loadCheckoutBasket,
+  saveCheckoutBasket,
+  upsertBasketLine,
+  type CheckoutBasketLine,
+} from '../lib/checkoutBasket';
+import { customerSaveError } from '../lib/customerErrors';
+import { t } from '../lib/i18n';
+import { filamentCustomerHint } from '../lib/filamentProfiles';
+import { isLiveSimple } from '../lib/liveMode';
 
 const MicrositeChat = lazy(() =>
   import('../components/MicrositeChat').then((m) => ({ default: m.MicrositeChat }))
@@ -46,16 +69,17 @@ type DeliveryLinks = {
   shortId: string;
   micrositeUrl: string;
   ccpUrl: string;
+  /** Fallback wenn Draft Order fehlt (nur letzte Zeile) */
   cartUrl: string;
-  /** Bei eigener Website: wohin der Chip wirklich weiterleitet */
   destinationUrl?: string;
+  basket: CheckoutBasketLine[];
 };
 
 const SAVING_LABELS: Record<string, string> = {
-  screenshot: 'Vorschau wird vorbereitet…',
-  upload: 'Bild wird hochgeladen…',
-  db: 'Wird gespeichert…',
-  done: 'Fast fertig…',
+  screenshot: 'Bild vom Anhänger wird gemacht…',
+  upload: 'Dein Design wird hochgeladen…',
+  db: 'Bestellung wird vorbereitet…',
+  done: 'Weiter zum Warenkorb…',
 };
 
 function hostnameFromUrl(url: string): string {
@@ -66,32 +90,39 @@ function hostnameFromUrl(url: string): string {
   }
 }
 
-/** Nach dem Speichern: Links kurz sichern, dann Warenkorb (Auto-Weiter). */
+/** Live: ein Design → Warenkorb. Full: Korb mit mehreren Designs / Draft-Kasse. */
 const DeliveryHandoffModal: React.FC<{
   links: DeliveryLinks;
-  onContinue: () => void;
-}> = ({ links, onContinue }) => {
+  onCheckout: () => void;
+  onAddAnother: () => void;
+  checkoutBusy?: boolean;
+  checkoutHint?: string | null;
+  simple?: boolean;
+}> = ({ links, onCheckout, onAddAnother, checkoutBusy, checkoutHint, simple }) => {
   const [copied, setCopied] = useState<'ms' | 'ccp' | null>(null);
-  const [seconds, setSeconds] = useState(4);
-  const continueRef = useRef(onContinue);
-  continueRef.current = onContinue;
+  const [showLinks, setShowLinks] = useState(false);
+  const [seconds, setSeconds] = useState(simple ? 5 : 0);
+  const totals = basketTotals(links.basket);
+  const continueRef = useRef(onCheckout);
+  continueRef.current = onCheckout;
   const doneRef = useRef(false);
 
   useEffect(() => {
+    if (!simple) return;
     if (seconds > 0) {
-      const t = window.setTimeout(() => setSeconds((s) => s - 1), 1000);
-      return () => window.clearTimeout(t);
+      const tmr = window.setTimeout(() => setSeconds((s) => s - 1), 1000);
+      return () => window.clearTimeout(tmr);
     }
     if (!doneRef.current) {
       doneRef.current = true;
       continueRef.current();
     }
-  }, [seconds]);
+  }, [simple, seconds]);
 
   const go = () => {
-    if (doneRef.current) return;
+    if (doneRef.current && simple) return;
     doneRef.current = true;
-    onContinue();
+    onCheckout();
   };
 
   const copy = async (which: 'ms' | 'ccp', value: string) => {
@@ -104,80 +135,185 @@ const DeliveryHandoffModal: React.FC<{
     }
   };
 
+  if (simple) {
+    return (
+      <div className="fixed inset-0 z-[2500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md">
+        <div className="card w-full max-w-lg flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300">
+          <header className="px-5 py-4 border-b border-navy/5 bg-cream">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-petrol mb-1">Geschafft</p>
+            <h2 className="font-headline text-lg font-extrabold uppercase tracking-tight text-navy">
+              Weiter zum Warenkorb
+            </h2>
+            <p className="text-sm text-zinc-600 mt-1 leading-snug">
+              Dein Anhänger ist gespeichert. Als Nächstes öffnet der Shopify-Warenkorb – dort siehst du den Preis und kannst bezahlen.
+            </p>
+          </header>
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <button
+              type="button"
+              onClick={go}
+              className="w-full min-h-[56px] bg-navy text-white rounded-xl font-semibold text-base flex items-center justify-center gap-2 active:scale-[0.98]"
+            >
+              <ShoppingCart size={20} />
+              Zum Warenkorb
+              <ArrowRight size={18} />
+            </button>
+            <p className="text-center text-xs text-zinc-500">
+              Öffnet automatisch in {seconds}s · Code:{' '}
+              <strong className="text-navy">{links.shortId}</strong>
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowLinks((v) => !v)}
+              className="w-full text-left text-sm font-semibold text-petrol py-2"
+            >
+              {showLinks ? '− Links ausblenden' : '+ Handy-Seite & Bearbeiten-Link'}
+            </button>
+            {showLinks && (
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-navy/10 bg-white p-4 space-y-2">
+                  <p className="text-sm font-semibold text-navy">
+                    {links.destinationUrl ? 'NFC-Link (Chip)' : 'Handy-Seite'}
+                  </p>
+                  <p className="text-xs text-zinc-500 break-all">{links.micrositeUrl}</p>
+                  <button
+                    type="button"
+                    onClick={() => void copy('ms', links.micrositeUrl)}
+                    className="min-h-[44px] px-4 rounded-xl border border-zinc-200 text-sm font-semibold text-navy inline-flex items-center gap-2"
+                  >
+                    {copied === 'ms' ? <Check size={16} /> : <Copy size={16} />}
+                    {copied === 'ms' ? 'Kopiert' : 'Kopieren'}
+                  </button>
+                </div>
+                <div className="rounded-2xl border border-petrol/20 bg-petrol/5 p-4 space-y-2">
+                  <p className="text-sm font-semibold text-navy">Später ändern</p>
+                  <p className="text-xs text-zinc-500 break-all">{links.ccpUrl}</p>
+                  <button
+                    type="button"
+                    onClick={() => void copy('ccp', links.ccpUrl)}
+                    className="min-h-[44px] px-4 rounded-xl border border-petrol/30 text-sm font-semibold text-navy inline-flex items-center gap-2 bg-white"
+                  >
+                    {copied === 'ccp' ? <Check size={16} /> : <Copy size={16} />}
+                    {copied === 'ccp' ? 'Kopiert' : 'Bearbeiten-Link kopieren'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[2500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md">
       <div className="card w-full max-w-lg flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300">
         <header className="px-5 py-4 border-b border-navy/5 bg-cream">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-petrol mb-1">Gespeichert</p>
-          <h2 className="font-headline text-lg font-extrabold uppercase tracking-tight text-navy">Links bereit</h2>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-petrol mb-1">Im Warenkorb</p>
+          <h2 className="font-headline text-lg font-extrabold uppercase tracking-tight text-navy">
+            Design gespeichert
+          </h2>
           <p className="text-sm text-zinc-600 mt-1 leading-snug">
-            Kommen auch in der Bestellmail. Warenkorb öffnet in {seconds}s – oder sofort tippen.
-          </p>
-          <p className="text-[11px] text-zinc-500 mt-2 leading-snug rounded-lg bg-white/70 border border-navy/5 px-2.5 py-2">
-            Die Vorschau ist unverbindlich. Für den Druck wird das Logo vereinfacht; Farbtöne können durch das 3D-Druckverfahren teilweise anders aussehen.
+            Mengenrabatt gilt nur je Design – nicht über verschiedene Anhänger hinweg.
           </p>
         </header>
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div className="rounded-2xl border border-navy/10 bg-white p-4 space-y-2">
-            <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Für deine Kunden</p>
-            <p className="text-sm font-semibold text-navy">
-              {links.destinationUrl ? 'NFC-Link (Chip)' : 'Handy-Seite'}
-            </p>
-            <p className="text-xs text-zinc-500 break-all">{links.micrositeUrl}</p>
-            {links.destinationUrl && (
-              <p className="text-xs text-zinc-600 leading-snug pt-1">
-                Öffnet danach: <span className="font-semibold text-navy break-all">{links.destinationUrl}</span>
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2 pt-1">
-              <a
-                href={links.destinationUrl || links.micrositeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="min-h-[44px] px-4 rounded-xl bg-navy text-white text-sm font-semibold inline-flex items-center gap-2"
+          <ul className="space-y-2">
+            {links.basket.map((line) => (
+              <li
+                key={line.shortId}
+                className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 flex gap-3 items-center"
               >
-                <ExternalLink size={16} /> Öffnen
-              </a>
-              <button
-                type="button"
-                onClick={() => void copy('ms', links.micrositeUrl)}
-                className="min-h-[44px] px-4 rounded-xl border border-zinc-200 text-sm font-semibold text-navy inline-flex items-center gap-2"
-              >
-                {copied === 'ms' ? <Check size={16} /> : <Copy size={16} />}
-                {copied === 'ms' ? 'Kopiert' : 'Kopieren'}
-              </button>
-            </div>
-          </div>
+                {line.previewUrl ? (
+                  <img src={line.previewUrl} alt="" className="w-12 h-12 rounded-lg object-cover bg-zinc-100" />
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-zinc-100" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-navy truncate">{line.productTitle}</p>
+                  <p className="text-[11px] text-zinc-500">
+                    {line.quantity}× · {line.unitLabel}
+                    <span className="text-zinc-400"> · {line.tierLabel}</span>
+                  </p>
+                  <p className="text-[10px] text-zinc-400 font-mono truncate">{line.shortId}</p>
+                </div>
+                <p className="text-sm font-semibold text-navy shrink-0">{line.totalLabel}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm font-semibold text-navy text-right">
+            Gesamt {totals.totalLabel}
+            <span className="block text-[11px] font-medium text-zinc-500">
+              {totals.lineCount} Design{totals.lineCount === 1 ? '' : 's'} · {totals.pieceCount} Stück
+            </span>
+          </p>
 
-          <div className="rounded-2xl border border-petrol/20 bg-petrol/5 p-4 space-y-2">
-            <p className="text-xs font-bold uppercase tracking-wider text-petrol">Nur für dich</p>
-            <p className="text-sm font-semibold text-navy">Später ändern</p>
-            <p className="text-xs text-zinc-500 break-all">{links.ccpUrl}</p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => void copy('ccp', links.ccpUrl)}
-                className="min-h-[44px] px-4 rounded-xl border border-petrol/30 text-sm font-semibold text-navy inline-flex items-center gap-2 bg-white"
-              >
-                {copied === 'ccp' ? <Check size={16} /> : <Copy size={16} />}
-                {copied === 'ccp' ? 'Kopiert' : 'Bearbeiten-Link kopieren'}
-              </button>
-            </div>
-          </div>
-
-          <p className="text-xs text-zinc-500 text-center">Bestell-Code: <strong className="text-navy">{links.shortId}</strong></p>
-        </div>
-        <footer className="p-4 border-t border-navy/5 bg-zinc-50/80 safe-bottom">
           <button
             type="button"
-            onClick={go}
-            className="w-full min-h-[52px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+            disabled={checkoutBusy}
+            onClick={onCheckout}
+            className="w-full min-h-[56px] bg-navy text-white rounded-xl font-semibold text-base flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60"
           >
-            <ShoppingCart size={18} />
-            Jetzt zum Warenkorb
+            {checkoutBusy ? <Loader2 size={20} className="animate-spin" /> : <ShoppingCart size={20} />}
+            Zur Kasse · {totals.totalLabel}
             <ArrowRight size={18} />
           </button>
-        </footer>
+          {checkoutHint && (
+            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-snug">
+              {checkoutHint}
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={checkoutBusy}
+            onClick={onAddAnother}
+            className="w-full min-h-[48px] rounded-xl border border-zinc-200 text-sm font-semibold text-navy"
+          >
+            Weiteren Anhänger gestalten
+          </button>
+          <p className="text-center text-[11px] text-zinc-500 leading-snug">
+            Ein einzelnes Design mit 1 Stück bleibt beim Einzelpreis – auch wenn ein anderes Design 50× im Korb liegt.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setShowLinks((v) => !v)}
+            className="w-full text-left text-sm font-semibold text-petrol py-2"
+          >
+            {showLinks ? '− Links ausblenden' : '+ Links zum letzten Design'}
+          </button>
+
+          {showLinks && (
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-navy/10 bg-white p-4 space-y-2">
+                <p className="text-sm font-semibold text-navy">
+                  {links.destinationUrl ? 'NFC-Link (Chip)' : 'Handy-Seite'}
+                </p>
+                <p className="text-xs text-zinc-500 break-all">{links.micrositeUrl}</p>
+                <button
+                  type="button"
+                  onClick={() => void copy('ms', links.micrositeUrl)}
+                  className="min-h-[44px] px-4 rounded-xl border border-zinc-200 text-sm font-semibold text-navy inline-flex items-center gap-2"
+                >
+                  {copied === 'ms' ? <Check size={16} /> : <Copy size={16} />}
+                  {copied === 'ms' ? 'Kopiert' : 'Kopieren'}
+                </button>
+              </div>
+              <div className="rounded-2xl border border-petrol/20 bg-petrol/5 p-4 space-y-2">
+                <p className="text-sm font-semibold text-navy">Später ändern</p>
+                <p className="text-xs text-zinc-500 break-all">{links.ccpUrl}</p>
+                <button
+                  type="button"
+                  onClick={() => void copy('ccp', links.ccpUrl)}
+                  className="min-h-[44px] px-4 rounded-xl border border-petrol/30 text-sm font-semibold text-navy inline-flex items-center gap-2 bg-white"
+                >
+                  {copied === 'ccp' ? <Check size={16} /> : <Copy size={16} />}
+                  {copied === 'ccp' ? 'Kopiert' : 'Bearbeiten-Link kopieren'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -187,6 +323,8 @@ const ConfiguratorPage: React.FC = () => {
   const [viewMode] = useState<'editor' | 'microsite' | 'preview'>(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('preview') === '1') return 'preview';
+    // Geteilter Entwurf hat Vorrang vor id= (kein öffentlicher Microsite-View)
+    if (params.get('draft')) return 'editor';
     return params.get('id') ? 'microsite' : 'editor';
   });
 
@@ -194,11 +332,48 @@ const ConfiguratorPage: React.FC = () => {
   const [authReady, setAuthReady] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   /** Assistent zuerst im gleichen Fenster; danach optional manueller Editor */
-  const [digitalMode, setDigitalMode] = useState<'assist' | 'manual'>('assist');
+  const [digitalMode, setDigitalMode] = useState<'assist' | 'manual'>(() =>
+    isLiveSimple() ? 'manual' : 'assist'
+  );
   /** Zwei Arbeitsphasen: zuerst Anhänger (Produkt), dann Chip-Ziel */
   const [workPhase, setWorkPhase] = useState<'site' | 'hardware'>('hardware');
   const [shopifyGuideOpen, setShopifyGuideOpen] = useState(false);
   const [deliveryLinks, setDeliveryLinks] = useState<DeliveryLinks | null>(null);
+  const [orderQuantity, setOrderQuantity] = useState(1);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutHint, setCheckoutHint] = useState<string | null>(null);
+  const [basketCount, setBasketCount] = useState(() => {
+    try {
+      return loadCheckoutBasket().length;
+    } catch {
+      return 0;
+    }
+  });
+
+  useEffect(() => {
+    if (isLiveSimple()) {
+      setCheckoutHint(null);
+      return;
+    }
+    let cancelled = false;
+    void probeDraftOrderFunction().then((p) => {
+      if (cancelled) return;
+      if (!p.reachable) {
+        setCheckoutHint(
+          'Kassen-Function noch nicht erreichbar – Bestellen öffnet ggf. den normalen Shopify-Warenkorb. Setup: PHASE0_GO_LIVE.md'
+        );
+      } else if (!p.configured) {
+        setCheckoutHint(
+          'Draft Orders Fast fertig: Function ist da, Shopify-Secrets in Supabase fehlen noch (SHOPIFY_SHOP_DOMAIN + Token).'
+        );
+      } else {
+        setCheckoutHint(null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     getSession().then((s) => {
@@ -266,7 +441,16 @@ const ConfiguratorPage: React.FC = () => {
       return null;
     }
   }, [svgContent]);
+  const logoHealth = useMemo(() => assessLogoHealth(svgContent), [svgContent]);
   const [selectedProductId, setSelectedProductId] = useState<string>(() => PRODUCTS[0]?.id ?? 'keychain');
+  const checkoutPrice = useMemo(
+    () => resolveCheckoutPrice(selectedProductId, orderQuantity),
+    [selectedProductId, orderQuantity]
+  );
+  const liveSimple = isLiveSimple();
+  const orderCtaLabel = liveSimple
+    ? `${t('cta.order')}${orderQuantity > 1 ? ` (${orderQuantity})` : ''}`
+    : `${t('cta.order')}${orderQuantity > 1 ? ` (${orderQuantity})` : ''} · ${checkoutPrice.totalLabel}`;
   const [activeDept, setActiveDept] = useState<Department>('digital');
   const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('preview');
   const [previewType, setPreviewType] = useState<'3d' | 'digital'>('digital');
@@ -281,6 +465,38 @@ const ConfiguratorPage: React.FC = () => {
   });
   const draftSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Geteilten Entwurf aus ?draft= laden (ohne Checkout)
+  useEffect(() => {
+    if (viewMode !== 'editor') return;
+    const encoded = readDraftParamFromLocation(window.location.search);
+    if (!encoded) return;
+    let cancelled = false;
+    void decodeDraftShare(encoded).then((result) => {
+      if (cancelled) return;
+      if (result.success) {
+        setConfig(result.config);
+        setToastMessage('Geteilter Entwurf geladen');
+        if (toastRef.current) clearTimeout(toastRef.current);
+        toastRef.current = setTimeout(() => {
+          setToastMessage(null);
+          toastRef.current = null;
+        }, 2800);
+        try {
+          const u = new URL(window.location.href);
+          u.searchParams.delete('draft');
+          window.history.replaceState({}, '', `${u.pathname}${u.search}${u.hash}`);
+        } catch {
+          /* ignore */
+        }
+      } else {
+        showError(result.error, 'Teilen-Link');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewMode]);
 
   const viewerRef = useRef<KeychainPreviewHandle>(null);
 
@@ -337,6 +553,28 @@ const ConfiguratorPage: React.FC = () => {
     setPreviewConfig(config);
     const url = `${window.location.origin}${window.location.pathname}?preview=1`;
     window.open(url, '_blank', 'noopener,noreferrer');
+  }, [config]);
+
+  const handleShareDraft = useCallback(async () => {
+    try {
+      const url = await buildDraftShareUrl(window.location.origin, config);
+      if (!url) {
+        showError(
+          'Der Entwurf ist zu groß für einen Link. Weniger Inhalte oder kürzere Texte helfen.',
+          'Teilen'
+        );
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setToastMessage('Teilen-Link kopiert (ohne Bestellung)');
+      if (toastRef.current) clearTimeout(toastRef.current);
+      toastRef.current = setTimeout(() => {
+        setToastMessage(null);
+        toastRef.current = null;
+      }, 2800);
+    } catch {
+      showError('Link konnte nicht kopiert werden.', 'Teilen');
+    }
   }, [config]);
 
   const handleImportConfig = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -414,17 +652,19 @@ const ConfiguratorPage: React.FC = () => {
     setSavingStep('screenshot');
     const shortId = generateShortId();
     const writeToken = generateWriteToken();
-    // STL parallel starten – wartet nicht auf Critical Path
-    const stlExportPromise =
-      viewerRef.current?.exportSTL?.().catch((e) => {
-        console.warn('STL export failed:', e);
-        return null;
-      }) ?? Promise.resolve(null);
+    const printAssets = buildProductionPrintAssets(svgContent);
+    const productionSvg = printAssets?.productionSvg ?? null;
+    // STL parallel starten – wartet nicht auf Critical Path (Druck-SVG als Quelle)
+    const stlExportPromise = exportKeychainStl(config, productionSvg).catch((e) => {
+      console.warn('STL export failed:', e);
+      return null;
+    });
 
     try {
       let finalImageUrl = '';
+      let printPngUrl: string | null = null;
+      setSavingStep('upload');
       if (screenshotDataUrl) {
-        setSavingStep('upload');
         const res = await fetch(screenshotDataUrl);
         if (!res.ok) throw new Error('Screenshot konnte nicht geladen werden');
         const blob = await res.blob();
@@ -435,8 +675,21 @@ const ConfiguratorPage: React.FC = () => {
         finalImageUrl = url;
       }
 
+      if (printAssets?.printPngBlob && supabase) {
+        const printPath = storagePath(`print/${shortId}_`, 'logo.png');
+        printPngUrl = await uploadAndGetPublicUrl(supabase, printPath, printAssets.printPngBlob);
+      }
+
       setSavingStep('db');
       const product = PRODUCTS.find((p) => p.id === selectedProductId) ?? PRODUCTS[0];
+      const priced = resolveCheckoutPrice(selectedProductId, orderQuantity);
+      const pricingSnapshot = buildPricingSnapshot({
+        productId: priced.productId,
+        quantity: priced.quantity,
+        unitPriceCents: priced.unitPriceCents,
+        totalCents: priced.totalCents,
+        tierLabel: priced.tierLabel,
+      });
       const configId = crypto.randomUUID();
       const { error: dbError } = await supabase.from('nfc_configs').insert([{
         id: configId,
@@ -464,15 +717,19 @@ const ConfiguratorPage: React.FC = () => {
           logoRotation: config.logoRotation,
           mirrorX: !!config.mirrorX,
           hasChain: config.hasChain !== false,
-          logo_svg: svgContent ? svgForProduction(svgContent) : null,
+          logo_svg: productionSvg,
+          print_png_url: printPngUrl,
           engraveText: config.engraveText || '',
           engraveLayout: config.engraveLayout || 'logo_above',
           engraveGap: config.engraveGap ?? 40,
           surfaceColor: config.surfaceColor || null,
           textColor: config.textColor || null,
           layoutMode: config.layoutMode || 'landing',
+          navEnabled: config.navEnabled !== false,
+          faviconUrl: config.faviconUrl && config.faviconUrl.startsWith('https://') ? config.faviconUrl : null,
           landingMode: isExternal ? 'external' : 'microsite',
           externalUrl: destinationUrl || '',
+          pricing: pricingSnapshot,
         }
       }]);
       if (dbError) throw dbError;
@@ -495,11 +752,56 @@ const ConfiguratorPage: React.FC = () => {
 
       setSavingStep('done');
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      const variantId = product?.variantId ?? '56564338262361';
+      const variantId = priced.variantId;
       const micrositeUrl = buildMicrositeUrl(baseUrl, shortId);
       const ccpUrl = buildCcpEditUrl(baseUrl, shortId, writeToken);
-      const cartUrl = buildShopifyCartUrl(variantId, shortId, finalImageUrl, baseUrl, writeToken, destinationUrl);
-      const links: DeliveryLinks = { shortId, micrositeUrl, ccpUrl, cartUrl, destinationUrl };
+      const fallbackCartUrl = buildShopifyCartUrl(
+        variantId,
+        shortId,
+        finalImageUrl,
+        baseUrl,
+        writeToken,
+        destinationUrl,
+        priced.quantity,
+        priced.cartPropertyValue
+      );
+
+      const basketLine: CheckoutBasketLine = {
+        shortId,
+        productId: priced.productId,
+        productTitle: priced.productName,
+        quantity: priced.quantity,
+        unitPriceCents: priced.unitPriceCents,
+        totalCents: priced.totalCents,
+        tierLabel: priced.tierLabel,
+        unitLabel: priced.unitLabel,
+        totalLabel: priced.totalLabel,
+        priceHint: priced.cartPropertyValue,
+        previewUrl: finalImageUrl || undefined,
+        micrositeUrl,
+        ccpUrl,
+        destinationUrl,
+        variantId,
+      };
+      // Live: immer nur dieses eine Design – kein Multi-Korb
+      const nextBasket = isLiveSimple()
+        ? [basketLine]
+        : upsertBasketLine(loadCheckoutBasket(), basketLine);
+      if (isLiveSimple()) {
+        clearCheckoutBasket();
+      } else {
+        saveCheckoutBasket(nextBasket);
+      }
+      setBasketCount(nextBasket.length);
+
+      const links: DeliveryLinks = {
+        shortId,
+        micrositeUrl,
+        ccpUrl,
+        cartUrl: fallbackCartUrl,
+        destinationUrl,
+        basket: nextBasket,
+      };
       try {
         localStorage.setItem(LAST_DELIVERY_KEY, JSON.stringify({ ...links, savedAt: Date.now() }));
       } catch {
@@ -524,10 +826,101 @@ const ConfiguratorPage: React.FC = () => {
     } catch (err) {
       console.error('Save error:', err);
       setSavingStep('idle');
-      const errorDetails = getDetailedError(err);
-      showError(errorDetails.msg, errorDetails.title);
+      const friendly = customerSaveError(err);
+      showError(friendly.msg, friendly.title);
     }
-  }, [config, selectedProductId, svgContent]);
+  }, [config, selectedProductId, svgContent, orderQuantity]);
+
+  const handleBasketCheckout = useCallback(async () => {
+    if (!deliveryLinks?.basket.length) return;
+
+    // Live-Shop: direkt Shopify-Warenkorb (bewährt, keine Draft-Secrets nötig)
+    if (isLiveSimple()) {
+      clearCheckoutBasket();
+      setBasketCount(0);
+      const url = deliveryLinks.cartUrl;
+      setDeliveryLinks(null);
+      window.location.href = url;
+      return;
+    }
+
+    setCheckoutBusy(true);
+    try {
+      const lines = deliveryLinks.basket.map((l) => ({
+        shortId: l.shortId,
+        productId: l.productId,
+        productTitle: l.productTitle,
+        quantity: l.quantity,
+        unitPriceCents: l.unitPriceCents,
+        previewUrl: l.previewUrl,
+        micrositeUrl: l.micrositeUrl,
+        ccpUrl: l.ccpUrl,
+        destinationUrl: l.destinationUrl,
+        variantId: l.variantId,
+        priceHint: l.priceHint,
+      }));
+      const draft = await createDraftCheckoutResult({ lines });
+      if (draft.ok) {
+        clearCheckoutBasket();
+        setBasketCount(0);
+        setDeliveryLinks(null);
+        window.location.href = draft.invoiceUrl;
+        return;
+      }
+
+      if (draft.reason === 'not_configured' || draft.reason === 'setup') {
+        setCheckoutHint(draft.message);
+        if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
+          const goCart = window.confirm(
+            `${draft.message}\n\nStattdessen den normalen Shopify-Warenkorb öffnen? (Preis dann aus dem Shop-Katalog)`
+          );
+          if (goCart) {
+            clearCheckoutBasket();
+            setBasketCount(0);
+            setDeliveryLinks(null);
+            window.location.href = deliveryLinks.cartUrl;
+          }
+          return;
+        }
+        showError(draft.message, 'Kasse noch nicht eingerichtet');
+        return;
+      }
+
+      if (draft.reason === 'rate_limited') {
+        showError(draft.message, 'Kurz warten');
+        return;
+      }
+
+      if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
+        const goCart = window.confirm(
+          `Kasse mit berechnetem Preis hat nicht geklappt:\n${draft.message}\n\nShopify-Warenkorb als Notlösung öffnen?`
+        );
+        if (goCart) {
+          clearCheckoutBasket();
+          setBasketCount(0);
+          setDeliveryLinks(null);
+          window.location.href = deliveryLinks.cartUrl;
+        }
+        return;
+      }
+
+      showError(draft.message, 'Kasse fehlgeschlagen');
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }, [deliveryLinks]);
+
+  const handleAddAnotherDesign = useCallback(() => {
+    setDeliveryLinks(null);
+    setOrderQuantity(1);
+    setWorkPhase('hardware');
+    setToastMessage('Nächstes Design – Stückzahl wieder 1 (eigener Preis)');
+    if (toastRef.current) clearTimeout(toastRef.current);
+    toastRef.current = setTimeout(() => {
+      setToastMessage(null);
+      toastRef.current = null;
+    }, 3200);
+  }, []);
 
   const initiateSave = useCallback(async () => {
     try {
@@ -542,15 +935,22 @@ const ConfiguratorPage: React.FC = () => {
         }
         setConfig((prev) => ({ ...prev, externalUrl: url }));
       }
+      const health = assessLogoHealth(svgContent);
+      if (!isLiveSimple() && health.willSimplifyForPrint) {
+        const ok = window.confirm(
+          `${health.message || t('legal.preview')}\n\nTrotzdem zur Bestellung weiter?`
+        );
+        if (!ok) return;
+      }
       setSavingStep('screenshot');
       const screenshot = (await viewerRef.current?.takeScreenshot()) || null;
       await executeSave(screenshot);
     } catch (err) {
       console.error('Screenshot error:', err);
       setSavingStep('idle');
-      showError('Bitte versuche es erneut.', 'Fehler beim Erstellen des Screenshots.');
+      showError('Bitte nochmal tippen.', 'Vorschau konnte nicht erstellt werden.');
     }
-  }, [config.landingMode, config.externalUrl, executeSave]);
+  }, [config.landingMode, config.externalUrl, executeSave, svgContent]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -673,11 +1073,11 @@ const ConfiguratorPage: React.FC = () => {
       {deliveryLinks && (
         <DeliveryHandoffModal
           links={deliveryLinks}
-          onContinue={() => {
-            const url = deliveryLinks.cartUrl;
-            setDeliveryLinks(null);
-            window.location.href = url;
-          }}
+          checkoutBusy={checkoutBusy}
+          checkoutHint={checkoutHint}
+          simple={isLiveSimple()}
+          onCheckout={() => void handleBasketCheckout()}
+          onAddAnother={handleAddAnotherDesign}
         />
       )}
       {toastMessage && (
@@ -702,6 +1102,7 @@ const ConfiguratorPage: React.FC = () => {
               >
                 <ShoppingCart size={14} />
                 Bestellen
+                {basketCount > 0 ? ` (${basketCount})` : ''}
               </button>
             )}
             <div className="relative">
@@ -725,8 +1126,11 @@ const ConfiguratorPage: React.FC = () => {
                     <a href="/ccp" className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Smartphone size={14} /> Kunden-Panel</a>
                     <button type="button" onClick={() => { handleExportConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Download size={14} /> Export</button>
                     <label className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"><Upload size={14} /> Import<input type="file" accept=".json,application/json" onChange={(e) => { handleImportConfig(e); setUserMenuOpen(false); }} className="hidden" /></label>
+                    <button type="button" onClick={() => { void handleShareDraft(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><Share2 size={14} /> Entwurf teilen</button>
                     <button type="button" onClick={() => { handlePreviewInNewTab(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ExternalLink size={14} /> So sehen es Kunden</button>
-                    <button type="button" onClick={() => { setShopifyGuideOpen(true); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ShoppingCart size={14} /> Shopify: Bestellmail</button>
+                    {!liveSimple && (
+                      <button type="button" onClick={() => { setShopifyGuideOpen(true); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><ShoppingCart size={14} /> Shopify: Bestellmail</button>
+                    )}
                     <button type="button" onClick={() => { handleResetConfig(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-700 hover:bg-zinc-50"><RotateCcw size={14} /> Zurücksetzen</button>
                     <div className="border-t border-zinc-100 mt-1 pt-1">
                       <button type="button" onClick={() => { signOut(); setUserMenuOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"><LogOut size={14} /> Abmelden</button>
@@ -786,7 +1190,7 @@ const ConfiguratorPage: React.FC = () => {
               </p>
               <p className="text-xs text-zinc-500 mt-0.5 max-w-xl">
                 {workPhase === 'hardware'
-                  ? 'Gestalte deinen Anhänger – die Live-Vorschau zeigt die Wirkung. Hinweise zur Herstellung findest du unten links.'
+                  ? 'Logo und Text platzieren – rechts siehst du, wie der Anhänger ungefähr aussieht.'
                   : (config.landingMode === 'external'
                     ? 'Optional: Website, Instagram oder Shop – wohin der Chip nach dem Scannen öffnet.'
                     : 'Optional: kleine Handy-Seite für deine Kunden – oder eigene URL wählen.')}
@@ -803,13 +1207,23 @@ const ConfiguratorPage: React.FC = () => {
                 </button>
               )}
               {workPhase === 'hardware' && (
-                <button
-                  type="button"
-                  onClick={goToSite}
-                  className="min-h-[40px] px-4 rounded-xl bg-navy text-white text-xs font-semibold hover:bg-navy/90"
-                >
-                  Weiter: Chip-Link →
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={goToSite}
+                    className="min-h-[40px] px-3 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                  >
+                    {t('cta.chip.optional')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void initiateSave()}
+                    className="min-h-[40px] px-4 rounded-xl bg-navy text-white text-xs font-semibold hover:bg-navy/90 inline-flex items-center gap-1.5"
+                  >
+                    <ShoppingCart size={14} />
+                    {t('cta.order.direct')}
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -1000,13 +1414,44 @@ const ConfiguratorPage: React.FC = () => {
                 </div>
               </div>
               <footer className="hidden md:flex shrink-0 p-4 border-t border-zinc-200/80 bg-white flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="order-qty-site">
+                    Stückzahl
+                  </label>
+                  <input
+                    id="order-qty-site"
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={orderQuantity}
+                    onChange={(e) => setOrderQuantity(clampOrderQuantity(e.target.value))}
+                    className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
+                  />
+                </div>
+                <p className="text-[11px] text-zinc-500 leading-snug">
+                  {liveSimple
+                    ? 'Den Preis und die Zahlung siehst du im Shopify-Warenkorb.'
+                    : bulkHintForQuantity(orderQuantity)}
+                </p>
+                {!liveSimple && (
+                  <p className="text-sm font-semibold text-navy leading-snug">
+                    {checkoutPrice.unitLabel}
+                    {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                  </p>
+                )}
+                {!liveSimple && (
+                  <p className="text-[11px] text-zinc-500 leading-snug">
+                    {pricingHintForQuantity(selectedProductId, orderQuantity)}
+                  </p>
+                )}
+                <p className="text-[11px] text-zinc-500 leading-snug">{t('legal.preview.short')}</p>
                 <button
                   type="button"
                   onClick={() => void initiateSave()}
                   className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
                   <ShoppingCart size={18} />
-                  Fertig – bestellen
+                  {orderCtaLabel}
                 </button>
                 <button
                   type="button"
@@ -1033,6 +1478,9 @@ const ConfiguratorPage: React.FC = () => {
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                       </select>
+                      <p className="text-[11px] text-zinc-500 mt-2 leading-snug">
+                        {filamentCustomerHint(selectedProductId)}
+                      </p>
                     </div>
                   )}
                   <Controls
@@ -1048,16 +1496,51 @@ const ConfiguratorPage: React.FC = () => {
                 </div>
               </div>
               <footer className="hidden md:flex shrink-0 p-4 border-t border-zinc-200/80 bg-white flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="order-qty-hw">
+                    Stückzahl
+                  </label>
+                  <input
+                    id="order-qty-hw"
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={orderQuantity}
+                    onChange={(e) => setOrderQuantity(clampOrderQuantity(e.target.value))}
+                    className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
+                  />
+                </div>
+                <p className="text-[11px] text-zinc-500 leading-snug">
+                  {liveSimple
+                    ? 'Den Preis und die Zahlung siehst du im Shopify-Warenkorb.'
+                    : bulkHintForQuantity(orderQuantity)}
+                </p>
+                {!liveSimple && (
+                  <p className="text-sm font-semibold text-navy leading-snug">
+                    {checkoutPrice.unitLabel}
+                    {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                  </p>
+                )}
+                {!liveSimple && (
+                  <p className="text-[11px] text-zinc-500 leading-snug">
+                    {pricingHintForQuantity(selectedProductId, orderQuantity)}
+                  </p>
+                )}
+                <p className="text-[11px] text-zinc-500 leading-snug">{t('legal.preview.short')}</p>
+                <button
+                  type="button"
+                  onClick={() => void initiateSave()}
+                  className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+                >
+                  <ShoppingCart size={18} />
+                  {orderCtaLabel}
+                </button>
                 <button
                   type="button"
                   onClick={goToSite}
-                  className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+                  className="w-full min-h-[40px] text-xs font-semibold text-zinc-600 hover:text-navy"
                 >
-                  Weiter: Chip-Link →
-                </button>
-                <button type="button" onClick={() => void initiateSave()} className="w-full min-h-[44px] rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 flex items-center justify-center gap-2">
-                  <ShoppingCart size={16} />
-                  Direkt bestellen
+                  {t('cta.chip.optional')} →
                 </button>
               </footer>
             </>
@@ -1075,26 +1558,63 @@ const ConfiguratorPage: React.FC = () => {
             ) : (
               <KeychainPreview ref={viewerRef} config={config} svgContent={svgContent} />
             )}
+            {workPhase === 'hardware' && logoHealth.level === 'warn' && logoHealth.message && (
+              <div
+                className="absolute left-3 right-3 bottom-3 md:left-6 md:right-auto md:max-w-md rounded-xl px-3 py-2 text-xs font-medium shadow-sm border bg-amber-50 border-amber-200 text-amber-950"
+                role="status"
+              >
+                {logoHealth.message}
+              </div>
+            )}
           </div>
           <div className="md:hidden shrink-0 p-4 bg-white border-t border-zinc-200 safe-bottom">
             {workPhase === 'hardware' ? (
               <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="order-qty-m">
+                    Stückzahl
+                  </label>
+                  <input
+                    id="order-qty-m"
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={orderQuantity}
+                    onChange={(e) => setOrderQuantity(clampOrderQuantity(e.target.value))}
+                    className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
+                  />
+                </div>
+                {!liveSimple && (
+                  <p className="text-sm font-semibold text-navy leading-snug">
+                    {checkoutPrice.unitLabel}
+                    {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                  </p>
+                )}
+                {liveSimple && (
+                  <p className="text-[11px] text-zinc-500 leading-snug">
+                    Preis und Zahlung im Shopify-Warenkorb.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void initiateSave()}
+                  className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+                >
+                  <ShoppingCart size={18} />
+                  {orderCtaLabel}
+                </button>
                 <button
                   type="button"
                   onClick={goToSite}
-                  className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+                  className="w-full min-h-[40px] text-xs font-semibold text-zinc-600"
                 >
-                  Weiter: Chip-Link →
-                </button>
-                <button type="button" onClick={() => void initiateSave()} className="w-full min-h-[44px] rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 flex items-center justify-center gap-2">
-                  <ShoppingCart size={16} />
-                  Direkt bestellen
+                  {t('cta.chip.optional')} →
                 </button>
               </div>
             ) : (
               <button type="button" onClick={() => void initiateSave()} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
                 <ShoppingCart size={18} />
-                Fertig – bestellen
+                {orderCtaLabel}
               </button>
             )}
           </div>
@@ -1104,7 +1624,7 @@ const ConfiguratorPage: React.FC = () => {
               <p className="font-black uppercase tracking-wider text-navy text-sm">
                 {SAVING_LABELS[savingStep] || 'Wird vorbereitet…'}
               </p>
-              <p className="text-[10px] text-zinc-500 mt-1">Danach geht’s zur Bestellung</p>
+              <p className="text-[10px] text-zinc-500 mt-1">Gleich geht’s zum Warenkorb</p>
             </div>
           )}
         </main>

@@ -34,6 +34,12 @@ export interface BlockRow {
   sort_order: number;
 }
 
+
+function numOr(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function mapBlockRow(row: BlockRow): NFCBlock {
   return {
     id: row.id,
@@ -75,20 +81,24 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     surfaceColor: (plate.surfaceColor as string | undefined) ?? base.surfaceColor,
     textColor: (plate.textColor as string | undefined) ?? base.textColor,
     layoutMode: (plate.layoutMode as ModelConfig['layoutMode']) ?? base.layoutMode ?? 'landing',
+    navEnabled: plate.navEnabled !== false,
+    faviconUrl: typeof plate.faviconUrl === 'string' && plate.faviconUrl.startsWith('https://')
+      ? plate.faviconUrl
+      : undefined,
     landingMode: (plate.landingMode as ModelConfig['landingMode']) === 'external' ? 'external' : 'microsite',
     externalUrl: typeof plate.externalUrl === 'string' ? plate.externalUrl : '',
     nfcBlocks: blocksError ? [] : (blocks || []).map((b: BlockRow) => mapBlockRow(b)),
     baseType: (plate.baseType as ModelConfig['baseType']) ?? base.baseType,
-    plateWidth: Number(plate.plateWidth) ?? base.plateWidth,
-    plateHeight: Number(plate.plateHeight) ?? base.plateHeight,
-    plateDepth: Number(plate.plateDepth) ?? base.plateDepth,
-    logoScale: Number(plate.logoScale) ?? base.logoScale,
+    plateWidth: numOr(plate.plateWidth, base.plateWidth),
+    plateHeight: numOr(plate.plateHeight, base.plateHeight),
+    plateDepth: numOr(plate.plateDepth, base.plateDepth),
+    logoScale: numOr(plate.logoScale, base.logoScale),
     logoColor: (plate.logoColor as string) ?? base.logoColor,
     plateColor: (plate.plateColor as string) ?? base.plateColor ?? '#F8F5F0',
-    logoDepth: Number(plate.logoDepth) ?? base.logoDepth,
-    logoPosX: Number(plate.logoPosX) ?? base.logoPosX,
-    logoPosY: Number(plate.logoPosY) ?? base.logoPosY,
-    logoRotation: Number(plate.logoRotation) ?? base.logoRotation,
+    logoDepth: numOr(plate.logoDepth, base.logoDepth),
+    logoPosX: numOr(plate.logoPosX, base.logoPosX),
+    logoPosY: numOr(plate.logoPosY, base.logoPosY),
+    logoRotation: numOr(plate.logoRotation, base.logoRotation),
     mirrorX: plate.mirrorX === true,
     hasChain: plate.hasChain !== false,
     engraveText: typeof plate.engraveText === 'string' ? plate.engraveText : '',
@@ -113,11 +123,17 @@ export async function getConfigsList(): Promise<ConfigRow[]> {
 
   const { data, error } = await supabase
     .from('nfc_configs')
-    .select('id, short_id, profile_title, preview_image, stl_url, created_at')
+    .select('id, short_id, profile_title, preview_image, stl_url, plate_data, created_at')
     .order('created_at', { ascending: false });
 
   if (error) return [];
   return (data as ConfigRow[]) || [];
+}
+
+/** Druck-PNG-URL aus plate_data (falls beim Speichern hochgeladen). */
+export function getPrintPngUrl(row: ConfigRow): string | null {
+  const url = row.plate_data?.print_png_url;
+  return typeof url === 'string' && url.startsWith('https://') ? url : null;
 }
 
 /**
@@ -235,12 +251,12 @@ export async function updateLandingTarget(
 }
 
 /**
- * Scan speichern (anon INSERT erlaubt).
+ * Scan speichern (RPC mit Rate-Limit, max. 20/min/config).
  */
 export async function recordScan(configId: string): Promise<void> {
-  if (!supabase) return;
-
-  await supabase.from('nfc_scans').insert([{ config_id: configId }]);
+  if (!supabase || !configId) return;
+  const { error } = await supabase.rpc('record_nfc_scan', { p_config_id: configId });
+  if (error) console.warn('recordScan:', error.message);
 }
 
 /**

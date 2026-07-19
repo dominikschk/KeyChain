@@ -15,6 +15,8 @@ import {
   Check,
   Save,
   Pencil,
+  History,
+  RotateCcw,
 } from 'lucide-react';
 import {
   getConfigByShortId,
@@ -29,6 +31,13 @@ import { showError } from '../lib/utils';
 import { Controls } from '../components/Controls';
 import { BlockRenderer } from '../components/Microsite';
 import type { ModelConfig } from '../types';
+import {
+  applyCcpSnapshot,
+  loadLocalCcpHistory,
+  pushCcpSnapshot,
+  type CcpSnapshot,
+} from '../lib/ccpHistory';
+import { buildScanInsight } from '../lib/scanInsights';
 
 function getShortIdFromUrl(): string | null {
   if (typeof window === 'undefined') return null;
@@ -60,6 +69,7 @@ export const CcpPage: React.FC = () => {
   const [savedOk, setSavedOk] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editTab, setEditTab] = useState<'edit' | 'preview'>('edit');
+  const [ccpHistory, setCcpHistory] = useState<CcpSnapshot[]>([]);
 
   useEffect(() => {
     // Defense-in-Depth: Write-Token in URL nicht per Referer an Drittseiten leaken
@@ -88,6 +98,7 @@ export const CcpPage: React.FC = () => {
         }
         setConfig(result.config);
         setConfigId(result.configId);
+        setCcpHistory(loadLocalCcpHistory(result.configId));
       })
       .catch((e) => {
         setError(e?.message ?? 'Fehler beim Laden.');
@@ -165,6 +176,9 @@ export const CcpPage: React.FC = () => {
     setSaving(true);
     setSavedOk(false);
     try {
+      const history = pushCcpSnapshot(configId, config);
+      setCcpHistory(history);
+
       const profileResult = await updateConfigProfile(configId, token, {
         profileTitle: config.profileTitle.trim(),
         headerImageUrl: config.headerImageUrl ?? null,
@@ -201,6 +215,10 @@ export const CcpPage: React.FC = () => {
       setSaving(false);
     }
   }, [config, configId]);
+
+  const restoreSnapshot = useCallback((snap: CcpSnapshot) => {
+    setConfig((prev) => (prev ? applyCcpSnapshot(prev, snap) : prev));
+  }, []);
 
   const noopUpload = useMemo(() => () => {}, []);
 
@@ -302,19 +320,31 @@ export const CcpPage: React.FC = () => {
                 <BarChart3 size={18} />
                 Chip-Scans
               </h2>
-              <p className="text-sm text-zinc-500 mb-4">
-                Anzahl Aufrufe über den NFC-Chip.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-center">
-                  <p className="text-2xl font-extrabold text-navy">{scanTotal ?? '—'}</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Gesamt</p>
-                </div>
-                <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-center">
-                  <p className="text-2xl font-extrabold text-navy">{scan30d ?? '—'}</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Letzte 30 Tage</p>
-                </div>
-              </div>
+              {(() => {
+                const insight = buildScanInsight(scanTotal ?? 0, scan30d ?? 0);
+                return (
+                  <>
+                    <p className="text-sm font-semibold text-navy">{insight.headline}</p>
+                    <p className="text-xs text-zinc-500 mt-1 mb-4 leading-snug">{insight.detail}</p>
+                    <div className="h-2 rounded-full bg-zinc-100 overflow-hidden mb-4" aria-hidden>
+                      <div
+                        className="h-full rounded-full bg-petrol transition-all"
+                        style={{ width: `${insight.activityPct}%` }}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-center">
+                        <p className="text-2xl font-extrabold text-navy">{scanTotal ?? '—'}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Gesamt</p>
+                      </div>
+                      <div className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 text-center">
+                        <p className="text-2xl font-extrabold text-navy">{scan30d ?? '—'}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Letzte 30 Tage</p>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </section>
 
             {canEdit && config.landingMode === 'external' && (
@@ -334,6 +364,39 @@ export const CcpPage: React.FC = () => {
                   placeholder="https://…"
                   className="w-full p-4 rounded-2xl border border-navy/10 text-sm bg-cream font-medium outline-none focus:border-petrol/40"
                 />
+              </section>
+            )}
+
+            {canEdit && config.landingMode !== 'external' && ccpHistory.length > 0 && (
+              <section className="card p-5 space-y-3">
+                <h2 className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy flex items-center gap-2">
+                  <History size={18} />
+                  Frühere Versionen
+                </h2>
+                <p className="text-xs text-zinc-500 leading-snug">
+                  Beim Speichern wird der vorherige Stand gemerkt. Wiederherstellen lädt ihn in den Editor – danach noch einmal speichern.
+                </p>
+                <ul className="space-y-2">
+                  {ccpHistory.map((snap) => (
+                    <li
+                      key={snap.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-navy truncate">{snap.label}</p>
+                        <p className="text-[10px] text-zinc-500">{snap.nfcBlocks.length} Inhalte</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => restoreSnapshot(snap)}
+                        className="inline-flex items-center gap-1.5 shrink-0 px-3 py-2 rounded-lg bg-white border border-zinc-200 text-xs font-semibold text-navy hover:bg-cream"
+                      >
+                        <RotateCcw size={14} />
+                        Laden
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </section>
             )}
 

@@ -243,7 +243,15 @@ export function splitBlocksForLanding(blocks: NFCBlock[]): {
   const heroLine = list.find((b) => b.type === 'headline');
   const stories = list.filter((b) => b.type === 'text' || b.type === 'image');
   const actions = list.filter((b) => b.type === 'magic_button');
-  const extras = list.filter((b) => b.type === 'map' || b.type === 'spacer');
+  const extras = list.filter(
+    (b) =>
+      b.type === 'map' ||
+      b.type === 'spacer' ||
+      b.type === 'faq' ||
+      b.type === 'hours' ||
+      b.type === 'gallery' ||
+      b.type === 'prices'
+  );
   return { heroLine, stories, actions, extras };
 }
 

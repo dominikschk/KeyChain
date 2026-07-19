@@ -139,7 +139,7 @@ export const ShopifyGuide: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                   <p className="text-sm text-amber-200 font-bold">Vorschaubild im Warenkorb</p>
                   <p className="text-xs text-zinc-400 leading-relaxed">
                     Optional: Damit das Vorschaubild im Warenkorb erscheint, den Standard-Code für{' '}
-                    <code>item.properties</code> ersetzen. Properties mit Unterstrich (z. B. _CCP-URL) bleiben
+                    <code>item.properties</code> ersetzen. Properties mit Unterstrich (z. B. _CCP-URL) bleiben
                     versteckt.
                   </p>
                 </div>

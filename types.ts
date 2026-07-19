@@ -18,7 +18,7 @@ export type LandingMode = 'microsite' | 'external';
 
 export interface NFCBlock {
   id: string;
-  type: 'text' | 'image' | 'magic_button' | 'spacer' | 'headline' | 'map';
+  type: 'text' | 'image' | 'magic_button' | 'spacer' | 'headline' | 'map' | 'faq' | 'hours' | 'gallery' | 'prices';
   content: string;
   title?: string;
   buttonType?: MagicButtonType;
@@ -43,6 +43,15 @@ export interface NFCBlock {
     description?: string;
     height?: number;
     address?: string;
+    faqJson?: string;
+    hoursText?: string;
+    galleryUrls?: string;
+    /** left | center | right */
+    align?: 'left' | 'center' | 'right';
+    /** Extra Abstand oben/unten in px */
+    padY?: number;
+    /** Mini-Seite: nur auf Kontakt, nur auf Start, oder automatisch */
+    page?: 'home' | 'kontakt' | 'auto';
   };
 }
 
@@ -80,6 +89,10 @@ export interface ModelConfig {
   theme: ProfileTheme;
   /** stack = klassische Kacheln, landing = Mini-Website mit Hero/Sections */
   layoutMode?: LayoutMode;
+  /** Sticky-Menü mit Ankern / Kontakt-Seite */
+  navEnabled?: boolean;
+  /** Favicon der öffentlichen Microsite (https) */
+  faviconUrl?: string;
   /** microsite = Konfigurator-Seite, external = eigene Website/Instagram/Shop */
   landingMode?: LandingMode;
   /** Ziel-URL wenn landingMode === 'external' (http/https) */

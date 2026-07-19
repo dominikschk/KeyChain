@@ -1,5 +1,5 @@
-
-import { defineConfig } from 'vite';
+/// <reference types="vitest/config" />
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -23,5 +23,9 @@ export default defineConfig({
       },
     },
     chunkSizeWarningLimit: 900,
+  },
+  test: {
+    environment: 'node',
+    include: ['lib/**/*.test.ts', 'lib/__tests__/**/*.test.ts'],
   },
 });

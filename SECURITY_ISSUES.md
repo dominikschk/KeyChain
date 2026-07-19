@@ -116,11 +116,26 @@ Dieses Dokument listet die gefundenen Sicherheitslücken, den jeweiligen Fix und
 
 ## Deployment-Checkliste
 
-1. [ ] `supabase-schema.sql` im Supabase SQL Editor ausführen
+1. [ ] `supabase-schema.sql` im Supabase SQL Editor ausführen (inkl. Q1: Order-Upsert + `record_nfc_scan`)
 2. [ ] Edge Function `send-microsite-email` neu deployen
-3. [ ] Secret `ALLOWED_MICROSITE_HOSTS` setzen (empfohlen)
-4. [ ] App neu bauen/deployen (Short-ID, write_token, Storage-Pfade)
-5. [ ] Smoke-Test: Konfigurator speichern → Shopify (`_CCP-URL`) → Microsite → CCP-Edit → Admin-Login
+3. [ ] Edge Function `shopify-order-webhook` deployen (`--no-verify-jwt`) – siehe [`SHOPIFY_WEBHOOK.md`](SHOPIFY_WEBHOOK.md)
+4. [ ] Secret `ALLOWED_MICROSITE_HOSTS` setzen (empfohlen)
+5. [ ] Secret `SHOPIFY_WEBHOOK_SECRET` setzen + Shopify Webhook `orders/paid`
+6. [ ] App neu bauen/deployen (Short-ID, write_token, Storage-Pfade, Sentry optional)
+7. [ ] Smoke-Test: Konfigurator speichern → Shopify (`_CCP-URL`) → Microsite → CCP-Edit → Admin-Login
+8. [ ] Smoke-Test: bezahlte Order → Admin zeigt Status `paid`
+
+### Rate-Limits (Infrastruktur)
+
+| Schicht | Maßnahme |
+|---------|----------|
+| Cloudflare / WAF | Rate-Limit auf `/`, `/ccp`, Supabase REST (z. B. 60 req/min/IP) |
+| Supabase | `record_nfc_scan` max. 20 Scans/config/Minute; Direct-INSERT-Policy entfernt |
+| Shopify Webhook | HMAC-Pflicht; ohne `Config-ID` → 200/`synced:0` (kein Retry-Loop) |
+
+### Observability
+
+Optional `VITE_SENTRY_DSN` setzen – siehe `.env.example`. Ohne DSN kein Browser-Tracking.
 
 ---
 
@@ -133,8 +148,8 @@ Dieses Dokument listet die gefundenen Sicherheitslücken, den jeweiligen Fix und
 | CCP-Edit per write_token in URL | Token in Shopify `_CCP-URL` / Bestellmail; wer den Link hat, kann digital editieren. Nie in öffentlicher Microsite-URL. Shop-Mitarbeiter sehen die Property in der Order. |
 | Token in Query-String (CCP) | Browser-History / Referer; CCP setzt `Referrer-Policy: no-referrer` |
 | Öffentlicher Storage-Read | Microsite/STL müssen öffentlich lesbar sein |
-| Scan-INSERT | Weiterhin anonym möglich (Statistik); Missbrauch verfälscht Zähler |
-| Kein App-Level-Rate-Limit | Über WAF / Supabase Dashboard absichern |
+| Scan-INSERT | Nur noch via `record_nfc_scan` RPC (Rate-Limit); Missbrauch verfälscht weiter Zähler |
+| App-Level-Rate-Limit | Scan-RPC + Cloudflare/WAF (siehe oben) |
 
 ---
 

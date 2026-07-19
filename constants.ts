@@ -14,10 +14,49 @@ export interface ShopifyProduct {
   /** Länge/Höhe in mm (für 3D-Platte). */
   plateHeightMm?: number;
 }
-export const PRODUCTS: ShopifyProduct[] = [
-  { id: 'keychain', name: 'Schlüsselanhänger', variantId: '56564338262361', plateWidthMm: 40, plateHeightMm: 40 },
-  { id: 'badge', name: 'Messe-Badge', variantId: '56564338262361', plateWidthMm: 110, plateHeightMm: 150 }, // 150 mm lang, 110 mm breit – echte Variant-ID eintragen
+
+function envVariant(key: string, fallback: string): string {
+  try {
+    const v = (import.meta as ImportMeta & { env?: Record<string, string> }).env?.[key]?.trim();
+    return v && /^\d+$/.test(v) ? v : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Fallback-IDs – echte Badge-ID per VITE_SHOPIFY_VARIANT_BADGE setzen. */
+const ALL_PRODUCTS: ShopifyProduct[] = [
+  {
+    id: 'keychain',
+    name: 'Schlüsselanhänger',
+    variantId: envVariant('VITE_SHOPIFY_VARIANT_KEYCHAIN', '56564338262361'),
+    plateWidthMm: 40,
+    plateHeightMm: 40,
+  },
+  {
+    id: 'badge',
+    name: 'Messe-Badge',
+    variantId: envVariant('VITE_SHOPIFY_VARIANT_BADGE', '56564338262361'),
+    plateWidthMm: 110,
+    plateHeightMm: 150,
+  },
 ];
+
+function featuresFullFromEnv(): boolean {
+  try {
+    const v = (import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_FEATURES_FULL;
+    return v === '1' || v === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Live-Shop: nur Schlüsselanhänger (Badge erst mit echter Variant-ID + VITE_FEATURES_FULL=1).
+ */
+export const PRODUCTS: ShopifyProduct[] = featuresFullFromEnv()
+  ? ALL_PRODUCTS
+  : ALL_PRODUCTS.filter((p) => p.id === 'keychain');
 
 /** Öffentliche Microsite-URL (ohne Token). */
 export function buildMicrositeUrl(origin: string, shortId: string): string {
@@ -39,15 +78,22 @@ export function buildShopifyCartUrl(
   baseUrl?: string,
   writeToken?: string,
   /** Optional: echte Ziel-URL bei „eigene Website“ (Chip bleibt trotzdem NUDAIM-Shortlink). */
-  destinationUrl?: string
+  destinationUrl?: string,
+  quantity: number = 1,
+  /** Optional: Preishinweis aus dem Konfigurator (Shopify rechnet trotzdem über die Variante ab). */
+  priceHint?: string
 ): string {
+  const qty = Math.min(99, Math.max(1, Math.round(Number(quantity) || 1)));
   const origin = baseUrl ? baseUrl.replace(/\/$/, '') : '';
   const params: Record<string, string> = {
     id: variantId,
-    quantity: '1',
+    quantity: String(qty),
     'properties[Config-ID]': shortId,
     'properties[Preview]': previewImageUrl,
   };
+  if (priceHint?.trim()) {
+    params['properties[Preis]'] = priceHint.trim().slice(0, 255);
+  }
   if (origin) {
     const micrositeUrl = buildMicrositeUrl(origin, shortId);
     // Eine sichtbare Property (deutsch) – kein zweites Synonym im Checkout
@@ -90,6 +136,8 @@ export const DEFAULT_CONFIG: ModelConfig = {
   fontStyle: 'modern',
   theme: 'light',
   layoutMode: 'landing',
+  navEnabled: true,
+  faviconUrl: '',
   landingMode: 'microsite',
   externalUrl: '',
   engraveText: '',

@@ -4,6 +4,15 @@
 import React, { forwardRef, useImperativeHandle, useRef, useEffect, useCallback } from 'react';
 import type { ModelConfig } from '../types';
 import { extractRasterPngFromSvg, isRasterLogoSvg, shouldShowOriginalLogoColors } from '../lib/logoFromRaster';
+import { exportKeychainStl } from '../lib/stlExport';
+import {
+  KEYCHAIN_CONTENT_ZONE,
+  KEYCHAIN_PLATE_BOUNDS,
+  clipContentZone,
+  rectCenter,
+  rectToCssPercent,
+  zoneToPixels,
+} from '../lib/keychainPlacement';
 
 const BASE_IMG = '/keychain-base.png';
 
@@ -161,42 +170,47 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
 
       try {
         const base = await loadBase();
-        const drawW = size * 0.82;
+        const drawW = size * 0.92;
         const drawH = drawW;
         const dx = (size - drawW) / 2;
         const dy = (size - drawH) / 2;
         ctx.drawImage(base, dx, dy, drawW, drawH);
+
+        const platePx = zoneToPixels(KEYCHAIN_PLATE_BOUNDS, dx, dy, drawW, drawH);
+        const zonePx = zoneToPixels(KEYCHAIN_CONTENT_ZONE, dx, dy, drawW, drawH);
+        const center = rectCenter(KEYCHAIN_CONTENT_ZONE);
+        const cx = dx + center.x * drawW + config.logoPosX * (zonePx.w * 0.02);
+        const contentY = dy + center.y * drawH - config.logoPosY * (zonePx.h * 0.02);
+        const gapPx = 8 + gap * 0.35;
 
         if (!isDefaultPlate) {
           ctx.save();
           ctx.globalCompositeOperation = 'multiply';
           ctx.globalAlpha = 0.45;
           ctx.fillStyle = plate;
-          ctx.beginPath();
-          const pad = drawW * 0.12;
-          roundRect(ctx, dx + pad, dy + pad * 1.15, drawW - pad * 2, drawH - pad * 2.1, drawW * 0.12);
+          roundRect(ctx, platePx.x, platePx.y, platePx.w, platePx.h, Math.min(platePx.w, platePx.h) * 0.12);
           ctx.fill();
           ctx.restore();
         }
 
-        const cx = size / 2;
-        const contentY = dy + drawH * 0.52;
-        const gapPx = 10 + gap * 0.4;
+        // Logo/Text nur auf der Platte – Ringe und Hintergrund ausclippen
+        ctx.save();
+        clipContentZone(ctx, dx, dy, drawW, drawH);
 
         if (showLogo && logoUrl) {
           await new Promise<void>((resolve) => {
             const img = new Image();
             img.onload = () => {
-              const maxW = drawW * 0.28 * config.logoScale;
+              const maxW = zonePx.w * 0.62 * config.logoScale;
               const ratio = img.height / Math.max(1, img.width);
               const lw = maxW;
               const lh = maxW * ratio;
               let ly = contentY;
               if (layout === 'logo_above' && showText) ly = contentY - gapPx / 2 - lh * 0.35;
               if (layout === 'text_above' && showText) ly = contentY + gapPx / 2 + lh * 0.2;
-              if (layout === 'logo_only') ly = contentY - drawH * 0.02;
+              if (layout === 'logo_only') ly = contentY;
               ctx.save();
-              ctx.translate(cx + config.logoPosX * 3, ly - config.logoPosY * 3);
+              ctx.translate(cx, ly);
               ctx.rotate(((config.logoRotation || 0) * Math.PI) / 180);
               ctx.scale(config.mirrorX ? -1 : 1, 1);
               ctx.imageSmoothingEnabled = true;
@@ -214,13 +228,14 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
         }
 
         if (showText) {
-          let ty = contentY + drawH * 0.12;
-          if (layout === 'logo_above' && showLogo) ty = contentY + gapPx / 2 + drawH * 0.08;
-          if (layout === 'text_above' && showLogo) ty = contentY - gapPx / 2 - drawH * 0.06;
-          if (layout === 'text_only') ty = contentY + drawH * 0.04;
+          let ty = contentY;
+          if (layout === 'logo_above' && showLogo) ty = contentY + gapPx / 2 + zonePx.h * 0.12;
+          if (layout === 'text_above' && showLogo) ty = contentY - gapPx / 2 - zonePx.h * 0.1;
+          if (layout === 'text_only') ty = contentY;
+          if (layout === 'logo_above' && !showLogo) ty = contentY;
           ctx.save();
           ctx.fillStyle = printColor;
-          ctx.font = `800 ${Math.round(26 * Math.min(1.35, config.logoScale))}px Arial, Helvetica, sans-serif`;
+          ctx.font = `800 ${Math.round(zonePx.w * 0.09 * Math.min(1.35, config.logoScale))}px Arial, Helvetica, sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.shadowColor = 'rgba(0,0,0,0.15)';
@@ -229,6 +244,8 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
           ctx.fillText(text.slice(0, 28).toUpperCase(), cx, ty);
           ctx.restore();
         }
+
+        ctx.restore();
       } catch {
         ctx.fillStyle = '#fff';
         ctx.fillRect(80, 80, size - 160, size - 160);
@@ -259,7 +276,7 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
 
     useImperativeHandle(ref, () => ({
       takeScreenshot: () => paintCanvas(),
-      exportSTL: async () => null,
+      exportSTL: () => exportKeychainStl(config, svgContent),
     }));
 
     return (
@@ -285,7 +302,7 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10 pointer-events-none">
               <span className="text-[9px] font-black uppercase tracking-[0.2em] text-navy/40">Live-Vorschau</span>
             </div>
-            <div className="relative w-[86%] max-w-[440px] mt-2">
+            <div className="relative w-[92%] max-w-[480px] mt-2">
               <img
                 src={BASE_IMG}
                 alt="Schlüsselanhänger"
@@ -294,28 +311,31 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
               />
               {!isDefaultPlate && (
                 <div
-                  className="absolute inset-[14%] rounded-[18%] pointer-events-none mix-blend-multiply opacity-45"
-                  style={{ backgroundColor: plate, top: '16%', bottom: '12%', left: '14%', right: '14%' }}
+                  className="absolute rounded-[14%] pointer-events-none mix-blend-multiply opacity-45"
+                  style={{
+                    ...rectToCssPercent(KEYCHAIN_PLATE_BOUNDS),
+                    backgroundColor: plate,
+                  }}
                   aria-hidden
                 />
               )}
 
+              {/* Nur flache Platte – Ringe/Öse/Hintergrund sind außerhalb */}
               <div
-                className="absolute left-1/2 flex flex-col items-center justify-center pointer-events-none"
+                className="absolute overflow-hidden flex flex-col items-center justify-center pointer-events-none"
                 style={{
-                  width: '48%',
-                  top: '38%',
-                  height: '42%',
-                  transform: 'translateX(-50%)',
+                  ...rectToCssPercent(KEYCHAIN_CONTENT_ZONE),
                   gap: `${4 + gap * 0.1}px`,
                   flexDirection: layout === 'text_above' ? 'column-reverse' : 'column',
+                  transform: `translate(${config.logoPosX * 1.2}%, ${-config.logoPosY * 1.2}%)`,
+                  borderRadius: '10%',
                 }}
               >
                 {showLogo && logoUrl && (
                   <img
                     src={logoUrl}
                     alt=""
-                    className="max-w-full max-h-[55%] object-contain drop-shadow-sm"
+                    className="max-w-[72%] max-h-[58%] object-contain drop-shadow-sm"
                     style={{
                       transform: `scale(${config.mirrorX ? -config.logoScale : config.logoScale}, ${config.logoScale}) rotate(${config.logoRotation || 0}deg)`,
                       filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.18))',
@@ -326,10 +346,10 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
                 )}
                 {showText && (
                   <p
-                    className="text-center font-extrabold uppercase tracking-wide leading-none px-1"
+                    className="text-center font-extrabold uppercase tracking-wide leading-none px-1 max-w-full"
                     style={{
                       color: printColor,
-                      fontSize: `clamp(11px, ${2.4 * config.logoScale}vw, 20px)`,
+                      fontSize: `clamp(10px, ${2.1 * config.logoScale}vw, 18px)`,
                       textShadow: '0 1px 1px rgba(0,0,0,0.15)',
                     }}
                   >

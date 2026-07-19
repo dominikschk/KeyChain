@@ -1,7 +1,9 @@
 /**
- * Bestellungen: Short-ID ↔ Bestellung ↔ Status (manuell oder später Shopify-Sync).
+ * Bestellungen: Short-ID ↔ Bestellung ↔ Status (manuell oder Shopify-Webhook).
+ * Print-QC: Freigabe vor Produktion.
  */
 import { supabase } from './supabase';
+import type { PrintQcStatus } from './adminOps';
 
 export interface OrderRow {
   id: string;
@@ -10,6 +12,9 @@ export interface OrderRow {
   short_id: string;
   config_id: string | null;
   status: string;
+  print_qc_status?: string | null;
+  print_qc_note?: string | null;
+  print_qc_at?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -19,6 +24,10 @@ export type OrderStatus = (typeof STATUS_OPTIONS)[number];
 
 export function getOrderStatusOptions(): OrderStatus[] {
   return [...STATUS_OPTIONS];
+}
+
+export function isShopifySyncedOrder(row: OrderRow): boolean {
+  return !!(row.shopify_order_id && String(row.shopify_order_id).trim());
 }
 
 export async function getOrdersList(): Promise<OrderRow[]> {
@@ -47,6 +56,7 @@ export async function createOrder(payload: {
       shopify_order_id: payload.shopify_order_id ?? null,
       config_id: payload.config_id ?? null,
       status: payload.status ?? 'pending',
+      print_qc_status: 'pending',
       updated_at: new Date().toISOString(),
     })
     .select()
@@ -62,4 +72,31 @@ export async function updateOrderStatus(orderId: string, status: string): Promis
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', orderId);
   return !error;
+}
+
+export async function updateOrderPrintQc(
+  orderId: string,
+  printQcStatus: PrintQcStatus,
+  note?: string,
+  /** Bei Freigabe optional Status auf in_production setzen */
+  promoteToProduction = false
+): Promise<OrderRow | null> {
+  if (!supabase) return null;
+  const patch: Record<string, unknown> = {
+    print_qc_status: printQcStatus,
+    print_qc_note: note?.trim() || null,
+    print_qc_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  if (promoteToProduction && printQcStatus === 'approved') {
+    patch.status = 'in_production';
+  }
+  const { data, error } = await supabase
+    .from('orders')
+    .update(patch)
+    .eq('id', orderId)
+    .select()
+    .single();
+  if (error) return null;
+  return data as OrderRow;
 }

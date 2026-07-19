@@ -7,6 +7,9 @@ import { validateImageFile, isValidEmail, normalizePhoneInput } from '../lib/val
 import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
 import { SITE_FONTS, SITE_TEMPLATES, type SiteTemplate } from '../lib/siteLayouts';
 import { paletteForIndustry } from '../lib/brandPalette';
+import { parseFaqItems, serializeFaqItems, type FaqItem } from '../lib/contentBlocks';
+import { parsePriceItems, serializePriceItems, type PriceItem } from '../lib/sectionContent';
+import { t } from '../lib/i18n';
 
 interface ControlsProps {
   activeDept: Department;
@@ -68,6 +71,45 @@ const PropertyPanel: React.FC<{ block: NFCBlock; onUpdate: (u: Partial<NFCBlock>
           <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Titel (sichtbar für Kunden)</label>
           <input type="text" value={block.title || ''} placeholder="z. B. WhatsApp schreiben" onChange={e => onUpdate({ title: e.target.value })} className="w-full p-4 rounded-2xl border border-navy/5 text-xs bg-cream font-bold outline-none focus:border-petrol/30 transition-colors" />
         </div>
+
+        {block.type !== 'spacer' && block.type !== 'headline' && (
+          <div className="space-y-2">
+            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Auf welcher Seite?</label>
+            <div className="flex gap-2 flex-wrap">
+              {([
+                { id: 'auto' as const, label: 'Automatisch' },
+                { id: 'home' as const, label: 'Nur Start' },
+                { id: 'kontakt' as const, label: 'Nur Kontakt' },
+              ]).map((opt) => {
+                const current = block.settings?.page || 'auto';
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() =>
+                      onUpdate({
+                        settings: {
+                          ...block.settings,
+                          page: opt.id === 'auto' ? undefined : opt.id,
+                        },
+                      })
+                    }
+                    className={`flex-1 min-w-[30%] py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${
+                      current === opt.id || (opt.id === 'auto' && !block.settings?.page)
+                        ? 'bg-navy text-white border-navy'
+                        : 'bg-cream border-navy/10 text-zinc-500'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-zinc-500 px-1">
+              Automatisch: Kontakt-Inhalte erscheinen auch unter „Kontakt“ im Menü.
+            </p>
+          </div>
+        )}
 
         {(block.type === 'text' || block.type === 'headline') && (
           <div className="space-y-2">
@@ -131,6 +173,183 @@ const PropertyPanel: React.FC<{ block: NFCBlock; onUpdate: (u: Partial<NFCBlock>
           <div className="space-y-2">
             <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Standort Adresse</label>
             <input type="text" value={block.settings?.address || ''} placeholder="Musterstraße 1, 12345 Stadt" onChange={e => onUpdate({ settings: { ...block.settings, address: e.target.value } })} className="w-full p-4 rounded-2xl border border-navy/5 text-xs bg-white font-bold outline-none focus:border-petrol/30 transition-colors" />
+          </div>
+        )}
+
+        {block.type === 'faq' && (
+          <div className="space-y-3">
+            <p className="text-[10px] text-zinc-500 px-1">Fragen und kurze Antworten für Kunden.</p>
+            {parseFaqItems(block.content).map((item, idx) => (
+              <div key={idx} className="space-y-2 p-3 rounded-2xl bg-cream/80 border border-navy/5">
+                <input
+                  type="text"
+                  value={item.q}
+                  placeholder="Frage"
+                  onChange={(e) => {
+                    const next: FaqItem[] = parseFaqItems(block.content).map((it, i) =>
+                      i === idx ? { ...it, q: e.target.value } : it
+                    );
+                    onUpdate({ content: serializeFaqItems(next) });
+                  }}
+                  className="w-full p-3 rounded-xl border border-navy/5 text-xs bg-white font-bold outline-none"
+                />
+                <textarea
+                  value={item.a}
+                  placeholder="Antwort"
+                  onChange={(e) => {
+                    const next: FaqItem[] = parseFaqItems(block.content).map((it, i) =>
+                      i === idx ? { ...it, a: e.target.value } : it
+                    );
+                    onUpdate({ content: serializeFaqItems(next) });
+                  }}
+                  className="w-full p-3 rounded-xl border border-navy/5 text-xs bg-white h-20 resize-none outline-none"
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              className="text-[10px] font-black uppercase tracking-wider text-petrol"
+              onClick={() => {
+                const next = [...parseFaqItems(block.content), { q: '', a: '' }];
+                onUpdate({ content: serializeFaqItems(next) });
+              }}
+            >
+              + Frage hinzufügen
+            </button>
+          </div>
+        )}
+
+        {block.type === 'hours' && (
+          <div className="space-y-2">
+            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Öffnungszeiten</label>
+            <textarea
+              value={block.settings?.hoursText || block.content || ''}
+              placeholder={'Mo–Fr 9–18 Uhr\nSa 10–14 Uhr'}
+              onChange={(e) =>
+                onUpdate({
+                  content: e.target.value,
+                  settings: { ...block.settings, hoursText: e.target.value },
+                })
+              }
+              className="w-full p-4 rounded-2xl border border-navy/5 text-xs h-32 bg-white resize-none font-medium outline-none"
+            />
+          </div>
+        )}
+
+        {block.type === 'gallery' && (
+          <div className="space-y-2">
+            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Bild-Links (https, eine pro Zeile)</label>
+            <textarea
+              value={block.settings?.galleryUrls || block.content || ''}
+              placeholder="https://…"
+              onChange={(e) =>
+                onUpdate({
+                  content: e.target.value,
+                  settings: { ...block.settings, galleryUrls: e.target.value },
+                })
+              }
+              className="w-full p-4 rounded-2xl border border-navy/5 text-xs h-32 bg-white resize-none font-medium outline-none"
+            />
+          </div>
+        )}
+
+        {block.type === 'prices' && (
+          <div className="space-y-3">
+            <p className="text-[10px] text-zinc-500 px-1">Leistung und Preis – klar für Kunden.</p>
+            {parsePriceItems(block.content).map((item, idx) => (
+              <div key={idx} className="space-y-2 p-3 rounded-2xl bg-cream/80 border border-navy/5">
+                <input
+                  type="text"
+                  value={item.name}
+                  placeholder="Leistung"
+                  onChange={(e) => {
+                    const next: PriceItem[] = parsePriceItems(block.content).map((it, i) =>
+                      i === idx ? { ...it, name: e.target.value } : it
+                    );
+                    onUpdate({ content: serializePriceItems(next) });
+                  }}
+                  className="w-full p-3 rounded-xl border border-navy/5 text-xs bg-white font-bold outline-none"
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={item.price}
+                    placeholder="Preis z. B. 12 €"
+                    onChange={(e) => {
+                      const next: PriceItem[] = parsePriceItems(block.content).map((it, i) =>
+                        i === idx ? { ...it, price: e.target.value } : it
+                      );
+                      onUpdate({ content: serializePriceItems(next) });
+                    }}
+                    className="w-1/3 p-3 rounded-xl border border-navy/5 text-xs bg-white font-bold outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={item.note || ''}
+                    placeholder="Hinweis (optional)"
+                    onChange={(e) => {
+                      const next: PriceItem[] = parsePriceItems(block.content).map((it, i) =>
+                        i === idx ? { ...it, note: e.target.value } : it
+                      );
+                      onUpdate({ content: serializePriceItems(next) });
+                    }}
+                    className="flex-1 p-3 rounded-xl border border-navy/5 text-xs bg-white outline-none"
+                  />
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="text-[10px] font-black uppercase tracking-wider text-petrol"
+              onClick={() => {
+                const next = [...parsePriceItems(block.content), { name: '', price: '' }];
+                onUpdate({ content: serializePriceItems(next) });
+              }}
+            >
+              + Preis hinzufügen
+            </button>
+          </div>
+        )}
+
+        {(block.type === 'text' ||
+          block.type === 'headline' ||
+          block.type === 'faq' ||
+          block.type === 'hours' ||
+          block.type === 'prices' ||
+          block.type === 'gallery') && (
+          <div className="space-y-3 pt-2 border-t border-navy/5">
+            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Ausrichtung</label>
+            <div className="flex gap-2">
+              {(['left', 'center', 'right'] as const).map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => onUpdate({ settings: { ...block.settings, align: a } })}
+                  className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border ${
+                    (block.settings?.align || 'center') === a
+                      ? 'bg-navy text-white border-navy'
+                      : 'bg-white text-zinc-500 border-navy/10'
+                  }`}
+                >
+                  {a === 'left' ? 'Links' : a === 'right' ? 'Rechts' : 'Mitte'}
+                </button>
+              ))}
+            </div>
+            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Abstand oben/unten</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min="0"
+                max="48"
+                step="4"
+                value={block.settings?.padY ?? 0}
+                onChange={(e) =>
+                  onUpdate({ settings: { ...block.settings, padY: parseInt(e.target.value, 10) } })
+                }
+                className="flex-1 accent-petrol"
+              />
+              <span className="text-[10px] font-black text-navy w-8">{block.settings?.padY ?? 0}</span>
+            </div>
           </div>
         )}
 
@@ -295,6 +514,29 @@ export const Controls: React.FC<ControlsProps> = ({
     updateConfig('nfcBlocks', [...config.nfcBlocks, newBlock]);
   };
 
+  const addContentBlock = (type: 'faq' | 'hours' | 'gallery' | 'prices', title: string) => {
+    const newBlock: NFCBlock = {
+      id: `${type}_${Date.now()}`,
+      type,
+      title,
+      content:
+        type === 'faq'
+          ? serializeFaqItems([{ q: 'Beispiel-Frage?', a: 'Kurze Antwort für Kunden.' }])
+          : type === 'hours'
+            ? 'Mo–Fr 9–18 Uhr\nSa 10–14 Uhr'
+            : type === 'prices'
+              ? serializePriceItems([{ name: 'Beispiel', price: '12 €', note: 'pro Person' }])
+              : '',
+      settings:
+        type === 'hours'
+          ? { hoursText: 'Mo–Fr 9–18 Uhr\nSa 10–14 Uhr', align: 'center' }
+          : type === 'gallery'
+            ? { galleryUrls: '', align: 'center' }
+            : { align: 'center' },
+    };
+    updateConfig('nfcBlocks', [...config.nfcBlocks, newBlock]);
+  };
+
   const duplicateBlock = (blockId: string) => {
     const block = config.nfcBlocks.find(b => b.id === blockId);
     if (!block) return;
@@ -325,11 +567,11 @@ export const Controls: React.FC<ControlsProps> = ({
     const plateColors = ['#F8F5F0', '#FFFFFF', '#2A2A2A', '#11235A', '#12A9E0', '#D6C3A8', '#1F4D3A', '#ff4d4d'];
     const printColors = ['#111111', '#FFFFFF', '#11235A', '#12A9E0', '#d4af37', '#ff4d4d', '#2ecc71', '#8B5E3C'];
     const layout = config.engraveLayout || 'logo_above';
-    const layouts: { id: NonNullable<ModelConfig['engraveLayout']>; label: string; icon: string }[] = [
-      { id: 'logo_above', label: 'Logo oben', icon: '⬆' },
-      { id: 'text_above', label: 'Text oben', icon: '⬇' },
-      { id: 'logo_only', label: 'Nur Logo', icon: '▣' },
-      { id: 'text_only', label: 'Nur Text', icon: 'T' },
+    const layouts: { id: NonNullable<ModelConfig['engraveLayout']>; label: string }[] = [
+      { id: 'logo_above', label: 'Logo oben' },
+      { id: 'text_above', label: 'Text oben' },
+      { id: 'logo_only', label: 'Nur Logo' },
+      { id: 'text_only', label: 'Nur Text' },
     ];
 
     return (
@@ -350,9 +592,6 @@ export const Controls: React.FC<ControlsProps> = ({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-navy">Logo übernommen</p>
-                <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
-                  Hintergrund entfernt. Details zur Herstellung stehen unten.
-                </p>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2.5 text-xs">
                   <label className="text-petrol font-bold cursor-pointer hover:underline relative">
                     Ersetzen
@@ -370,7 +609,7 @@ export const Controls: React.FC<ControlsProps> = ({
                 <>
                   <Loader2 className="animate-spin text-petrol" size={26} />
                   <span className="text-sm font-semibold text-navy">Logo wird vorbereitet…</span>
-                  <span className="text-[11px] text-zinc-500 text-center px-3">Hintergrund wird entfernt</span>
+                  <span className="text-[11px] text-zinc-500 text-center px-3">Einen Moment bitte</span>
                 </>
               ) : (
                 <>
@@ -378,15 +617,14 @@ export const Controls: React.FC<ControlsProps> = ({
                     <ImageIcon className="text-navy/70" size={22} />
                   </div>
                   <span className="text-sm font-bold text-navy">Logo auswählen</span>
-                  <span className="text-[11px] text-zinc-500 text-center px-4 leading-snug">PNG, JPG oder SVG – am besten eine klare Logo-Datei, kein Foto</span>
+                  <span className="text-[11px] text-zinc-500 text-center px-4 leading-snug">
+                    PNG, JPG oder SVG – am besten ein klares Logo, kein Foto
+                  </span>
                 </>
               )}
               <input type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml" onChange={onUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
             </label>
           )}
-          <p className="text-[11px] text-zinc-500 leading-snug">
-            Am besten ein klares Logo. Personen- oder Produktfotos können wir nicht verwenden.
-          </p>
         </section>
 
         <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-2">
@@ -421,27 +659,9 @@ export const Controls: React.FC<ControlsProps> = ({
         <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-4">
           <div>
             <h3 className="text-sm font-bold text-navy">Farben</h3>
-            <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
-              Produktfarbe für den Anhänger. Optional kannst du Logo und Text einfarbig umfärben.
-            </p>
           </div>
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Logo / Text (optional)</p>
-            <div className="flex flex-wrap gap-2">
-              {printColors.map((c) => (
-                <button
-                  key={`print-${c}`}
-                  type="button"
-                  onClick={() => updateConfig('logoColor', c)}
-                  className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${config.logoColor?.toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
-                  style={{ backgroundColor: c }}
-                  aria-label={`Druckfarbe ${c}`}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Produktfarbe</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe vom Anhänger</p>
             <div className="flex flex-wrap gap-2">
               {plateColors.map((c) => (
                 <button
@@ -450,7 +670,22 @@ export const Controls: React.FC<ControlsProps> = ({
                   onClick={() => updateConfig('plateColor', c)}
                   className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${(config.plateColor || '#F8F5F0').toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
                   style={{ backgroundColor: c }}
-                  aria-label={`Produktfarbe ${c}`}
+                  aria-label="Farbe vom Anhänger wählen"
+                />
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe von Logo und Text</p>
+            <div className="flex flex-wrap gap-2">
+              {printColors.map((c) => (
+                <button
+                  key={`print-${c}`}
+                  type="button"
+                  onClick={() => updateConfig('logoColor', c)}
+                  className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${config.logoColor?.toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
+                  style={{ backgroundColor: c }}
+                  aria-label="Farbe von Logo und Text wählen"
                 />
               ))}
             </div>
@@ -459,22 +694,18 @@ export const Controls: React.FC<ControlsProps> = ({
 
         <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-2">
           <h3 className="text-sm font-bold text-navy">Ausrichtung</h3>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {layouts.map((l) => (
               <button
                 key={l.id}
                 type="button"
-                title={l.label}
                 onClick={() => updateConfig('engraveLayout', l.id)}
-                className={`h-12 rounded-xl border text-sm font-bold transition-colors ${layout === l.id ? 'border-navy bg-navy text-white shadow-sm' : 'border-navy/10 bg-cream/40 text-navy hover:border-petrol/40'}`}
+                className={`min-h-[44px] px-3 rounded-xl border text-xs font-bold transition-colors ${layout === l.id ? 'border-navy bg-navy text-white shadow-sm' : 'border-navy/10 bg-cream/40 text-navy hover:border-petrol/40'}`}
               >
-                {l.icon}
+                {l.label}
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-zinc-500">
-            {layouts.find((l) => l.id === layout)?.label}
-          </p>
         </section>
 
         <section className="space-y-2 pt-0.5">
@@ -509,22 +740,8 @@ export const Controls: React.FC<ControlsProps> = ({
           )}
         </section>
 
-        <aside className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-4 space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-wider text-amber-800/80">Hinweise zur Herstellung</p>
-          <ul className="space-y-1.5 text-[11px] text-zinc-600 leading-snug">
-            <li className="flex gap-2">
-              <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-700/50 shrink-0" aria-hidden />
-              <span>Die Bildschirmvorschau dient der Orientierung und ist kein farbverbindlicher Andruck.</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-700/50 shrink-0" aria-hidden />
-              <span>Für den 3D-Druck wird das Logo auf höchstens drei Farben vereinfacht.</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-700/50 shrink-0" aria-hidden />
-              <span>Durch das 3D-Druckverfahren können Farbtöne und Oberflächen teilweise anders aussehen als am Bildschirm.</span>
-            </li>
-          </ul>
+        <aside className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-4">
+          <p className="text-[11px] text-zinc-600 leading-snug">{t('legal.preview')}</p>
         </aside>
       </div>
     );
@@ -578,6 +795,12 @@ export const Controls: React.FC<ControlsProps> = ({
                <button type="button" onClick={() => updateConfig('layoutMode', 'landing')} className={`flex-1 min-w-0 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${(config.layoutMode || 'landing') === 'landing' ? 'bg-navy text-white border-navy' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}>Wie eine kleine Website</button>
                <button type="button" onClick={() => updateConfig('layoutMode', 'stack')} className={`flex-1 min-w-0 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${config.layoutMode === 'stack' ? 'bg-navy text-white border-navy' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}>Einfache Liste</button>
              </div>
+             <div className="flex gap-2 flex-wrap mt-2">
+               <span className="text-[7px] font-bold text-zinc-400 uppercase w-full px-1">Menü oben</span>
+               <button type="button" onClick={() => updateConfig('navEnabled', true)} className={`flex-1 min-w-0 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${config.navEnabled !== false ? 'bg-navy text-white border-navy' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}>An</button>
+               <button type="button" onClick={() => updateConfig('navEnabled', false)} className={`flex-1 min-w-0 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${config.navEnabled === false ? 'bg-navy text-white border-navy' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}>Aus</button>
+             </div>
+             <p className="text-[10px] text-zinc-500 px-1">Menü springt zu Abschnitten und zur Kontakt-Seite.</p>
              <div className="flex gap-2 flex-wrap mt-2">
                <span className="text-[7px] font-bold text-zinc-400 uppercase w-full px-1">Hell oder dunkel</span>
                <button type="button" onClick={() => updateConfig('theme', 'light')} className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${config.theme === 'light' ? 'bg-navy text-white border-navy' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}><Sun size={12} /> Hell</button>
@@ -671,6 +894,56 @@ export const Controls: React.FC<ControlsProps> = ({
                </div>
             </div>
           </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[8px] font-black uppercase text-zinc-500 px-1">Favicon (Browser-Tab, optional)</label>
+            <div className="relative min-h-[56px] rounded-xl border border-dashed border-navy/10 bg-cream/80 flex items-center gap-3 px-3 overflow-hidden cursor-pointer">
+              {config.faviconUrl ? (
+                <img src={config.faviconUrl} alt="" className="w-8 h-8 object-contain shrink-0" />
+              ) : (
+                <Globe size={18} className="text-zinc-300 shrink-0" />
+              )}
+              <span className="text-[10px] text-zinc-500 font-medium truncate">
+                {config.faviconUrl ? 'Tippen zum Austauschen' : 'Kleines Icon hochladen'}
+              </span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/x-icon,image/vnd.microsoft.icon,.ico"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file || !supabase) {
+                    resetFileInput(e.target);
+                    return;
+                  }
+                  if (file.size > 512 * 1024) {
+                    showError('Bitte ein Bild unter 512 KB wählen.');
+                    resetFileInput(e.target);
+                    return;
+                  }
+                  try {
+                    const path = storagePath('fav_', file.name);
+                    const url = await uploadAndGetPublicUrl(supabase, path, file);
+                    if (url) updateConfig('faviconUrl', url);
+                  } catch (err) {
+                    console.error('Favicon upload:', err);
+                    showError('Bitte versuche es erneut.', 'Favicon konnte nicht hochgeladen werden.');
+                  } finally {
+                    resetFileInput(e.target);
+                  }
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+              />
+            </div>
+            {config.faviconUrl && (
+              <button
+                type="button"
+                onClick={() => updateConfig('faviconUrl', '')}
+                className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-1 hover:text-red-500"
+              >
+                Favicon entfernen
+              </button>
+            )}
+          </div>
       </section>
 
       {/* Add Content Selection Grid */}
@@ -682,6 +955,18 @@ export const Controls: React.FC<ControlsProps> = ({
             <button type="button" onClick={addSpacer} className="card p-3 flex items-center gap-2 text-zinc-500 hover:border-petrol/25 transition-all text-[8px] font-black uppercase tracking-wider min-h-[44px]" title="Abstand einfügen">
               <div className="w-7 h-7 rounded-lg bg-cream flex items-center justify-center"><div className="w-full h-0.5 bg-zinc-300 rounded" /></div>
               Abstand
+            </button>
+            <button type="button" onClick={() => addContentBlock('faq', 'FAQ')} className="card p-3 flex items-center gap-2 text-zinc-500 hover:border-petrol/25 transition-all text-[8px] font-black uppercase tracking-wider min-h-[44px]">
+              FAQ
+            </button>
+            <button type="button" onClick={() => addContentBlock('hours', 'Öffnungszeiten')} className="card p-3 flex items-center gap-2 text-zinc-500 hover:border-petrol/25 transition-all text-[8px] font-black uppercase tracking-wider min-h-[44px]">
+              Zeiten
+            </button>
+            <button type="button" onClick={() => addContentBlock('gallery', 'Galerie')} className="card p-3 flex items-center gap-2 text-zinc-500 hover:border-petrol/25 transition-all text-[8px] font-black uppercase tracking-wider min-h-[44px]">
+              Galerie
+            </button>
+            <button type="button" onClick={() => addContentBlock('prices', 'Preise')} className="card p-3 flex items-center gap-2 text-zinc-500 hover:border-petrol/25 transition-all text-[8px] font-black uppercase tracking-wider min-h-[44px]">
+              Preise
             </button>
           </div>
           <div className="space-y-6">
