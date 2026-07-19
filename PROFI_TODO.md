@@ -140,13 +140,13 @@ Erst wenn Phase 0–1 stabil sind. Anhänger bleibt Priorität.
 Bewusst optional – nur wenn Kern läuft.
 
 ### Fertigung
-- [ ] Print-QC: Side-by-Side Kunden-Vorschau vs. 3-Farben-Druck
+- [x] Print-QC: Side-by-Side Kunden-Vorschau vs. 3-Farben-Druck
 - [ ] Automatische E-Mail an Druckerei bei QC-Freigabe
 - [ ] Reprint-Grund erfassen (Dropdown) → Metrik
 - [ ] G-Code/Export-Hinweise pro Material
 
 ### Konfigurator
-- [ ] Logo-Health-Check vor Save („zu viele Farben → wird vereinfacht“)
+- [x] Logo-Health-Check vor Save („zu viele Farben → wird vereinfacht“)
 - [ ] Fortschrittsbalken Speichern verständlicher
 - [ ] Entwurf teilen-Link (ohne Checkout)
 - [ ] B2B: Mengenrabatt-Hinweis + Sammelbestellung
@@ -154,7 +154,7 @@ Bewusst optional – nur wenn Kern läuft.
 ### Digital
 - [ ] Scan-Insights im CCP (ohne Spam, Rate-Limit schon da)
 - [ ] Versionierung Microsite (Rollback eine Version)
-- [ ] Öffnungszeiten mit „jetzt geöffnet“-Badge
+- [x] Öffnungszeiten mit „jetzt geöffnet“-Badge
 
 ### Betrieb
 - [ ] Statusseite / Uptime-Ping Microsite
