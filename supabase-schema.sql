@@ -783,3 +783,23 @@ REVOKE ALL ON FUNCTION public.record_nfc_scan(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.record_nfc_scan(uuid) TO anon, authenticated;
 
 DROP POLICY IF EXISTS "nfc_scans_insert_anon" ON public.nfc_scans;
+
+-- ------------------------------------------------------------
+-- Q2 2026: Print-QC auf orders
+-- ------------------------------------------------------------
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS print_qc_status TEXT DEFAULT 'pending';
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS print_qc_note TEXT;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS print_qc_at TIMESTAMPTZ;
+
+DO $$
+BEGIN
+  ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_print_qc_status_check;
+  ALTER TABLE public.orders
+    ADD CONSTRAINT orders_print_qc_status_check
+    CHECK (print_qc_status IS NULL OR print_qc_status IN ('pending', 'approved', 'rejected'));
+EXCEPTION
+  WHEN others THEN
+    RAISE NOTICE 'print_qc constraint: %', SQLERRM;
+END $$;
+
+UPDATE public.orders SET print_qc_status = 'pending' WHERE print_qc_status IS NULL;

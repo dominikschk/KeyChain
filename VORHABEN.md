@@ -62,7 +62,7 @@ Geführtes Gespräch → Microsite-Config (kein freies HTML).
 
 ### 3. Von Bausteinen zu „Mini-Website“
 
-- [ ] Reichhaltigere Inhaltsblöcke: Text + Bild, Galerie, FAQ, Preise, Öffnungszeiten, Embed
+- [x] Reichhaltigere Inhaltsblöcke: FAQ, Öffnungszeiten, Galerie (erster Slice)
 - [ ] Mehrere „Seiten“/Tabs innerhalb einer Microsite (Home, Kontakt, …) – oder Anker-Navigation
 - [ ] Header/Nav + Footer als eigene editierbare Bereiche
 - [ ] Eigenes Favicon / Seitentitel / Share-Preview

@@ -14,9 +14,32 @@ export interface ShopifyProduct {
   /** Länge/Höhe in mm (für 3D-Platte). */
   plateHeightMm?: number;
 }
+
+function envVariant(key: string, fallback: string): string {
+  try {
+    const v = (import.meta as ImportMeta & { env?: Record<string, string> }).env?.[key]?.trim();
+    return v && /^\d+$/.test(v) ? v : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Fallback-IDs – echte Badge-ID per VITE_SHOPIFY_VARIANT_BADGE setzen. */
 export const PRODUCTS: ShopifyProduct[] = [
-  { id: 'keychain', name: 'Schlüsselanhänger', variantId: '56564338262361', plateWidthMm: 40, plateHeightMm: 40 },
-  { id: 'badge', name: 'Messe-Badge', variantId: '56564338262361', plateWidthMm: 110, plateHeightMm: 150 }, // 150 mm lang, 110 mm breit – echte Variant-ID eintragen
+  {
+    id: 'keychain',
+    name: 'Schlüsselanhänger',
+    variantId: envVariant('VITE_SHOPIFY_VARIANT_KEYCHAIN', '56564338262361'),
+    plateWidthMm: 40,
+    plateHeightMm: 40,
+  },
+  {
+    id: 'badge',
+    name: 'Messe-Badge',
+    variantId: envVariant('VITE_SHOPIFY_VARIANT_BADGE', '56564338262361'),
+    plateWidthMm: 110,
+    plateHeightMm: 150,
+  },
 ];
 
 /** Öffentliche Microsite-URL (ohne Token). */

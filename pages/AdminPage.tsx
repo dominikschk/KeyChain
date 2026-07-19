@@ -1,12 +1,17 @@
 /**
- * Admin – Panel: Nur per direkter URL /admin, Login über Supabase Auth.
- * Zugriff nur für E-Mails in der Tabelle admin_users (RLS).
+ * Admin – Produktion: Queue, Print-QC, Filter, CSV-Export, STL/Print-Assets.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ShoppingCart, ExternalLink, Loader2, Lock, LogOut, Copy, Check, Package, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getConfigsList, getPrintPngUrl } from '../lib/configApi';
-import { getOrdersList, createOrder, updateOrderStatus, getOrderStatusOptions } from '../lib/ordersApi';
+import {
+  getOrdersList,
+  createOrder,
+  updateOrderStatus,
+  updateOrderPrintQc,
+  getOrderStatusOptions,
+} from '../lib/ordersApi';
 import { SHOPIFY_ADMIN_ORDERS_URL } from '../constants';
 import {
   checkIsAdmin,
@@ -17,12 +22,25 @@ import {
 } from '../lib/adminAuth';
 import type { ConfigRow } from '../lib/configApi';
 import type { OrderRow } from '../lib/ordersApi';
+import {
+  filterOrders,
+  buildProductionCsv,
+  downloadTextFile,
+  getPrintQcStatus,
+  isSlaOverdue,
+  manufacturingSlaHours,
+  type OrderFilter,
+} from '../lib/adminOps';
+import { getStoredLocale, setStoredLocale, t, toggleLocale, type Locale } from '../lib/i18n';
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
-    const d = new Date(iso);
-    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return new Date(iso).toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   } catch {
     return '—';
   }
@@ -43,11 +61,14 @@ export const AdminPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [orderFilter, setOrderFilter] = useState<OrderFilter>('all');
+  const [locale, setLocale] = useState<Locale>(() =>
+    typeof window !== 'undefined' ? getStoredLocale() : 'de'
+  );
   const statusOptions = getOrderStatusOptions();
 
   useEffect(() => {
     let cancelled = false;
-
     async function bootstrap() {
       if (!supabase) {
         if (!cancelled) {
@@ -65,18 +86,14 @@ export const AdminPage: React.FC = () => {
       }
       if (!cancelled) setChecked(true);
     }
-
     bootstrap();
-
     const unsub = onAdminAuthStateChange(async (session) => {
       if (!session) {
         setAuthenticated(false);
         return;
       }
-      const ok = await checkIsAdmin();
-      setAuthenticated(ok);
+      setAuthenticated(await checkIsAdmin());
     });
-
     return () => {
       cancelled = true;
       unsub();
@@ -88,12 +105,8 @@ export const AdminPage: React.FC = () => {
     setLoading(true);
     setError(null);
     getConfigsList()
-      .then((rows) => {
-        setList(rows);
-      })
-      .catch((e) => {
-        setError(e?.message ?? 'Fehler beim Laden.');
-      })
+      .then(setList)
+      .catch((e) => setError(e?.message ?? 'Fehler beim Laden.'))
       .finally(() => setLoading(false));
   }, [authenticated]);
 
@@ -106,6 +119,7 @@ export const AdminPage: React.FC = () => {
   }, [authenticated]);
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const filteredOrders = useMemo(() => filterOrders(orders, orderFilter), [orders, orderFilter]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,10 +175,33 @@ export const AdminPage: React.FC = () => {
     if (ok) setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status } : o)));
   };
 
+  const handlePrintQc = async (order: OrderRow, approve: boolean) => {
+    const updated = await updateOrderPrintQc(
+      order.id,
+      approve ? 'approved' : 'rejected',
+      undefined,
+      approve && order.status === 'paid'
+    );
+    if (updated) {
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
+    }
+  };
+
+  const handleExportCsv = () => {
+    const csv = buildProductionCsv(filteredOrders, list, baseUrl);
+    downloadTextFile(`nudaim-produktion-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  };
+
+  const switchLang = () => {
+    const next = toggleLocale(locale);
+    setStoredLocale(next);
+    setLocale(next);
+  };
+
   if (!checked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cream">
-        <Loader2 className="animate-spin text-petrol" size={28} />
+        <Loader2 className="animate-spin text-petrol" size={28} aria-label="Laden" />
       </div>
     );
   }
@@ -173,22 +210,13 @@ export const AdminPage: React.FC = () => {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-cream px-4">
         <div className="w-full max-w-sm bg-white rounded-2xl border border-zinc-200 shadow-sm p-8">
-          <div className="flex justify-center mb-6">
-            <div className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center">
-              <Lock size={24} className="text-amber-700" />
-            </div>
-          </div>
-          <h1 className="text-center font-headline font-extrabold text-lg uppercase tracking-tight text-navy mb-1">
+          <h1 className="text-center font-headline font-extrabold text-lg uppercase tracking-tight text-navy mb-2">
             Admin nicht konfiguriert
           </h1>
-          <p className="text-center text-sm text-zinc-600 mb-4">
-            <strong>VITE_SUPABASE_URL</strong> und <strong>VITE_SUPABASE_ANON_KEY</strong> fehlen.
-          </p>
-          <p className="text-center text-xs text-zinc-500">
-            In Vercel/Netlify oder lokal in <code className="bg-zinc-100 px-1 rounded">.env.local</code> setzen und neu starten.
+          <p className="text-center text-sm text-zinc-600">
+            VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY fehlen.
           </p>
         </div>
-        <a href="/" className="mt-6 text-sm font-medium text-zinc-500 hover:text-navy">Zur Startseite</a>
       </div>
     );
   }
@@ -199,7 +227,7 @@ export const AdminPage: React.FC = () => {
         <div className="w-full max-w-sm bg-white rounded-2xl border border-zinc-200 shadow-sm p-8">
           <div className="flex justify-center mb-6">
             <div className="w-14 h-14 rounded-xl bg-navy/10 flex items-center justify-center">
-              <Lock size={24} className="text-navy" />
+              <Lock size={24} className="text-navy" aria-hidden />
             </div>
           </div>
           <h1 className="text-center font-headline font-extrabold text-lg uppercase tracking-tight text-navy mb-1">
@@ -210,110 +238,343 @@ export const AdminPage: React.FC = () => {
           </p>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1" htmlFor="admin-email">
                 E-Mail
               </label>
               <input
+                id="admin-email"
                 type="email"
                 value={email}
-                onChange={(e) => { setEmail(e.target.value); setPasswordError(null); }}
-                placeholder="admin@example.com"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setPasswordError(null);
+                }}
                 autoComplete="username"
-                className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm font-medium text-navy placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-petrol/30 focus:border-transparent"
+                className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm font-medium text-navy focus:outline-none focus:ring-2 focus:ring-petrol/30"
                 autoFocus
                 required
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1" htmlFor="admin-password">
                 Passwort
               </label>
               <input
+                id="admin-password"
                 type="password"
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); setPasswordError(null); }}
-                placeholder="Passwort"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setPasswordError(null);
+                }}
                 autoComplete="current-password"
-                className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm font-medium text-navy placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-petrol/30 focus:border-transparent"
+                className="w-full px-4 py-3 rounded-xl border border-zinc-200 text-sm font-medium text-navy focus:outline-none focus:ring-2 focus:ring-petrol/30"
                 required
               />
             </div>
             {passwordError && (
-              <p className="text-sm text-red-600 font-medium">{passwordError}</p>
+              <p className="text-sm text-red-600 font-medium" role="alert">
+                {passwordError}
+              </p>
             )}
             <button
               type="submit"
               disabled={loginLoading}
-              className="w-full py-3 rounded-xl bg-navy text-white text-sm font-semibold hover:bg-navy/90 transition-colors disabled:opacity-50"
+              className="w-full py-3 rounded-xl bg-navy text-white text-sm font-semibold hover:bg-navy/90 disabled:opacity-50"
             >
               {loginLoading ? 'Anmelden…' : 'Anmelden'}
             </button>
           </form>
         </div>
-        <a href="/" className="mt-6 text-sm font-medium text-zinc-500 hover:text-navy">Zur Startseite</a>
+        <a href="/" className="mt-6 text-sm font-medium text-zinc-500 hover:text-navy">
+          Zur Startseite
+        </a>
       </div>
     );
   }
 
+  const filters: { id: OrderFilter; label: string }[] = [
+    { id: 'all', label: t('admin.filter.all', locale) },
+    { id: 'paid', label: t('admin.filter.paid', locale) },
+    { id: 'qc_pending', label: t('admin.filter.qc', locale) },
+    { id: 'in_production', label: t('admin.filter.production', locale) },
+    { id: 'shipped', label: 'Versandt' },
+  ];
+
   return (
     <div className="min-h-screen flex flex-col bg-cream text-navy">
+      <a href="#admin-main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded-lg">
+        Zum Inhalt
+      </a>
       <header className="app-bar shrink-0 h-12 md:h-14 flex items-center justify-between px-4 md:px-6">
         <a href="/" className="btn-ghost text-sm font-medium">
           Zurück
         </a>
         <span className="font-headline font-extrabold text-sm md:text-base uppercase tracking-tight text-white">
-          Bestellübersicht
+          {t('admin.title', locale)}
         </span>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="btn-ghost flex items-center gap-2 text-sm font-medium"
-        >
-          <LogOut size={16} />
-          Abmelden
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={switchLang} className="btn-ghost text-xs font-medium">
+            {t('lang.switch', locale)}
+          </button>
+          <button type="button" onClick={handleLogout} className="btn-ghost flex items-center gap-2 text-sm font-medium">
+            <LogOut size={16} aria-hidden />
+            Abmelden
+          </button>
+        </div>
       </header>
 
-      <main className="flex-1 p-4 md:p-6 max-w-5xl mx-auto w-full">
+      <main id="admin-main" className="flex-1 p-4 md:p-6 max-w-6xl mx-auto w-full space-y-6">
+        <section className="card overflow-hidden">
+          <div className="px-5 py-4 border-b border-zinc-200 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy flex items-center gap-2">
+                <Package size={18} aria-hidden />
+                Produktions-Queue
+              </h2>
+              <p className="text-sm text-zinc-500 mt-1">
+                Filter, Print-QC (48h-SLA), CSV für die Druckerei.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-semibold hover:bg-zinc-50"
+            >
+              <Download size={14} aria-hidden />
+              {t('admin.export', locale)}
+            </button>
+          </div>
+
+          <div className="px-5 py-3 border-b border-zinc-100 flex flex-wrap gap-2" role="tablist" aria-label="Bestellfilter">
+            {filters.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                role="tab"
+                aria-selected={orderFilter === f.id}
+                onClick={() => setOrderFilter(f.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+                  orderFilter === f.id
+                    ? 'bg-navy text-white border-navy'
+                    : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={handleAddOrder} className="px-5 py-4 border-b border-zinc-100 flex flex-wrap gap-3 items-end">
+            <div className="flex-1 min-w-[120px]">
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+                Bestellnummer
+              </label>
+              <input
+                type="text"
+                value={orderForm.order_number}
+                onChange={(e) => setOrderForm((f) => ({ ...f, order_number: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm"
+              />
+            </div>
+            <div className="flex-1 min-w-[120px]">
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+                Short-ID *
+              </label>
+              <input
+                type="text"
+                value={orderForm.short_id}
+                onChange={(e) => setOrderForm((f) => ({ ...f, short_id: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm"
+                required
+              />
+            </div>
+            <div className="w-36">
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+                Status
+              </label>
+              <select
+                value={orderForm.status}
+                onChange={(e) => setOrderForm((f) => ({ ...f, status: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm"
+              >
+                {statusOptions.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={orderSubmitting}
+              className="px-4 py-2 rounded-lg bg-navy text-white text-sm font-medium hover:bg-navy/90 disabled:opacity-50"
+            >
+              {orderSubmitting ? '…' : 'Verknüpfen'}
+            </button>
+          </form>
+
+          {ordersLoading ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-zinc-400">
+              <Loader2 size={18} className="animate-spin" aria-hidden />
+              <span className="text-sm">Lade Bestellungen…</span>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="bg-zinc-50 border-b border-zinc-200">
+                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">
+                      Bestellnr.
+                    </th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">
+                      Short-ID
+                    </th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">
+                      Status / QC
+                    </th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">
+                      SLA
+                    </th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">
+                      Aktionen
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-zinc-500 text-sm">
+                        Keine Bestellungen in diesem Filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredOrders.map((o) => {
+                      const qc = getPrintQcStatus(o);
+                      const overdue = isSlaOverdue(o);
+                      const slaH = manufacturingSlaHours(o);
+                      return (
+                        <tr key={o.id} className="border-b border-zinc-100 hover:bg-zinc-50/50">
+                          <td className="px-4 py-3 font-medium text-navy">
+                            {o.order_number || o.shopify_order_id || '—'}
+                            {o.shopify_order_id && (
+                              <a
+                                href={`${SHOPIFY_ADMIN_ORDERS_URL}/${o.shopify_order_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-2 text-petrol hover:underline inline-flex items-center"
+                                aria-label="In Shopify öffnen"
+                              >
+                                <ExternalLink size={12} />
+                              </a>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs text-navy">{o.short_id}</td>
+                          <td className="px-4 py-3 space-y-1">
+                            <select
+                              value={o.status}
+                              onChange={(e) => handleOrderStatusChange(o.id, e.target.value)}
+                              className="px-2 py-1 rounded border border-zinc-200 text-xs font-medium"
+                              aria-label={`Status ${o.short_id}`}
+                            >
+                              {statusOptions.map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+                              QC: {qc}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            {slaH == null ? (
+                              '—'
+                            ) : (
+                              <span className={overdue ? 'text-red-600 font-semibold' : 'text-zinc-600'}>
+                                {slaH}h {overdue ? t('admin.sla.overdue', locale) : t('admin.sla.ok', locale)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-1.5">
+                              {qc !== 'approved' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handlePrintQc(o, true)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wide"
+                                >
+                                  {t('admin.qc.approve', locale)}
+                                </button>
+                              )}
+                              {qc !== 'rejected' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handlePrintQc(o, false)}
+                                  className="px-2.5 py-1.5 rounded-lg border border-zinc-200 text-[10px] font-bold uppercase tracking-wide text-zinc-600"
+                                >
+                                  {t('admin.qc.reject', locale)}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
         <section className="card overflow-hidden">
           <div className="px-5 py-4 border-b border-zinc-200">
             <h2 className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy flex items-center gap-2">
-              <ShoppingCart size={18} />
-              Konfigurationen / Bestellungen
+              <ShoppingCart size={18} aria-hidden />
+              Konfigurationen / Druck-Assets
             </h2>
-            <p className="text-sm text-zinc-500 mt-1">
-              Druck-Assets (STL, Print-PNG) und Links zum Kopieren.
-            </p>
+            <p className="text-sm text-zinc-500 mt-1">STL, Print-PNG und Links.</p>
           </div>
 
           {loading && (
             <div className="flex items-center justify-center py-16 gap-2 text-zinc-400">
-              <Loader2 size={22} className="animate-spin" />
+              <Loader2 size={22} className="animate-spin" aria-hidden />
               <span className="text-sm font-medium">Lade…</span>
             </div>
           )}
-
           {error && (
             <div className="px-5 py-4">
-              <p className="text-sm text-red-600 font-medium">{error}</p>
+              <p className="text-sm text-red-600 font-medium" role="alert">
+                {error}
+              </p>
             </div>
           )}
-
           {!loading && !error && (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="bg-zinc-50 border-b border-zinc-200">
-                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Short-ID</th>
-                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Profil</th>
-                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Erstellt</th>
-                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Druck</th>
-                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Aktionen</th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">
+                      Short-ID
+                    </th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">
+                      Profil
+                    </th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">
+                      Erstellt
+                    </th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">
+                      Druck
+                    </th>
+                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">
+                      Aktionen
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {list.length === 0 ? (
-                    <tr className="border-b border-zinc-100">
+                    <tr>
                       <td colSpan={5} className="px-4 py-12 text-center text-zinc-500 text-sm">
                         Noch keine Konfigurationen.
                       </td>
@@ -326,7 +587,9 @@ export const AdminPage: React.FC = () => {
                       return (
                         <tr key={row.id} className="border-b border-zinc-100 hover:bg-zinc-50/50">
                           <td className="px-4 py-3 font-mono text-xs text-navy">{row.short_id}</td>
-                          <td className="px-4 py-3 font-medium text-navy truncate max-w-[200px]">{row.profile_title}</td>
+                          <td className="px-4 py-3 font-medium text-navy truncate max-w-[200px]">
+                            {row.profile_title}
+                          </td>
                           <td className="px-4 py-3 text-zinc-500 text-xs">{formatDate(row.created_at)}</td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap items-center gap-1.5">
@@ -338,7 +601,7 @@ export const AdminPage: React.FC = () => {
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
                                 >
-                                  <Download size={12} />
+                                  <Download size={12} aria-hidden />
                                   STL
                                 </a>
                               ) : null}
@@ -349,7 +612,7 @@ export const AdminPage: React.FC = () => {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-                                  title="Druckversion (max. 3 Farben) – Vorschau unverbindlich"
+                                  title="Druckversion (max. 3 Farben)"
                                 >
                                   <img
                                     src={printPng}
@@ -388,7 +651,7 @@ export const AdminPage: React.FC = () => {
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-navy text-white text-xs font-medium hover:bg-navy/90"
                               >
-                                <ExternalLink size={12} />
+                                <ExternalLink size={12} aria-hidden />
                                 Öffnen
                               </a>
                             </div>
@@ -396,112 +659,6 @@ export const AdminPage: React.FC = () => {
                         </tr>
                       );
                     })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className="card overflow-hidden mt-6">
-          <div className="px-5 py-4 border-b border-zinc-200">
-            <h2 className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy flex items-center gap-2">
-              <Package size={18} />
-              Bestellungen (Short-ID ↔ Bestellung ↔ Status)
-            </h2>
-            <p className="text-sm text-zinc-500 mt-1">
-              Manuell verknüpfen oder automatisch per Shopify-Webhook (
-              <code className="text-xs">orders/paid</code>
-              ). Siehe SHOPIFY_WEBHOOK.md.
-            </p>
-          </div>
-
-          <form onSubmit={handleAddOrder} className="px-5 py-4 border-b border-zinc-100 flex flex-wrap gap-3 items-end">
-            <div className="flex-1 min-w-[120px]">
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1">Bestellnummer</label>
-              <input
-                type="text"
-                value={orderForm.order_number}
-                onChange={(e) => setOrderForm((f) => ({ ...f, order_number: e.target.value }))}
-                placeholder="z. B. 1001"
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm"
-              />
-            </div>
-            <div className="flex-1 min-w-[120px]">
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1">Short-ID *</label>
-              <input
-                type="text"
-                value={orderForm.short_id}
-                onChange={(e) => setOrderForm((f) => ({ ...f, short_id: e.target.value }))}
-                placeholder="z. B. ABC12XYZ"
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm"
-                required
-              />
-            </div>
-            <div className="w-36">
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-1">Status</label>
-              <select
-                value={orderForm.status}
-                onChange={(e) => setOrderForm((f) => ({ ...f, status: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg border border-zinc-200 text-sm"
-              >
-                {statusOptions.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-            <button type="submit" disabled={orderSubmitting} className="px-4 py-2 rounded-lg bg-navy text-white text-sm font-medium hover:bg-navy/90 disabled:opacity-50">
-              {orderSubmitting ? '…' : 'Verknüpfen'}
-            </button>
-          </form>
-
-          {ordersLoading ? (
-            <div className="flex items-center justify-center py-8 gap-2 text-zinc-400">
-              <Loader2 size={18} className="animate-spin" />
-              <span className="text-sm">Lade Bestellungen…</span>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="bg-zinc-50 border-b border-zinc-200">
-                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Bestellnr.</th>
-                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Short-ID</th>
-                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Status</th>
-                    <th className="px-4 py-3 font-semibold uppercase tracking-tight text-zinc-500 text-[10px]">Aktionen</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.length === 0 ? (
-                    <tr><td colSpan={4} className="px-4 py-8 text-center text-zinc-500 text-sm">Noch keine Bestellungen verknüpft.</td></tr>
-                  ) : (
-                    orders.map((o) => (
-                      <tr key={o.id} className="border-b border-zinc-100 hover:bg-zinc-50/50">
-                        <td className="px-4 py-3 font-medium text-navy">
-                          {o.order_number || o.shopify_order_id || '—'}
-                          {o.shopify_order_id && (
-                            <a href={`${SHOPIFY_ADMIN_ORDERS_URL}/${o.shopify_order_id}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-petrol hover:underline inline-flex items-center">
-                              <ExternalLink size={12} />
-                            </a>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs text-navy">{o.short_id}</td>
-                        <td className="px-4 py-3">
-                          <select
-                            value={o.status}
-                            onChange={(e) => handleOrderStatusChange(o.id, e.target.value)}
-                            className="px-2 py-1 rounded border border-zinc-200 text-xs font-medium"
-                          >
-                            {statusOptions.map((s) => (
-                              <option key={s} value={s}>{s}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-4 py-3">
-                          <a href={`${baseUrl}/?id=${encodeURIComponent(o.short_id)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-petrol hover:underline">Microsite</a>
-                        </td>
-                      </tr>
-                    ))
                   )}
                 </tbody>
               </table>

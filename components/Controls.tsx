@@ -7,6 +7,7 @@ import { validateImageFile, isValidEmail, normalizePhoneInput } from '../lib/val
 import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
 import { SITE_FONTS, SITE_TEMPLATES, type SiteTemplate } from '../lib/siteLayouts';
 import { paletteForIndustry } from '../lib/brandPalette';
+import { parseFaqItems, serializeFaqItems, type FaqItem } from '../lib/contentBlocks';
 
 interface ControlsProps {
   activeDept: Department;
@@ -131,6 +132,83 @@ const PropertyPanel: React.FC<{ block: NFCBlock; onUpdate: (u: Partial<NFCBlock>
           <div className="space-y-2">
             <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Standort Adresse</label>
             <input type="text" value={block.settings?.address || ''} placeholder="Musterstraße 1, 12345 Stadt" onChange={e => onUpdate({ settings: { ...block.settings, address: e.target.value } })} className="w-full p-4 rounded-2xl border border-navy/5 text-xs bg-white font-bold outline-none focus:border-petrol/30 transition-colors" />
+          </div>
+        )}
+
+        {block.type === 'faq' && (
+          <div className="space-y-3">
+            <p className="text-[10px] text-zinc-500 px-1">Fragen und kurze Antworten für Kunden.</p>
+            {parseFaqItems(block.content).map((item, idx) => (
+              <div key={idx} className="space-y-2 p-3 rounded-2xl bg-cream/80 border border-navy/5">
+                <input
+                  type="text"
+                  value={item.q}
+                  placeholder="Frage"
+                  onChange={(e) => {
+                    const next: FaqItem[] = parseFaqItems(block.content).map((it, i) =>
+                      i === idx ? { ...it, q: e.target.value } : it
+                    );
+                    onUpdate({ content: serializeFaqItems(next) });
+                  }}
+                  className="w-full p-3 rounded-xl border border-navy/5 text-xs bg-white font-bold outline-none"
+                />
+                <textarea
+                  value={item.a}
+                  placeholder="Antwort"
+                  onChange={(e) => {
+                    const next: FaqItem[] = parseFaqItems(block.content).map((it, i) =>
+                      i === idx ? { ...it, a: e.target.value } : it
+                    );
+                    onUpdate({ content: serializeFaqItems(next) });
+                  }}
+                  className="w-full p-3 rounded-xl border border-navy/5 text-xs bg-white h-20 resize-none outline-none"
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              className="text-[10px] font-black uppercase tracking-wider text-petrol"
+              onClick={() => {
+                const next = [...parseFaqItems(block.content), { q: '', a: '' }];
+                onUpdate({ content: serializeFaqItems(next) });
+              }}
+            >
+              + Frage hinzufügen
+            </button>
+          </div>
+        )}
+
+        {block.type === 'hours' && (
+          <div className="space-y-2">
+            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Öffnungszeiten</label>
+            <textarea
+              value={block.settings?.hoursText || block.content || ''}
+              placeholder={'Mo–Fr 9–18 Uhr\nSa 10–14 Uhr'}
+              onChange={(e) =>
+                onUpdate({
+                  content: e.target.value,
+                  settings: { ...block.settings, hoursText: e.target.value },
+                })
+              }
+              className="w-full p-4 rounded-2xl border border-navy/5 text-xs h-32 bg-white resize-none font-medium outline-none"
+            />
+          </div>
+        )}
+
+        {block.type === 'gallery' && (
+          <div className="space-y-2">
+            <label className="text-[8px] font-black uppercase text-zinc-400 px-1 tracking-widest">Bild-Links (https, eine pro Zeile)</label>
+            <textarea
+              value={block.settings?.galleryUrls || block.content || ''}
+              placeholder="https://…"
+              onChange={(e) =>
+                onUpdate({
+                  content: e.target.value,
+                  settings: { ...block.settings, galleryUrls: e.target.value },
+                })
+              }
+              className="w-full p-4 rounded-2xl border border-navy/5 text-xs h-32 bg-white resize-none font-medium outline-none"
+            />
           </div>
         )}
 
@@ -291,6 +369,27 @@ export const Controls: React.FC<ControlsProps> = ({
       type: 'spacer',
       content: '',
       settings: { height: 24 }
+    };
+    updateConfig('nfcBlocks', [...config.nfcBlocks, newBlock]);
+  };
+
+  const addContentBlock = (type: 'faq' | 'hours' | 'gallery', title: string) => {
+    const newBlock: NFCBlock = {
+      id: `${type}_${Date.now()}`,
+      type,
+      title,
+      content:
+        type === 'faq'
+          ? serializeFaqItems([{ q: 'Beispiel-Frage?', a: 'Kurze Antwort für Kunden.' }])
+          : type === 'hours'
+            ? 'Mo–Fr 9–18 Uhr\nSa 10–14 Uhr'
+            : '',
+      settings:
+        type === 'hours'
+          ? { hoursText: 'Mo–Fr 9–18 Uhr\nSa 10–14 Uhr' }
+          : type === 'gallery'
+            ? { galleryUrls: '' }
+            : {},
     };
     updateConfig('nfcBlocks', [...config.nfcBlocks, newBlock]);
   };
@@ -682,6 +781,15 @@ export const Controls: React.FC<ControlsProps> = ({
             <button type="button" onClick={addSpacer} className="card p-3 flex items-center gap-2 text-zinc-500 hover:border-petrol/25 transition-all text-[8px] font-black uppercase tracking-wider min-h-[44px]" title="Abstand einfügen">
               <div className="w-7 h-7 rounded-lg bg-cream flex items-center justify-center"><div className="w-full h-0.5 bg-zinc-300 rounded" /></div>
               Abstand
+            </button>
+            <button type="button" onClick={() => addContentBlock('faq', 'FAQ')} className="card p-3 flex items-center gap-2 text-zinc-500 hover:border-petrol/25 transition-all text-[8px] font-black uppercase tracking-wider min-h-[44px]">
+              FAQ
+            </button>
+            <button type="button" onClick={() => addContentBlock('hours', 'Öffnungszeiten')} className="card p-3 flex items-center gap-2 text-zinc-500 hover:border-petrol/25 transition-all text-[8px] font-black uppercase tracking-wider min-h-[44px]">
+              Zeiten
+            </button>
+            <button type="button" onClick={() => addContentBlock('gallery', 'Galerie')} className="card p-3 flex items-center gap-2 text-zinc-500 hover:border-petrol/25 transition-all text-[8px] font-black uppercase tracking-wider min-h-[44px]">
+              Galerie
             </button>
           </div>
           <div className="space-y-6">

@@ -7,6 +7,7 @@ import { showError } from '../lib/utils';
 import { isValidEmail, toSafeHttpUrl } from '../lib/validation';
 import { brandButtonStyle, resolveSurface } from '../lib/brandPalette';
 import { fontClassFor, splitBlocksForLanding } from '../lib/siteLayouts';
+import { parseFaqItems, parseGalleryUrls } from '../lib/contentBlocks';
 
 interface MicrositeProps {
   config: ModelConfig;
@@ -197,8 +198,74 @@ export const BlockRenderer: React.FC<{ block: NFCBlock, configId: string, accent
   if (block.type === 'image' && block.imageUrl) {
     return (
       <div className="rounded-[2.5rem] overflow-hidden border border-navy/5 shadow-lg pointer-events-auto relative group animate-in zoom-in duration-500">
-        <img src={block.imageUrl} alt={block.title} className="w-full h-auto group-hover:scale-105 transition-transform duration-700" />
+        <img src={block.imageUrl} alt={block.title || ''} className="w-full h-auto group-hover:scale-105 transition-transform duration-700" />
         {block.title && <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-8"><p className="text-white text-[11px] font-black uppercase tracking-widest">{block.title}</p></div>}
+      </div>
+    );
+  }
+
+  if (block.type === 'faq') {
+    const items = parseFaqItems(block.content || block.settings?.faqJson);
+    if (!items.length) return null;
+    return (
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-6 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto`}>
+        <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest px-1`}>
+          {block.title || 'FAQ'}
+        </h3>
+        <div className="space-y-2">
+          {items.map((item, i) => (
+            <details key={i} className={`${isDark ? 'bg-zinc-950/60' : 'bg-cream/80'} rounded-2xl px-4 py-3`}>
+              <summary className={`${isDark ? 'text-zinc-100' : 'text-navy'} text-sm font-bold cursor-pointer list-none`}>
+                {item.q || 'Frage'}
+              </summary>
+              <p className={`${isDark ? 'text-zinc-400' : 'text-zinc-600'} text-sm mt-2 leading-relaxed whitespace-pre-line`}>
+                {item.a}
+              </p>
+            </details>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (block.type === 'hours') {
+    const text = (block.settings?.hoursText || block.content || '').trim();
+    if (!text) return null;
+    return (
+      <div className={`${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-navy/5'} p-6 rounded-[2.5rem] border shadow-sm space-y-3 pointer-events-auto text-center`}>
+        <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest`}>
+          {block.title || 'Öffnungszeiten'}
+        </h3>
+        <p className={`${isDark ? 'text-zinc-400' : 'text-zinc-600'} text-sm leading-relaxed whitespace-pre-line`}>
+          {text}
+        </p>
+      </div>
+    );
+  }
+
+  if (block.type === 'gallery') {
+    const urls = parseGalleryUrls(block.settings?.galleryUrls || block.content);
+    if (!urls.length) return null;
+    return (
+      <div className="space-y-3 pointer-events-auto">
+        {block.title && (
+          <h3 className={`${isDark ? 'text-white' : 'text-navy'} font-black text-[11px] uppercase tracking-widest text-center`}>
+            {block.title}
+          </h3>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          {urls.map((url) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-2xl overflow-hidden border border-navy/5 aspect-square bg-zinc-100"
+            >
+              <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+            </a>
+          ))}
+        </div>
       </div>
     );
   }

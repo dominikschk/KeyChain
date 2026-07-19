@@ -18,7 +18,7 @@ export type LandingMode = 'microsite' | 'external';
 
 export interface NFCBlock {
   id: string;
-  type: 'text' | 'image' | 'magic_button' | 'spacer' | 'headline' | 'map';
+  type: 'text' | 'image' | 'magic_button' | 'spacer' | 'headline' | 'map' | 'faq' | 'hours' | 'gallery';
   content: string;
   title?: string;
   buttonType?: MagicButtonType;
@@ -43,6 +43,12 @@ export interface NFCBlock {
     description?: string;
     height?: number;
     address?: string;
+    /** FAQ: JSON-Array [{q,a}] in content bevorzugt; Fallback settings.faqJson */
+    faqJson?: string;
+    /** Öffnungszeiten als Mehrzeilentext */
+    hoursText?: string;
+    /** Galerie: https-URLs, eine pro Zeile */
+    galleryUrls?: string;
   };
 }
 

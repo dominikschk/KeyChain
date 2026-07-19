@@ -194,9 +194,9 @@ Anschluss an `VORHABEN.md`, ohne Anhänger zu verwässern:
 - [ ] Materialliste + Farbtoleranz-Doku (intern)
 
 **Q2**
-- Print-QC-Freigabe (Mensch-in-the-Loop optional)
-- Batch-Export für Druckerei
-- Filament-/Platten-Profile
+- [x] Print-QC-Freigabe (Mensch-in-the-Loop) – Admin QC → optional `in_production`
+- [x] Batch-Export für Druckerei (CSV)
+- [ ] Filament-/Platten-Profile
 
 **Q3–Q4**
 - SLA-Tracking; Nachdruck-Workflow; Qualitätsmetriken (Reprint-Rate)
@@ -232,9 +232,9 @@ Anschluss an `VORHABEN.md`, ohne Anhänger zu verwässern:
 ### 8.4 Platform, Security, DevOps (6)
 
 **Q1**
-- [x] GitHub Actions CI (typecheck + vitest + build); Preview-Deploys & Branch-Schutz offen
-- [ ] Sentry; Rate-Limits (Cloudflare/Supabase)
-- [ ] Rest-Checkliste `SECURITY_ISSUES.md`
+- [x] GitHub Actions CI (typecheck + lint + vitest + build + e2e); Preview-Deploys & Branch-Schutz offen
+- [x] Sentry-Hook (optional DSN); Rate-Limits dokumentiert + Scan-RPC
+- [ ] Rest-Checkliste `SECURITY_ISSUES.md` in Prod ausführen (Mensch)
 
 **Q2**
 - Staging/Prod-Trennung; Secrets-Rotation; Backup-Drills
@@ -245,8 +245,8 @@ Anschluss an `VORHABEN.md`, ohne Anhänger zu verwässern:
 ### 8.5 QA, Design, Support, Data (9)
 
 **Q1**
-- [x] Unit (Utils/Validation/STL/Print); Playwright Smoke offen
-- [ ] Legal-Copy zentral pflegen (Vorschau vs. Druck)
+- [x] Unit (Utils/Validation/STL/Print/Webhook) + Playwright Smoke
+- [x] Legal-Copy zentral (`LEGAL_COPY.md`)
 - [ ] Support-Playbooks (Mail/CCP/Order)
 
 **Q2**
