@@ -34,6 +34,12 @@ export interface BlockRow {
   sort_order: number;
 }
 
+
+function numOr(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function mapBlockRow(row: BlockRow): NFCBlock {
   return {
     id: row.id,
@@ -79,16 +85,16 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     externalUrl: typeof plate.externalUrl === 'string' ? plate.externalUrl : '',
     nfcBlocks: blocksError ? [] : (blocks || []).map((b: BlockRow) => mapBlockRow(b)),
     baseType: (plate.baseType as ModelConfig['baseType']) ?? base.baseType,
-    plateWidth: Number(plate.plateWidth) ?? base.plateWidth,
-    plateHeight: Number(plate.plateHeight) ?? base.plateHeight,
-    plateDepth: Number(plate.plateDepth) ?? base.plateDepth,
-    logoScale: Number(plate.logoScale) ?? base.logoScale,
+    plateWidth: numOr(plate.plateWidth, base.plateWidth),
+    plateHeight: numOr(plate.plateHeight, base.plateHeight),
+    plateDepth: numOr(plate.plateDepth, base.plateDepth),
+    logoScale: numOr(plate.logoScale, base.logoScale),
     logoColor: (plate.logoColor as string) ?? base.logoColor,
     plateColor: (plate.plateColor as string) ?? base.plateColor ?? '#F8F5F0',
-    logoDepth: Number(plate.logoDepth) ?? base.logoDepth,
-    logoPosX: Number(plate.logoPosX) ?? base.logoPosX,
-    logoPosY: Number(plate.logoPosY) ?? base.logoPosY,
-    logoRotation: Number(plate.logoRotation) ?? base.logoRotation,
+    logoDepth: numOr(plate.logoDepth, base.logoDepth),
+    logoPosX: numOr(plate.logoPosX, base.logoPosX),
+    logoPosY: numOr(plate.logoPosY, base.logoPosY),
+    logoRotation: numOr(plate.logoRotation, base.logoRotation),
     mirrorX: plate.mirrorX === true,
     hasChain: plate.hasChain !== false,
     engraveText: typeof plate.engraveText === 'string' ? plate.engraveText : '',
@@ -241,12 +247,12 @@ export async function updateLandingTarget(
 }
 
 /**
- * Scan speichern (anon INSERT erlaubt).
+ * Scan speichern (RPC mit Rate-Limit, max. 20/min/config).
  */
 export async function recordScan(configId: string): Promise<void> {
-  if (!supabase) return;
-
-  await supabase.from('nfc_scans').insert([{ config_id: configId }]);
+  if (!supabase || !configId) return;
+  const { error } = await supabase.rpc('record_nfc_scan', { p_config_id: configId });
+  if (error) console.warn('recordScan:', error.message);
 }
 
 /**

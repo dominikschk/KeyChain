@@ -1,5 +1,6 @@
 /**
- * Bestellungen: Short-ID ↔ Bestellung ↔ Status (manuell oder später Shopify-Sync).
+ * Bestellungen: Short-ID ↔ Bestellung ↔ Status (manuell oder Shopify-Webhook).
+ * Webhook: siehe SHOPIFY_WEBHOOK.md / Edge Function shopify-order-webhook.
  */
 import { supabase } from './supabase';
 
@@ -19,6 +20,10 @@ export type OrderStatus = (typeof STATUS_OPTIONS)[number];
 
 export function getOrderStatusOptions(): OrderStatus[] {
   return [...STATUS_OPTIONS];
+}
+
+export function isShopifySyncedOrder(row: OrderRow): boolean {
+  return !!(row.shopify_order_id && String(row.shopify_order_id).trim());
 }
 
 export async function getOrdersList(): Promise<OrderRow[]> {

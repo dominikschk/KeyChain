@@ -11,27 +11,30 @@ Abgeleitet aus [`ROADMAP_PROFESSIONAL_2026_2027.md`](ROADMAP_PROFESSIONAL_2026_2
 
 | ID | Aufgabe | Status | Hinweis |
 |----|---------|--------|---------|
-| T1 | **STL/Print-Pipeline** – headless STL, Print-PNG Upload, Admin-Druckspalte | **in diesem PR** | `lib/stlExport.ts`, `lib/printAssets.ts`; Raster → Platten-STL + Print-PNG |
-| T2 | **CI** – GitHub Actions: typecheck, unit tests, build | **in diesem PR** | `.github/workflows/ci.yml` |
-| T3 | **Test-Grundlage** – Unit für Utils/Validation/STL/Print | **in diesem PR** | Vitest `lib/__tests__/q1-foundation.test.ts` |
-| T4 | **Shopify Order-Webhook** → Admin Status `paid` | offen | `lib/ordersApi.ts` + Edge Function |
-| T5 | **Security-Deploy** – Rest aus `SECURITY_ISSUES.md` | offen | Schema + Edge Functions + Rate-Limit |
+| T1 | **STL/Print-Pipeline** – headless STL, Print-PNG Upload, Admin-Druckspalte | **erledigt** | `lib/stlExport.ts`, `lib/printAssets.ts` |
+| T2 | **CI** – GitHub Actions: typecheck, lint, unit, build, e2e | **erledigt** | `.github/workflows/ci.yml` |
+| T3 | **Test-Grundlage** – Unit Utils/Validation/STL/Print/Webhook | **erledigt** | Vitest 19 Tests |
+| T4 | **Shopify Order-Webhook** → Admin Status `paid` | **erledigt (Code)** | Edge Function + Schema-RPC; Deploy: [`SHOPIFY_WEBHOOK.md`](SHOPIFY_WEBHOOK.md) |
+| T5 | **Security-Deploy** – Scan-Rate-Limit + Checkliste | **erledigt (Code)** | `record_nfc_scan`; Cloudflare-Schritte in `SECURITY_ISSUES.md` (manuell) |
 
 ## P1 – Q1 parallel
 
 | ID | Aufgabe | Status |
 |----|---------|--------|
-| T6 | Observability (Sentry + Basis-Analytics) | offen |
-| T7 | Playwright Smoke Upload → Save → Cart-URL | offen |
-| T8 | Lint (ESLint) in CI | offen |
+| T6 | Observability (Sentry optional via `VITE_SENTRY_DSN`) | **erledigt** |
+| T7 | Playwright Smoke Routing + Cart-URL | **erledigt** |
+| T8 | Lint (ESLint) in CI | **erledigt** |
 
-## P2 – nach Q1-Exit
+## P2 – Q2+ (nächste Sessions)
 
 | ID | Aufgabe | Status |
 |----|---------|--------|
-| T9 | Print-QC UI / 3-Farben-Produktionstrennung | offen |
-| T10 | Produktvarianten mit echten Shopify Variant-IDs | offen |
-| T11 | Microsite-Slices laut `VORHABEN.md` (ohne Print zu blockieren) | offen |
+| T9 | Print-QC Freigabe-Workflow (Mensch-in-the-Loop) | teilweise – Admin Print-PNG-Thumbnail; Freigabe-State offen |
+| T10 | Echte Shopify Variant-IDs (Badge etc.) | offen – Platzhalter in `PRODUCTS` |
+| T11 | Microsite-Slices laut `VORHABEN.md` | offen – nach Print/Commerce |
+| T12 | Admin 2.0 Queue/Filter/Batch-Export | offen |
+| T13 | Design System + WCAG AA Kernflows | offen |
+| T14 | i18n DE/EN | offen (Q4) |
 
 ---
 
@@ -40,9 +43,17 @@ Abgeleitet aus [`ROADMAP_PROFESSIONAL_2026_2027.md`](ROADMAP_PROFESSIONAL_2026_2
 - [x] Shopify Bestellmail/Liquid live + Smoke Order (2026-07-19)
 - [x] CCP-Edit mit `write_token`
 - [x] Logo Preview vs. Print (max. 3 Farben)
+- [x] Q1 Engineering: STL + CI + Tests + Lint + E2E + Webhook-Code + Scan-RL + Sentry-Hook
 
 ---
 
+## Deploy-Pflicht (Mensch)
+
+1. `supabase-schema.sql` (Q1-Abschnitt) ausführen  
+2. `shopify-order-webhook` + Secrets deployen  
+3. Shopify Webhook `orders/paid` eintragen  
+4. Optional: `VITE_SENTRY_DSN`, Cloudflare Rate-Limit  
+
 ## Nächste Agent-Session
 
-Nach Merge von T1–T3: **T4 Shopify Order-Webhook** (P0).
+**T9/T10** (Print-QC Freigabe + echte Variant-IDs) oder Microsite nur wenn Print/Commerce nicht blockiert.

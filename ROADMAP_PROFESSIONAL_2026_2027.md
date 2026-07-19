@@ -126,9 +126,13 @@ Fokus: Produktionsfähigkeit und Engineering-Hygiene.
 
 | # | Thema | Status / Hinweis |
 |---|--------|------------------|
-| 1 | **STL/Print-Pipeline wieder live** – Viewer-STL oder neue Engine; `svgForProduction` → Fertigungsjob; Admin zeigt druckfertige Assets | **teilweise erledigt 2026-07-19** – headless STL + Print-PNG + Admin-Downloads; Lint/Preview-Deploys folgen |
-| 2 | **CI/CD** – GitHub Actions: `tsc`, Lint, Build, Preview-Deploys; Branch-Schutz | **teilweise erledigt 2026-07-19** – Actions: typecheck + vitest + build; Lint/Preview/Branch-Schutz offen |
-| 3 | **Test-Grundlage** – Unit Logo/Validation; Playwright Smoke (Upload → Save → Cart-URL) | **teilweise erledigt 2026-07-19** – Unit Utils/Validation/STL/Print; Playwright offen |
+| 1 | **STL/Print-Pipeline wieder live** – Viewer-STL oder neue Engine; `svgForProduction` → Fertigungsjob; Admin zeigt druckfertige Assets | **erledigt 2026-07-19** (headless STL + Print-PNG + Admin) |
+| 2 | **CI/CD** – GitHub Actions: `tsc`, Lint, Build, Preview-Deploys; Branch-Schutz | **größtenteils erledigt** – Actions: typecheck+lint+vitest+build+e2e; Preview-Deploys/Branch-Schutz offen |
+| 3 | **Test-Grundlage** – Unit Logo/Validation; Playwright Smoke (Upload → Save → Cart-URL) | **erledigt** – Unit + Playwright Routing/Cart-URL (voller Upload-Save braucht Staging-Env) |
+| 4 | **Security-Deploy abschließen** – Rest aus `SECURITY_ISSUES.md`; Cloudflare Rate-Limit; Scan-Flooding | **Code erledigt** – `record_nfc_scan`; Cloudflare/Schema-Deploy manuell |
+| 5a | **Shopify Live-Delivery** – Liquid + Smoke Order | **erledigt 2026-07-19** |
+| 5b | **Shopify Order-Sync** – Webhook Order → Status `paid` in Admin (`lib/ordersApi.ts`) | **Code erledigt** – siehe `SHOPIFY_WEBHOOK.md` (Deploy offen) |
+| 6 | **Observability** – Sentry + Basis-Analytics; Error-Budgets | **teilweise** – optional Sentry (`VITE_SENTRY_DSN`); Error-Budgets offen |
 | 4 | **Security-Deploy abschließen** – Rest aus `SECURITY_ISSUES.md`; Cloudflare Rate-Limit; Scan-Flooding | offen |
 | 5a | **Shopify Live-Delivery** – Liquid + Smoke Order | **erledigt 2026-07-19** |
 | 5b | **Shopify Order-Sync** – Webhook Order → Status `paid` in Admin (`lib/ordersApi.ts`) | offen |
@@ -200,8 +204,8 @@ Anschluss an `VORHABEN.md`, ohne Anhänger zu verwässern:
 ### 8.2 Configurator & Commerce (7)
 
 **Q1**
-- Shopify Webhook → Order/`paid` in Backend
-- Cart-Properties stabil halten; Variant-Mapping vorbereiten
+- [x] Shopify Webhook → Order/`paid` in Backend (Code + Docs; Deploy manuell)
+- [ ] Cart-Properties stabil halten; Variant-Mapping vorbereiten
 
 **Q2**
 - Mehrere physische Varianten (Badge etc.) mit echten Shopify Variant-IDs
@@ -297,9 +301,9 @@ Ohne **STL + Webhook + CI** keine seriöse Skalierung von Varianten oder Digital
 
 ---
 
-## 12. Nächster konkreter Schritt (nach Roadmap-Commit)
+## 12. Nächster konkreter Schritt
 
-1. ~~Q1 starten mit **STL-Pipeline** + **CI**~~ – erster Slice erledigt (siehe `TASKS.md`)
-2. Als Nächstes: **Shopify-Webhook** → Admin `paid`
-3. `VORHABEN.md`-Slices nur so weit, dass sie Print/Commerce nicht blockieren
+1. ~~Q1 STL + CI + Webhook-Code~~ – erledigt im Repo (siehe `TASKS.md`)
+2. **Mensch:** Schema + `shopify-order-webhook` + Shopify `orders/paid` deployen
+3. Q2 starten: Print-QC Freigabe + echte Variant-IDs
 4. Quartals-Review an Exit-Kriterien – Scope streichen statt strecken

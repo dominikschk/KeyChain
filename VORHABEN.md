@@ -21,7 +21,7 @@ CCP-Edit funktioniert. Zustellung über Shopify-Liquid ist **live**.
 - [x] Link-Übergabe im Konfigurator vor Warenkorb (Handy-Seite + Bearbeiten kopieren)
 - [x] Live-Smoke: echte Order → Properties in Admin → Mail erneut senden → CCP testen (Dominik, 2026-07-19)
 
-**Offen danach:** automatischer Shopify-Order-Webhook → Admin-Status (`paid`) – siehe Jahres-Roadmap Q1.
+**Offen danach:** Shopify-Order-Webhook → Admin (`paid`) – **Code fertig**, Deploy siehe [`SHOPIFY_WEBHOOK.md`](SHOPIFY_WEBHOOK.md).
 
 ---
 
@@ -94,9 +94,10 @@ Geführtes Gespräch → Microsite-Config (kein freies HTML).
 
 ## Vorgeschlagene Reihenfolge (nächste Sessions)
 
-1. ~~**STL/Print-Pipeline + CI** (Jahres-Roadmap Q1)~~ – erster Slice erledigt (siehe [`TASKS.md`](TASKS.md) T1–T3)
-2. **Shopify-Order-Webhook** → Admin
-3. Dann Microsite-Slices laut unten / `VORHABEN` (Farben, Sections, Blöcke) – ohne Print zu blockieren
+1. ~~**STL/Print-Pipeline + CI** (Jahres-Roadmap Q1)~~ – erledigt
+2. ~~**Shopify-Order-Webhook** → Admin~~ – Code erledigt; Deploy laut `SHOPIFY_WEBHOOK.md`
+3. Schema/Secrets deployen (Mensch) + Cloudflare Rate-Limit
+4. Dann Q2: Print-QC Freigabe, echte Variant-IDs; Microsite-Slices ohne Print zu blockieren
 
 Kurzfristig Digital (wenn Kapazität frei):
 

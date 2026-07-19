@@ -349,8 +349,13 @@ export const AdminPage: React.FC = () => {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                                  title="Druckversion (max. 3 Farben) – Vorschau unverbindlich"
                                 >
-                                  <Download size={12} />
+                                  <img
+                                    src={printPng}
+                                    alt=""
+                                    className="w-7 h-7 rounded object-contain bg-white border border-zinc-100"
+                                  />
                                   Print-PNG
                                 </a>
                               ) : null}
@@ -405,7 +410,9 @@ export const AdminPage: React.FC = () => {
               Bestellungen (Short-ID ↔ Bestellung ↔ Status)
             </h2>
             <p className="text-sm text-zinc-500 mt-1">
-              Manuell verknüpfen oder später per Shopify-Sync. Link zu Bestellung: Shopify Admin → Bestellungen.
+              Manuell verknüpfen oder automatisch per Shopify-Webhook (
+              <code className="text-xs">orders/paid</code>
+              ). Siehe SHOPIFY_WEBHOOK.md.
             </p>
           </div>
 

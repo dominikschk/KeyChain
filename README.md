@@ -13,22 +13,28 @@ npm run dev
 
 ```bash
 npm run typecheck
+npm run lint
 npm run test
+npm run test:e2e
 npm run build
-# alles:
+# oder:
 npm run ci
 ```
 
-GitHub Actions: `.github/workflows/ci.yml` (typecheck, tests, build).
+GitHub Actions: `.github/workflows/ci.yml` (typecheck, lint, unit, build, Playwright).
 
-## Docs für Agents
+## Docs
 
-- [`AGENTS.md`](AGENTS.md) – Arbeitsregeln
-- [`TASKS.md`](TASKS.md) – priorisiertes Backlog
-- [`ROADMAP_PROFESSIONAL_2026_2027.md`](ROADMAP_PROFESSIONAL_2026_2027.md) – Jahresplan
-- [`VORHABEN.md`](VORHABEN.md) – kurzfristige Produkt-Slices
-- [`SECURITY_ISSUES.md`](SECURITY_ISSUES.md) – Security-Checkliste
+| Datei | Inhalt |
+|-------|--------|
+| [`AGENTS.md`](AGENTS.md) | Agent-Arbeitsregeln |
+| [`TASKS.md`](TASKS.md) | Priorisiertes Backlog |
+| [`ROADMAP_PROFESSIONAL_2026_2027.md`](ROADMAP_PROFESSIONAL_2026_2027.md) | Jahresplan |
+| [`VORHABEN.md`](VORHABEN.md) | Kurzfristige Produkt-Slices |
+| [`SECURITY_ISSUES.md`](SECURITY_ISSUES.md) | Security + Deploy-Checkliste |
+| [`SHOPIFY_WEBHOOK.md`](SHOPIFY_WEBHOOK.md) | Order-Sync deployen |
+| [`LEGAL_COPY.md`](LEGAL_COPY.md) | Vorschau vs. Druck – Kundentexte |
 
 ## Env
 
-Siehe [`.env.example`](.env.example).
+Siehe [`.env.example`](.env.example) (`VITE_SUPABASE_*`, optional `VITE_SENTRY_DSN`).
