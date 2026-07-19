@@ -4,22 +4,31 @@ Stand: 2026-07-19
 
 Automatischer Sync: bezahlte Shopify-Orders mit Line-Item-Property `Config-ID` landen in `orders` (Status `paid`).
 
-## 1. Schema
+> **Wichtig:** Der Supabase **SQL Editor** akzeptiert nur SQL.  
+> `supabase functions deploy …` ist ein **Terminal-/CLI-Befehl** – dort einfügen schlägt mit Syntaxfehler fehl.
 
-Im Supabase SQL Editor den Abschnitt **Q1 2026: Shopify Order-Sync** in [`supabase-schema.sql`](supabase-schema.sql) ausführen (oder die ganze Datei).
+## 1. Schema (SQL Editor)
 
-Enthält:
-- Unique auf `orders.shopify_order_id`
+Supabase Dashboard → **SQL** → New query → Datei [`supabase/migrations/q1_q2_orders_webhook.sql`](supabase/migrations/q1_q2_orders_webhook.sql) einfügen und **Run**.
+
+Oder den Abschnitt ab `Q1 2026` in [`supabase-schema.sql`](supabase-schema.sql).
+
+Enthält u. a.:
 - RPC `upsert_order_from_shopify` (nur `service_role`)
+- RPC `record_nfc_scan` (Rate-Limit)
+- Spalten `print_qc_*` auf `orders`
 
-## 2. Edge Function deployen
+## 2. Edge Function (Terminal / lokal)
+
+Voraussetzung: [Supabase CLI](https://supabase.com/docs/guides/cli) installiert und eingeloggt (`supabase login`, `supabase link`).
 
 ```bash
+# im Projektordner, NICHT im SQL Editor:
 supabase functions deploy shopify-order-webhook --no-verify-jwt
 supabase secrets set SHOPIFY_WEBHOOK_SECRET="dein-shopify-webhook-signing-secret"
 ```
 
-`SUPABASE_URL` und `SUPABASE_SERVICE_ROLE_KEY` sind in Edge Functions i. d. R. schon gesetzt.
+**Ohne CLI:** Dashboard → **Edge Functions** → Code aus `supabase/functions/shopify-order-webhook/index.ts` deployen, JWT-Verify aus, Secret `SHOPIFY_WEBHOOK_SECRET` setzen.
 
 ## 3. Shopify Webhook
 
