@@ -31,11 +31,12 @@ describe('shopifyPricing', () => {
     expect(ten.tierLabel.toLowerCase()).toContain('10')
   })
 
-  it('nutzt Badge-Preise getrennt', () => {
-    const badge = resolveCheckoutPrice('badge', 1)
-    const key = resolveCheckoutPrice('keychain', 1)
+  it('Badge-Staffeln bleiben getrennt von Keychain (auch ohne Live-Katalog)', () => {
+    // Live-Simple blendet Badge aus PRODUCTS aus – Staffeln bleiben trotzdem getrennt.
+    const { priceTiersForProduct } = require('../shopifyPricing') as typeof import('../shopifyPricing')
+    const badge = priceTiersForProduct('badge')[0]!
+    const key = priceTiersForProduct('keychain')[0]!
     expect(badge.unitPriceCents).not.toBe(key.unitPriceCents)
-    expect(badge.productId).toBe('badge')
   })
 
   it('gibt kundenfreundlichen Hinweis zur per-line Staffel', () => {
