@@ -98,3 +98,18 @@ Branch/PR mergen oder Preview deployen.
 - Draft Order bindet Menge an Snapshot (weniger Tampering)  
 - Rate-Limit auf `create-draft-order` (~15/min/IP)  
 - Schärfere Logo-Hinweise (klein/unscharf, feine Linien)
+
+---
+
+## Wenn „es irgendwie nicht klappt“
+
+| Symptom | Typische Ursache | Fix |
+|---------|------------------|-----|
+| Zur Kasse → alter Warenkorb, Katalogpreis | Function/Secrets fehlen | `create-draft-order` deployen + `SHOPIFY_SHOP_DOMAIN` + `shpat_…` |
+| Alert „Function fehlt (404)“ | Nicht deployed | Supabase → Edge Functions → `create-draft-order` |
+| Alert „Secrets fehlen“ (503) | Domain/Token leer | `supabase secrets set …` |
+| Speichern schlägt fehl | Vercel Env / Supabase | `VITE_SUPABASE_URL` + `ANON_KEY` auf **dieser** Deploy-URL |
+| Admin zeigt keine Order | Webhook fehlt | `shopify-order-webhook` + `orders/paid` |
+| Du testest „Produktion“ ohne Änderungen | PR nicht gemergt | Preview-URL vom PR nutzen oder mergen |
+
+**Wichtig:** Die neuen Kassen-Features liegen auf Branch/`PR #1`. Production (`main`) hat sie erst nach Merge.

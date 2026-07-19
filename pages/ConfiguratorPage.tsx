@@ -41,7 +41,7 @@ import {
 import { bulkHintForQuantity, clampOrderQuantity } from '../lib/bulkOrder';
 import { pricingHintForQuantity, resolveCheckoutPrice } from '../lib/shopifyPricing';
 import { buildPricingSnapshot } from '../lib/pricingSnapshot';
-import { createDraftCheckout } from '../lib/shopifyDraftOrderApi';
+import { createDraftCheckoutResult, probeDraftOrderFunction } from '../lib/shopifyDraftOrderApi';
 import {
   basketTotals,
   clearCheckoutBasket,
@@ -95,7 +95,8 @@ const DeliveryHandoffModal: React.FC<{
   onCheckout: () => void;
   onAddAnother: () => void;
   checkoutBusy?: boolean;
-}> = ({ links, onCheckout, onAddAnother, checkoutBusy }) => {
+  checkoutHint?: string | null;
+}> = ({ links, onCheckout, onAddAnother, checkoutBusy, checkoutHint }) => {
   const [copied, setCopied] = useState<'ms' | 'ccp' | null>(null);
   const [showLinks, setShowLinks] = useState(false);
   const totals = basketTotals(links.basket);
@@ -163,6 +164,11 @@ const DeliveryHandoffModal: React.FC<{
             Zur Kasse · {totals.totalLabel}
             <ArrowRight size={18} />
           </button>
+          {checkoutHint && (
+            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-snug">
+              {checkoutHint}
+            </p>
+          )}
           <button
             type="button"
             disabled={checkoutBusy}
@@ -239,6 +245,7 @@ const ConfiguratorPage: React.FC = () => {
   const [deliveryLinks, setDeliveryLinks] = useState<DeliveryLinks | null>(null);
   const [orderQuantity, setOrderQuantity] = useState(1);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutHint, setCheckoutHint] = useState<string | null>(null);
   const [basketCount, setBasketCount] = useState(() => {
     try {
       return loadCheckoutBasket().length;
@@ -246,6 +253,27 @@ const ConfiguratorPage: React.FC = () => {
       return 0;
     }
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    void probeDraftOrderFunction().then((p) => {
+      if (cancelled) return;
+      if (!p.reachable) {
+        setCheckoutHint(
+          'Kassen-Function noch nicht erreichbar – Bestellen öffnet ggf. den normalen Shopify-Warenkorb. Setup: PHASE0_GO_LIVE.md'
+        );
+      } else if (!p.configured) {
+        setCheckoutHint(
+          'Draft Orders Fast fertig: Function ist da, Shopify-Secrets in Supabase fehlen noch (SHOPIFY_SHOP_DOMAIN + Token).'
+        );
+      } else {
+        setCheckoutHint(null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     getSession().then((s) => {
@@ -709,26 +737,54 @@ const ConfiguratorPage: React.FC = () => {
         variantId: l.variantId,
         priceHint: l.priceHint,
       }));
-      const draft = await createDraftCheckout({ lines });
-      if (draft?.invoiceUrl) {
+      const draft = await createDraftCheckoutResult({ lines });
+      if (draft.ok) {
         clearCheckoutBasket();
         setBasketCount(0);
         setDeliveryLinks(null);
         window.location.href = draft.invoiceUrl;
         return;
       }
-      // Fallback: nur eine Position → alter Cart-Link; mehrere → Hinweis
-      if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
-        clearCheckoutBasket();
-        setBasketCount(0);
-        setDeliveryLinks(null);
-        window.location.href = deliveryLinks.cartUrl;
+
+      // Setup fehlt → Cart-Fallback nur bei einer Position, aber klar sagen
+      if (draft.reason === 'not_configured' || draft.reason === 'setup') {
+        setCheckoutHint(draft.message);
+        if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
+          const goCart = window.confirm(
+            `${draft.message}\n\nStattdessen den normalen Shopify-Warenkorb öffnen? (Preis dann aus dem Shop-Katalog)`
+          );
+          if (goCart) {
+            clearCheckoutBasket();
+            setBasketCount(0);
+            setDeliveryLinks(null);
+            window.location.href = deliveryLinks.cartUrl;
+          }
+          return;
+        }
+        showError(draft.message, 'Kasse noch nicht eingerichtet');
         return;
       }
-      showError(
-        'Für mehrere Designs brauchst du Draft Orders in Shopify. Oder bestelle jedes Design einzeln.',
-        'Kasse nicht bereit'
-      );
+
+      if (draft.reason === 'rate_limited') {
+        showError(draft.message, 'Kurz warten');
+        return;
+      }
+
+      // Sonstiger Fehler: bei 1 Position optional Cart, sonst hart fehlschlagen
+      if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
+        const goCart = window.confirm(
+          `Kasse mit berechnetem Preis hat nicht geklappt:\n${draft.message}\n\nShopify-Warenkorb als Notlösung öffnen?`
+        );
+        if (goCart) {
+          clearCheckoutBasket();
+          setBasketCount(0);
+          setDeliveryLinks(null);
+          window.location.href = deliveryLinks.cartUrl;
+        }
+        return;
+      }
+
+      showError(draft.message, 'Kasse fehlgeschlagen');
     } finally {
       setCheckoutBusy(false);
     }
@@ -898,6 +954,7 @@ const ConfiguratorPage: React.FC = () => {
         <DeliveryHandoffModal
           links={deliveryLinks}
           checkoutBusy={checkoutBusy}
+          checkoutHint={checkoutHint}
           onCheckout={() => void handleBasketCheckout()}
           onAddAnother={handleAddAnotherDesign}
         />
