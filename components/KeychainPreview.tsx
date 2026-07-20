@@ -281,7 +281,7 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
 
     return (
       <div
-        className="w-full h-full flex items-center justify-center p-4 md:p-10 relative overflow-hidden"
+        className="w-full h-full flex items-center justify-center p-2 sm:p-4 md:p-10 relative overflow-hidden"
         style={{
           background:
             'radial-gradient(ellipse 80% 60% at 50% 40%, #ffffff 0%, #e8eef5 45%, #d4dde8 100%)',
@@ -299,10 +299,10 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
         <div className="relative w-full max-w-[560px]">
           <div className="absolute -inset-3 rounded-[1.25rem] bg-white/40 blur-xl" aria-hidden />
           <div className="relative aspect-square rounded-2xl bg-white/90 border border-navy/10 shadow-[0_20px_60px_-28px_rgba(17,35,90,0.45)] flex items-center justify-center overflow-hidden">
-            <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10 pointer-events-none">
+            <div className="absolute top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-4 flex items-center justify-between z-10 pointer-events-none">
               <span className="text-[9px] font-black uppercase tracking-[0.2em] text-navy/40">Live-Vorschau</span>
             </div>
-            <div className="relative w-[92%] max-w-[480px] mt-2">
+            <div className="relative w-[96%] sm:w-[92%] max-w-[480px] mt-1 sm:mt-2">
               <img
                 src={BASE_IMG}
                 alt="Schlüsselanhänger"

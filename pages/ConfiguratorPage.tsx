@@ -4,6 +4,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { Loader2, ArrowRight, RefreshCw, Edit3, Smartphone, ShoppingCart, Download, Upload, RotateCcw, ExternalLink, Check, LogOut, User, ChevronDown, Copy, Share2 } from 'lucide-react';
 import { Controls } from '../components/Controls';
+import { MobileOrderBar } from '../components/MobileOrderBar';
 import { SitePreview } from '../components/SitePreview';
 import { KeychainPreview } from '../components/KeychainPreview';
 import type { KeychainPreviewHandle } from '../components/KeychainPreview';
@@ -101,26 +102,11 @@ const DeliveryHandoffModal: React.FC<{
 }> = ({ links, onCheckout, onAddAnother, checkoutBusy, checkoutHint, simple }) => {
   const [copied, setCopied] = useState<'ms' | 'ccp' | null>(null);
   const [showLinks, setShowLinks] = useState(false);
-  const [seconds, setSeconds] = useState(simple ? 5 : 0);
   const totals = basketTotals(links.basket);
-  const continueRef = useRef(onCheckout);
-  continueRef.current = onCheckout;
   const doneRef = useRef(false);
 
-  useEffect(() => {
-    if (!simple) return;
-    if (seconds > 0) {
-      const tmr = window.setTimeout(() => setSeconds((s) => s - 1), 1000);
-      return () => window.clearTimeout(tmr);
-    }
-    if (!doneRef.current) {
-      doneRef.current = true;
-      continueRef.current();
-    }
-  }, [simple, seconds]);
-
   const go = () => {
-    if (doneRef.current && simple) return;
+    if (doneRef.current) return;
     doneRef.current = true;
     onCheckout();
   };
@@ -137,18 +123,18 @@ const DeliveryHandoffModal: React.FC<{
 
   if (simple) {
     return (
-      <div className="fixed inset-0 z-[2500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md">
-        <div className="card w-full max-w-lg flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300">
+      <div className="fixed inset-0 z-[2500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md pb-safe">
+        <div className="card w-full max-w-lg flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300 rounded-t-2xl sm:rounded-2xl">
           <header className="px-5 py-4 border-b border-navy/5 bg-cream">
             <p className="text-[10px] font-bold uppercase tracking-widest text-petrol mb-1">Geschafft</p>
             <h2 className="font-headline text-lg font-extrabold uppercase tracking-tight text-navy">
               Weiter zum Warenkorb
             </h2>
             <p className="text-sm text-zinc-600 mt-1 leading-snug">
-              Dein Anhänger ist gespeichert. Als Nächstes öffnet der Shopify-Warenkorb – dort siehst du den Preis und kannst bezahlen.
+              Dein Anhänger ist gespeichert. Tippe auf den Button – im Shopify-Warenkorb siehst du den Preis und kannst bezahlen.
             </p>
           </header>
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 pb-safe">
             <button
               type="button"
               onClick={go}
@@ -159,8 +145,7 @@ const DeliveryHandoffModal: React.FC<{
               <ArrowRight size={18} />
             </button>
             <p className="text-center text-xs text-zinc-500">
-              Öffnet automatisch in {seconds}s · Code:{' '}
-              <strong className="text-navy">{links.shortId}</strong>
+              Code: <strong className="text-navy">{links.shortId}</strong>
             </p>
             <button
               type="button"
@@ -452,7 +437,7 @@ const ConfiguratorPage: React.FC = () => {
     ? `${t('cta.order')}${orderQuantity > 1 ? ` (${orderQuantity})` : ''}`
     : `${t('cta.order')}${orderQuantity > 1 ? ` (${orderQuantity})` : ''} · ${checkoutPrice.totalLabel}`;
   const [activeDept, setActiveDept] = useState<Department>('digital');
-  const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('preview');
+  const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('editor');
   const [previewType, setPreviewType] = useState<'3d' | 'digital'>('digital');
   const [savingStep, setSavingStep] = useState('idle');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -1143,7 +1128,7 @@ const ConfiguratorPage: React.FC = () => {
         </div>
 
         {/* Phasen-Leiste: klar getrennt */}
-        <div className="px-4 md:px-5 pb-3">
+        <div className="px-4 md:px-5 pb-2 md:pb-3">
           {showDraftBanner && (
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-petrol/20 bg-petrol/5 px-3 py-2.5">
               <p className="text-xs text-navy font-medium">Entwurf geladen – weiterarbeiten oder neu starten?</p>
@@ -1174,21 +1159,22 @@ const ConfiguratorPage: React.FC = () => {
               </div>
             </div>
           )}
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-1.5 md:mb-2">
             <div className={`flex-1 h-1.5 rounded-full ${workPhase === 'hardware' || workPhase === 'site' ? 'bg-petrol' : 'bg-zinc-200'}`} />
             <div className={`flex-1 h-1.5 rounded-full ${workPhase === 'site' ? 'bg-petrol' : 'bg-zinc-200'}`} />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                Schritt {workPhase === 'hardware' ? '1' : '2'} von 2 · Produkt: Schlüsselanhänger
+                Schritt {workPhase === 'hardware' ? '1' : '2'} von 2
+                <span className="hidden sm:inline"> · Produkt: Schlüsselanhänger</span>
               </p>
               <p className="text-sm font-extrabold text-navy">
                 {workPhase === 'hardware'
                   ? 'Dein Schlüsselanhänger'
                   : (config.landingMode === 'external' ? 'Wohin der Chip öffnen soll' : 'Was Kunden auf dem Handy sehen')}
               </p>
-              <p className="text-xs text-zinc-500 mt-0.5 max-w-xl">
+              <p className="hidden md:block text-xs text-zinc-500 mt-0.5 max-w-xl">
                 {workPhase === 'hardware'
                   ? 'Logo und Text platzieren – rechts siehst du, wie der Anhänger ungefähr aussieht.'
                   : (config.landingMode === 'external'
@@ -1196,7 +1182,7 @@ const ConfiguratorPage: React.FC = () => {
                     : 'Optional: kleine Handy-Seite für deine Kunden – oder eigene URL wählen.')}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2">
               {workPhase === 'site' && (
                 <button
                   type="button"
@@ -1292,7 +1278,7 @@ const ConfiguratorPage: React.FC = () => {
           {workPhase === 'site' && config.landingMode === 'external' ? (
             <>
               <div className="flex-1 scroll-container min-h-0">
-                <div className="p-4 sm:p-5 pb-28 md:pb-6 space-y-4">
+                <div className="p-3 sm:p-5 pb-36 md:pb-6 space-y-4">
                   <div className="card p-4 sm:p-5 space-y-3">
                     <p className="text-[9px] font-black uppercase text-petrol tracking-wider">Adresse eintragen</p>
                     <p className="text-sm font-semibold text-navy leading-snug">
@@ -1402,7 +1388,7 @@ const ConfiguratorPage: React.FC = () => {
                 </button>
               </div>
               <div className="flex-1 scroll-container technical-grid-fine min-h-0">
-                <div className="p-4 sm:p-5 pb-28 md:pb-6">
+                <div className="p-3 sm:p-5 pb-36 md:pb-6">
                   <Controls
                     activeDept="digital"
                     config={config}
@@ -1465,7 +1451,7 @@ const ConfiguratorPage: React.FC = () => {
           ) : (
             <>
               <div className="flex-1 scroll-container technical-grid-fine min-h-0">
-                <div className="p-4 sm:p-5 pb-28 md:pb-6">
+                <div className="p-3 sm:p-5 pb-36 md:pb-6">
                   {PRODUCTS.length > 1 && (
                     <div className="mb-4">
                       <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-2">Produkt</label>
@@ -1567,57 +1553,6 @@ const ConfiguratorPage: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="md:hidden shrink-0 p-4 bg-white border-t border-zinc-200 safe-bottom">
-            {workPhase === 'hardware' ? (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500" htmlFor="order-qty-m">
-                    Stückzahl
-                  </label>
-                  <input
-                    id="order-qty-m"
-                    type="number"
-                    min={1}
-                    max={99}
-                    value={orderQuantity}
-                    onChange={(e) => setOrderQuantity(clampOrderQuantity(e.target.value))}
-                    className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
-                  />
-                </div>
-                {!liveSimple && (
-                  <p className="text-sm font-semibold text-navy leading-snug">
-                    {checkoutPrice.unitLabel}
-                    {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
-                  </p>
-                )}
-                {liveSimple && (
-                  <p className="text-[11px] text-zinc-500 leading-snug">
-                    Preis und Zahlung im Shopify-Warenkorb.
-                  </p>
-                )}
-                <button
-                  type="button"
-                  onClick={() => void initiateSave()}
-                  className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
-                >
-                  <ShoppingCart size={18} />
-                  {orderCtaLabel}
-                </button>
-                <button
-                  type="button"
-                  onClick={goToSite}
-                  className="w-full min-h-[40px] text-xs font-semibold text-zinc-600"
-                >
-                  {t('cta.chip.optional')} →
-                </button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => void initiateSave()} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
-                <ShoppingCart size={18} />
-                {orderCtaLabel}
-              </button>
-            )}
-          </div>
           {savingStep !== 'idle' && (
             <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-[600] flex flex-col items-center justify-center text-center px-6">
               <RefreshCw className="text-petrol animate-spin mb-4" size={40} />
@@ -1629,6 +1564,44 @@ const ConfiguratorPage: React.FC = () => {
           )}
         </main>
       </div>
+
+      {workPhase === 'hardware' && (
+        <div className="md:hidden shrink-0 z-[550]">
+          <MobileOrderBar
+            quantity={orderQuantity}
+            onQuantityChange={setOrderQuantity}
+            onOrder={() => void initiateSave()}
+            orderLabel={orderCtaLabel}
+            hint={liveSimple ? 'Preis und Zahlung im Shopify-Warenkorb.' : undefined}
+          />
+          <button
+            type="button"
+            onClick={goToSite}
+            className="w-full min-h-[40px] px-3 text-xs font-semibold text-zinc-600 bg-white border-t border-zinc-100"
+          >
+            {t('cta.chip.short')} →
+          </button>
+        </div>
+      )}
+      {workPhase === 'site' && (
+        <div className="md:hidden shrink-0 border-t border-zinc-200 bg-white px-3 pt-3 pb-2 z-[550] space-y-2">
+          <button
+            type="button"
+            onClick={() => void initiateSave()}
+            className="w-full min-h-[52px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]"
+          >
+            <ShoppingCart size={18} />
+            {orderCtaLabel}
+          </button>
+          <button
+            type="button"
+            onClick={goToHardware}
+            className="w-full min-h-[44px] rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700"
+          >
+            ← Zurück zum Anhänger
+          </button>
+        </div>
+      )}
 
       <nav className="md:hidden flex h-16 bg-white border-t border-zinc-200 z-[600] shrink-0 pb-safe pt-1" role="tablist" aria-label="Hauptnavigation">
         <button type="button" role="tab" onClick={() => setMobileTab('editor')} className={`flex-1 flex flex-col items-center justify-center gap-1 min-w-0 transition-colors ${mobileTab === 'editor' ? 'text-navy' : 'text-zinc-400'}`} aria-selected={mobileTab === 'editor'}>
