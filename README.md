@@ -34,8 +34,9 @@ GitHub Actions: `.github/workflows/ci.yml` (typecheck, lint, unit, build, Playwr
 | [`SECURITY_ISSUES.md`](SECURITY_ISSUES.md) | Security + Deploy-Checkliste |
 | [`SHOPIFY_WEBHOOK.md`](SHOPIFY_WEBHOOK.md) | Order-Sync deployen |
 | [`SHOPIFY_DRAFT_ORDER.md`](SHOPIFY_DRAFT_ORDER.md) | Berechneter Preis → Draft Order / Kasse |
-| [`GO_LIVE.md`](GO_LIVE.md) | **Jetzt:** Shop live – Bestellen ohne Draft-Setup |
-| [`PHASE0_GO_LIVE.md`](PHASE0_GO_LIVE.md) | Später: Webhook + Draft Orders |
+| [`GO_LIVE.md`](GO_LIVE.md) | Übersicht: was schon live, was als Nächstes |
+| [`GO_LIVE_SCHRITT_1_3.md`](GO_LIVE_SCHRITT_1_3.md) | Merge + Vercel + erste Bestellung |
+| [`GO_LIVE_SCHRITT_4_WEBHOOK.md`](GO_LIVE_SCHRITT_4_WEBHOOK.md) | Webhook: bezahlt → Admin |
 | [`LEGAL_COPY.md`](LEGAL_COPY.md) | Vorschau vs. Druck – Kundentexte |
 
 ## Env
