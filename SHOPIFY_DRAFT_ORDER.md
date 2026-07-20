@@ -3,7 +3,9 @@
 Der Konfigurator kann den **Staffelpreis echt an Shopify übergeben** (nicht nur als Hinweis).
 Dafür legt eine Edge Function eine **Draft Order** an und leitet zur `invoice_url` (Checkout) weiter.
 
-Ohne diese Secrets fällt der Flow automatisch auf den klassischen Cart-Link zurück (`/cart/add`).
+**Für Dominik (Klick für Klick):** [`GO_LIVE_SCHRITT_DRAFT.md`](GO_LIVE_SCHRITT_DRAFT.md)
+
+Ohne diese Secrets zeigt die Live-App eine klare Fehlermeldung (kein stiller Katalog-Cart mehr).
 
 ---
 
