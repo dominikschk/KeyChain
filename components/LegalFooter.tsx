@@ -1,25 +1,19 @@
 /**
- * Fußzeile mit Impressum / Datenschutz / AGB / Widerruf.
+ * Fußzeile: Impressum / Datenschutz / AGB / Widerruf → Shopify-Policy-Links.
  */
 import React from 'react'
-import { LEGAL_PATHS } from '../lib/legalCompany'
+import { LEGAL_PATHS, openLegalLink, type LegalLinkKey } from '../lib/legalCompany'
 
 type Props = {
   className?: string
-  /** kompakt für Modals */
   compact?: boolean
 }
 
-function go(path: string) {
-  window.history.pushState({}, '', path)
-  window.dispatchEvent(new PopStateEvent('popstate'))
-}
-
-const links: { path: string; label: string }[] = [
-  { path: LEGAL_PATHS.impressum, label: 'Impressum' },
-  { path: LEGAL_PATHS.datenschutz, label: 'Datenschutz' },
-  { path: LEGAL_PATHS.agb, label: 'AGB' },
-  { path: LEGAL_PATHS.widerruf, label: 'Widerruf' },
+const links: { key: LegalLinkKey; label: string }[] = [
+  { key: 'impressum', label: 'Impressum' },
+  { key: 'datenschutz', label: 'Datenschutz' },
+  { key: 'agb', label: 'AGB' },
+  { key: 'widerruf', label: 'Widerruf' },
 ]
 
 export const LegalFooter: React.FC<Props> = ({ className = '', compact }) => {
@@ -30,9 +24,9 @@ export const LegalFooter: React.FC<Props> = ({ className = '', compact }) => {
     >
       {links.map((l) => (
         <button
-          key={l.path}
+          key={l.key}
           type="button"
-          onClick={() => go(l.path)}
+          onClick={() => openLegalLink(l.key)}
           className={`text-zinc-500 hover:text-navy underline-offset-2 hover:underline ${
             compact ? 'text-[10px]' : 'text-[11px] sm:text-xs'
           }`}
@@ -40,6 +34,10 @@ export const LegalFooter: React.FC<Props> = ({ className = '', compact }) => {
           {l.label}
         </button>
       ))}
+      {/* Fallback für crawler / no-js: lokale Pfade bleiben erreichbar */}
+      <span className="sr-only">
+        {Object.values(LEGAL_PATHS).join(' ')}
+      </span>
     </nav>
   )
 }

@@ -1,85 +1,49 @@
 # Recht & Datenschutz vor Go-Live
 
 Stand: 2026-07-20  
-Für: Dominik  
 
-**Wichtig:** Der Code liefert **Vorlagen und Pflicht-Links**. Das ist **keine anwaltliche Prüfung**.  
-Finaltexte (AGB, Widerruf bei Personalisierung, Datenschutzerklärung) solltest du mit einer Fachperson / einem Generator (z. B. IT-Recht Kanzlei, eRecht24) abstimmen.
-
-Nimm dir Ruhe. Checkboxen helfen.
+**Kurz:** Impressum/AGB/Datenschutz/Widerruf verlinken auf **deine Shopify-Policies**.  
+KI-Chat startet erst nach Datenschutz-Zustimmung.
 
 ---
 
-## Was der Code schon kann
+## BLOCK 1 – Shopify-Links in Vercel
 
-- Seiten: `/impressum` · `/datenschutz` · `/agb` · `/widerruf`
-- Links im Konfigurator, Login, Microsite, vor „Zur Kasse“
-- Cookie-Hinweis (notwendig vs. Sentry)
-- Preise mit **inkl. MwSt.**
-- Druck-Hinweis (Vorschau unverbindlich)
-- Google-Login-Script nur noch auf dem Login (nicht global)
+Shopify Admin → **Einstellungen** → **Rechtliches** → jeweilige Policy öffnen → URL kopieren.
 
----
-
-## BLOCK 1 – Firmendaten in Vercel
-
-Production Environment Variables setzen, dann **Redeploy**:
+In Vercel (Production) setzen + **Redeploy**:
 
 | Variable | Beispiel |
 |----------|----------|
-| `VITE_LEGAL_COMPANY_NAME` | `Dominik Schkalei` oder `NUDAIM3D GmbH` |
-| `VITE_LEGAL_STREET` | `Musterstraße 1` |
-| `VITE_LEGAL_ZIP_CITY` | `12345 Musterstadt` |
-| `VITE_LEGAL_EMAIL` | `hallo@nudaim3d.de` |
-| `VITE_LEGAL_PHONE` | optional |
-| `VITE_LEGAL_REPRESENTATIVE` | dein Name |
-| `VITE_LEGAL_REGISTER` | z. B. `Amtsgericht … HRB …` oder `Einzelunternehmen` |
-| `VITE_LEGAL_VAT_ID` | `DE…` oder `Kleinunternehmer § 19 UStG` |
-| `VITE_LEGAL_SHOP_URL` | `https://nudaim3d.de` |
+| `VITE_LEGAL_IMPRESSUM_URL` | `https://nudaim3d.de/policies/legal-notice` |
+| `VITE_LEGAL_DATENSCHUTZ_URL` | `https://nudaim3d.de/policies/privacy-policy` |
+| `VITE_LEGAL_AGB_URL` | `https://nudaim3d.de/policies/terms-of-service` |
+| `VITE_LEGAL_WIDERRUF_URL` | `https://nudaim3d.de/policies/refund-policy` |
 
 ### Kontrolle
-- [ ] `/impressum` zeigt **keine** eckigen `[Platzhalter]` mehr
-- [ ] E-Mail ist klickbar und erreichbar
+- [ ] Footer-Link „Impressum“ öffnet Shopify
+- [ ] „Datenschutz“ öffnet Shopify
+- [ ] Policies im Shopify-Checkout sind auch gefüllt
 
 ---
 
-## BLOCK 2 – Shopify Policies (Pflicht für Checkout)
+## BLOCK 2 – KI-Chat
 
-Im Shopify Admin → **Einstellungen** → **Rechtliches** / **Policies**:
-
-- [ ] Datenschutzrichtlinie (kann auf Konfigurator-`/datenschutz` verweisen oder denselben Text enthalten)
-- [ ] AGB / Nutzungsbedingungen
-- [ ] Widerrufsrichtlinie / Rückerstattung
-- [ ] Kontakt / Impressum-Link
-
-Checkout-Seiten sollten die Policies anzeigen (Shopify Standard).
+- [ ] Assistent zeigt zuerst „Datenschutz akzeptieren“
+- [ ] Erst danach kann man schreiben
 
 ---
 
-## BLOCK 3 – Texte finalisieren (mit Beratung)
+## BLOCK 3 – Draft-Kasse (falls „Config-ID ungültig“)
 
-- [ ] Impressum: alle Pflichtangaben korrekt (Rechtsform, Register, USt)
-- [ ] Datenschutz: Aufbewahrungsdauer Scans, AVV mit Shopify/Supabase/Vercel/Google/OpenAI
-- [ ] AGB: Lieferzeit, Versandkosten, Gerichtsstand
-- [ ] Widerruf: ob personalisierte Anhänger vom Widerruf ausgeschlossen sind (§ 312g BGB) – **nur mit Rechtsberatung festlegen**
-- [ ] OS-Plattform / Streitschlichtung-Satz anpassen
+1. Diesen Legal-PR + Code-Fix mergen  
+2. Supabase Function **`create-draft-order` neu deployen** (wichtig – Server-Regex)  
+3. Alten Warenkorb/Entwurf leeren, **neu speichern**, nochmal „Zur Kasse“
 
----
-
-## BLOCK 4 – Kurz testen
-
-- [ ] Cookie-Banner erscheint → „Nur notwendige“ / „Alle“
-- [ ] Login: Links zu AGB + Datenschutz funktionieren
-- [ ] Vor „Zur Kasse“: Vorschau-Hinweis + Legal-Links
-- [ ] Microsite-Fußzeile: Impressum/Datenschutz erreichbar
-- [ ] Preis zeigt „inkl. MwSt.“
+Ursache des Fehlers: Die Kassen-Function hat die Config-ID abgelehnt (zu strenge Prüfung oder veraltete Function). Ohne gültige Draft-Antwort gibt’s keinen Konfigurator-Preis.
 
 ---
 
-## Was du nicht vom Code erwarten sollst
+## Hinweis
 
-- Keine Garantie „DSGVO-fertig ohne Anwalt“
-- Keine Steuerberatung (Kleinunternehmer vs. USt)
-- Keine fertigen AVV-Verträge (musst du mit den Anbietern abschließen)
-
-Wenn Block 1–2 grün sind, kannst du die **Draft-Order-Checkliste** weiter machen – Rechtliches parallel finalisieren.
+Code verlinkt nur. Die **Texte** in Shopify müssen inhaltlich stimmen (ggf. Generator / Anwalt).

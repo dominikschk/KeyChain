@@ -906,6 +906,11 @@ const ConfiguratorPage: React.FC = () => {
         return;
       }
 
+      if (draft.reason === 'invalid') {
+        showError(draft.message, 'Kasse fehlgeschlagen');
+        return;
+      }
+
       if (draft.reason === 'rate_limited') {
         showError(draft.message, 'Kurz warten');
         return;
@@ -926,7 +931,7 @@ const ConfiguratorPage: React.FC = () => {
 
       showError(
         isLiveSimple()
-          ? `${draft.message} Ohne Draft Order kann der Konfigurator-Preis nicht greifen.`
+          ? `${draft.message} Tipp: Function create-draft-order neu deployen und GO_LIVE_SCHRITT_DRAFT.md prüfen.`
           : draft.message,
         'Kasse fehlgeschlagen'
       );

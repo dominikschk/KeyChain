@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { GOOGLE_CLIENT_ID, signInWithGoogleIdToken, signInAsGuest } from '../lib/auth';
 import { showError } from '../lib/utils';
 import { LegalFooter } from './LegalFooter';
-import { LEGAL_PATHS } from '../lib/legalCompany';
+import { openLegalLink } from '../lib/legalCompany';
 
 const GSI_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
 const LOAD_TIMEOUT_MS = 5000;
@@ -142,10 +142,7 @@ export const LoginScreen: React.FC = () => {
           <button
             type="button"
             className="underline text-petrol font-semibold"
-            onClick={() => {
-              window.history.pushState({}, '', LEGAL_PATHS.agb);
-              window.dispatchEvent(new PopStateEvent('popstate'));
-            }}
+            onClick={() => openLegalLink('agb')}
           >
             AGB
           </button>{' '}
@@ -153,10 +150,7 @@ export const LoginScreen: React.FC = () => {
           <button
             type="button"
             className="underline text-petrol font-semibold"
-            onClick={() => {
-              window.history.pushState({}, '', LEGAL_PATHS.datenschutz);
-              window.dispatchEvent(new PopStateEvent('popstate'));
-            }}
+            onClick={() => openLegalLink('datenschutz')}
           >
             Datenschutzerklärung
           </button>

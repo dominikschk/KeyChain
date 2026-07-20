@@ -32,10 +32,20 @@ export type DraftOrderLineBuild = {
   properties: DraftOrderProperty[]
 }
 
-const SHORT_ID_RE = /^[A-HJ-NP-Z2-9]{8,24}$/i
+const SHORT_ID_RE = /^[A-Z0-9]{8,32}$/i
 const MAX_UNIT_CENTS = 99_999
 const MAX_TOTAL_CENTS = 500_000
 const MAX_LINES = 20
+
+export function normalizeShortId(raw: unknown): string {
+  return String(raw ?? '')
+    .trim()
+    .toUpperCase()
+}
+
+export function isValidConfigShortId(raw: unknown): boolean {
+  return SHORT_ID_RE.test(normalizeShortId(raw))
+}
 
 export function centsToShopifyPrice(cents: number): string {
   const n = Math.max(0, Math.round(cents)) / 100
@@ -61,8 +71,15 @@ export function validateDraftOrderLine(raw: unknown):
   | { ok: false; error: string } {
   if (!raw || typeof raw !== 'object') return { ok: false, error: 'Ungültige Zeile.' }
   const b = raw as Record<string, unknown>
-  const shortId = String(b.shortId ?? '').trim()
-  if (!SHORT_ID_RE.test(shortId)) return { ok: false, error: 'Config-ID fehlt oder ist ungültig.' }
+  const shortId = normalizeShortId(b.shortId)
+  if (!SHORT_ID_RE.test(shortId)) {
+    return {
+      ok: false,
+      error: shortId
+        ? `Config-ID ungültig („${shortId.slice(0, 24)}“). Bitte neu speichern und nochmal zur Kasse.`
+        : 'Config-ID fehlt. Bitte Design neu speichern und nochmal zur Kasse.',
+    }
+  }
 
   const productId = String(b.productId ?? 'keychain').trim() || 'keychain'
   if (!['keychain', 'badge'].includes(productId)) {

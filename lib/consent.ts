@@ -1,20 +1,20 @@
 /**
- * Cookie-/Einwilligungs-Status (TTDSG-nah: optionale Tools erst nach Opt-in).
- * Essenzielle Speicherung (Gast-Session, Entwurf, Warenkorb) braucht keine Extra-Einwilligung.
+ * Cookie-/Einwilligungs-Status.
+ * - analytics: Sentry
+ * - ai: KI-Assistent (OpenAI) – erst nach expliziter Zustimmung
  */
 const STORAGE_KEY = 'nudaim_consent_v1'
 
 export type ConsentState = {
-  /** Banner schon beantwortet */
   decided: boolean
-  /** Optionale Analyse/Fehler (Sentry) */
   analytics: boolean
+  /** KI-Chat / OpenAI-Verarbeitung */
+  ai: boolean
   updatedAt: number
 }
 
-const DEFAULT: ConsentState = { decided: false, analytics: false, updatedAt: 0 }
+const DEFAULT: ConsentState = { decided: false, analytics: false, ai: false, updatedAt: 0 }
 
-/** Fallback wenn localStorage fehlt (Tests / SSR). */
 let memory: ConsentState | null = null
 
 function canUseStorage(): boolean {
@@ -36,6 +36,7 @@ export function readConsent(): ConsentState {
     return {
       decided: !!parsed.decided,
       analytics: !!parsed.analytics,
+      ai: !!parsed.ai,
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : 0,
     }
   } catch {
@@ -44,11 +45,13 @@ export function readConsent(): ConsentState {
 }
 
 export function writeConsent(
-  next: Omit<ConsentState, 'updatedAt' | 'decided'> & { decided?: boolean }
+  next: Partial<Pick<ConsentState, 'analytics' | 'ai' | 'decided'>>
 ): ConsentState {
+  const prev = readConsent()
   const state: ConsentState = {
-    decided: next.decided !== false,
-    analytics: !!next.analytics,
+    decided: next.decided !== undefined ? !!next.decided : true,
+    analytics: next.analytics !== undefined ? !!next.analytics : prev.analytics,
+    ai: next.ai !== undefined ? !!next.ai : prev.ai,
     updatedAt: Date.now(),
   }
   memory = state
@@ -66,14 +69,17 @@ export function writeConsent(
 }
 
 export function acceptEssentialOnly(): ConsentState {
-  return writeConsent({ analytics: false })
+  return writeConsent({ decided: true, analytics: false, ai: false })
 }
 
 export function acceptAll(): ConsentState {
-  return writeConsent({ analytics: true })
+  return writeConsent({ decided: true, analytics: true, ai: true })
 }
 
-/** Nur für Tests */
+export function acceptAiProcessing(): ConsentState {
+  return writeConsent({ decided: true, ai: true })
+}
+
 export function resetConsentMemory(): void {
   memory = null
   if (canUseStorage()) {

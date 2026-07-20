@@ -12,6 +12,8 @@ import {
   type ChatSession,
 } from '../lib/micrositeChatEngine';
 import { showError, resetFileInput } from '../lib/utils';
+import { acceptAiProcessing, readConsent, type ConsentState } from '../lib/consent';
+import { openLegalLink } from '../lib/legalCompany';
 import { SITE_TEMPLATES } from '../lib/siteLayouts';
 import { supabase } from '../lib/supabase';
 import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
@@ -49,6 +51,7 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
   const [session, setSession] = useState<ChatSession>(() => createChatSession());
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [aiOk, setAiOk] = useState(() => readConsent().ai);
   const [statusLine, setStatusLine] = useState(
     'Rechts siehst du, was deine Kunden später sehen.'
   );
@@ -63,6 +66,15 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
 
   const meta = useMemo(() => getStepMeta(session.step), [session.step]);
   const progressPct = Math.round((meta.index / meta.total) * 100);
+
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const detail = (e as CustomEvent<ConsentState>).detail;
+      if (detail) setAiOk(!!detail.ai);
+    };
+    window.addEventListener('nudaim-consent', onChange);
+    return () => window.removeEventListener('nudaim-consent', onChange);
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -235,6 +247,7 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
   );
 
   const handleSend = async (raw?: string) => {
+    if (!aiOk) return;
     const text = (raw ?? input).trim();
     if (!text || busy) return;
     setInput('');
@@ -251,7 +264,7 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
   };
 
   const handleChip = (chip: string) => {
-    if (busy) return;
+    if (!aiOk || busy) return;
     if (chip === 'Von meiner Website') {
       setStatusLine('Website-Adresse einfügen (https://…) und senden.');
       setInput('https://');
@@ -282,6 +295,47 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
 
   const inner = (
     <div className={cardClass} role="dialog" aria-labelledby="microsite-chat-title">
+      {!aiOk ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-petrol text-white flex items-center justify-center">
+            <Sparkles size={22} />
+          </div>
+          <h2 id="microsite-chat-title" className="font-headline font-extrabold text-base uppercase text-navy">
+            Bevor’s mit der KI weitergeht
+          </h2>
+          <p className="text-sm text-zinc-600 leading-snug max-w-sm">
+            Der Assistent kann deine Eingaben an einen KI-Dienst (OpenAI) senden. Bitte lies den Datenschutz und stimme zu,
+            bevor du schreibst.
+          </p>
+          <button
+            type="button"
+            onClick={() => openLegalLink('datenschutz')}
+            className="text-sm font-semibold text-petrol underline"
+          >
+            Datenschutz öffnen
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              acceptAiProcessing();
+              setAiOk(true);
+            }}
+            className="w-full max-w-xs min-h-[52px] rounded-xl bg-navy text-white text-sm font-semibold"
+          >
+            Datenschutz akzeptieren & starten
+          </button>
+          {onContinueManual && (
+            <button
+              type="button"
+              onClick={onContinueManual}
+              className="text-xs font-semibold text-zinc-500 underline"
+            >
+              Ohne KI selbst anpassen
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
       <header className="shrink-0 px-4 pt-4 pb-3 border-b border-zinc-100 bg-cream">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
@@ -525,6 +579,8 @@ export const MicrositeChat: React.FC<MicrositeChatProps> = ({
           <Send size={18} />
         </button>
       </form>
+        </>
+      )}
     </div>
   );
 

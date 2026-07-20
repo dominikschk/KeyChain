@@ -19,18 +19,21 @@ describe('consent', () => {
   it('startet ohne Entscheidung', () => {
     expect(readConsent().decided).toBe(false)
     expect(readConsent().analytics).toBe(false)
+    expect(readConsent().ai).toBe(false)
   })
 
   it('speichert nur notwendige', () => {
     const s = acceptEssentialOnly()
     expect(s.decided).toBe(true)
     expect(s.analytics).toBe(false)
+    expect(s.ai).toBe(false)
     expect(readConsent().analytics).toBe(false)
   })
 
-  it('speichert alle inkl. Analyse', () => {
+  it('speichert alle inkl. Analyse und KI', () => {
     acceptAll()
     expect(readConsent().analytics).toBe(true)
+    expect(readConsent().ai).toBe(true)
   })
 
   it('writeConsent setzt Timestamp', () => {

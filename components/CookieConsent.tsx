@@ -3,13 +3,8 @@
  */
 import React, { useEffect, useState } from 'react'
 import { acceptAll, acceptEssentialOnly, readConsent, type ConsentState } from '../lib/consent'
-import { LEGAL_PATHS } from '../lib/legalCompany'
+import { openLegalLink } from '../lib/legalCompany'
 import { initObservability } from '../lib/observability'
-
-function navigate(path: string) {
-  window.history.pushState({}, '', path)
-  window.dispatchEvent(new PopStateEvent('popstate'))
-}
 
 export const CookieConsent: React.FC = () => {
   const [consent, setConsent] = useState<ConsentState>(() => readConsent())
@@ -45,7 +40,7 @@ export const CookieConsent: React.FC = () => {
           <button
             type="button"
             className="underline font-semibold text-petrol"
-            onClick={() => navigate(LEGAL_PATHS.datenschutz)}
+            onClick={() => openLegalLink('datenschutz')}
           >
             Datenschutz
           </button>
