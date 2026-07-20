@@ -80,7 +80,11 @@ export function buildShopifyCartUrl(
   /** Optional: echte Ziel-URL bei „eigene Website“ (Chip bleibt trotzdem NUDAIM-Shortlink). */
   destinationUrl?: string,
   quantity: number = 1,
-  /** Optional: Preishinweis aus dem Konfigurator (Shopify rechnet trotzdem über die Variante ab). */
+  /**
+   * Optionaler Text in den Line-Item-Properties.
+   * Ändert den abgerechneten Betrag NICHT – Shopify nutzt immer den Katalogpreis der Variante.
+   * Für Live-Cart besser weglassen (sonst steht z. B. „1,00 €“ neben „1,50 €“).
+   */
   priceHint?: string
 ): string {
   const qty = Math.min(99, Math.max(1, Math.round(Number(quantity) || 1)));

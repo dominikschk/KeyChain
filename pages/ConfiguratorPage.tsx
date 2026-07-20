@@ -90,7 +90,7 @@ function hostnameFromUrl(url: string): string {
   }
 }
 
-/** Live: ein Design → Warenkorb. Full: Korb mit mehreren Designs / Draft-Kasse. */
+/** Live: ein Design → Draft-Kasse (Preis echt). Full: ggf. Multi-Korb. */
 const DeliveryHandoffModal: React.FC<{
   links: DeliveryLinks;
   onCheckout: () => void;
@@ -101,27 +101,11 @@ const DeliveryHandoffModal: React.FC<{
 }> = ({ links, onCheckout, onAddAnother, checkoutBusy, checkoutHint, simple }) => {
   const [copied, setCopied] = useState<'ms' | 'ccp' | null>(null);
   const [showLinks, setShowLinks] = useState(false);
-  const [seconds, setSeconds] = useState(simple ? 5 : 0);
   const totals = basketTotals(links.basket);
-  const continueRef = useRef(onCheckout);
-  continueRef.current = onCheckout;
-  const doneRef = useRef(false);
-
-  useEffect(() => {
-    if (!simple) return;
-    if (seconds > 0) {
-      const tmr = window.setTimeout(() => setSeconds((s) => s - 1), 1000);
-      return () => window.clearTimeout(tmr);
-    }
-    if (!doneRef.current) {
-      doneRef.current = true;
-      continueRef.current();
-    }
-  }, [simple, seconds]);
+  const line = links.basket[0];
 
   const go = () => {
-    if (doneRef.current && simple) return;
-    doneRef.current = true;
+    if (checkoutBusy) return;
     onCheckout();
   };
 
@@ -137,31 +121,51 @@ const DeliveryHandoffModal: React.FC<{
 
   if (simple) {
     return (
-      <div className="fixed inset-0 z-[2500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md">
-        <div className="card w-full max-w-lg flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300">
+      <div className="fixed inset-0 z-[2500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-navy/80 backdrop-blur-md pb-safe">
+        <div className="card w-full max-w-lg flex flex-col max-h-[92dvh] overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in duration-300 rounded-t-2xl sm:rounded-2xl">
           <header className="px-5 py-4 border-b border-navy/5 bg-cream">
             <p className="text-[10px] font-bold uppercase tracking-widest text-petrol mb-1">Geschafft</p>
             <h2 className="font-headline text-lg font-extrabold uppercase tracking-tight text-navy">
-              Weiter zum Warenkorb
+              Weiter zur Kasse
             </h2>
             <p className="text-sm text-zinc-600 mt-1 leading-snug">
-              Dein Anhänger ist gespeichert. Als Nächstes öffnet der Shopify-Warenkorb – dort siehst du den Preis und kannst bezahlen.
+              Dein Anhänger ist gespeichert. Als Nächstes öffnet die Shopify-Kasse mit dem Preis aus dem Konfigurator.
             </p>
           </header>
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 pb-safe">
+            {(line || totals.pieceCount > 0) && (
+              <div className="rounded-2xl border border-navy/10 bg-white px-4 py-3">
+                <p className="text-sm font-semibold text-navy">
+                  {totals.pieceCount}× Schlüsselanhänger
+                </p>
+                <p className="text-base font-extrabold text-navy mt-0.5">
+                  {totals.totalLabel}
+                  {line && totals.pieceCount > 1 ? (
+                    <span className="text-xs font-semibold text-zinc-500 ml-2">
+                      ({line.unitLabel})
+                    </span>
+                  ) : null}
+                </p>
+              </div>
+            )}
             <button
               type="button"
               onClick={go}
-              className="w-full min-h-[56px] bg-navy text-white rounded-xl font-semibold text-base flex items-center justify-center gap-2 active:scale-[0.98]"
+              disabled={!!checkoutBusy}
+              className="w-full min-h-[56px] bg-navy text-white rounded-xl font-semibold text-base flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-70"
             >
-              <ShoppingCart size={20} />
-              Zum Warenkorb
-              <ArrowRight size={18} />
+              {checkoutBusy ? <Loader2 size={20} className="animate-spin" /> : <ShoppingCart size={20} />}
+              {checkoutBusy ? 'Kasse wird vorbereitet…' : 'Zur Kasse'}
+              {!checkoutBusy && <ArrowRight size={18} />}
             </button>
             <p className="text-center text-xs text-zinc-500">
-              Öffnet automatisch in {seconds}s · Code:{' '}
-              <strong className="text-navy">{links.shortId}</strong>
+              Code: <strong className="text-navy">{links.shortId}</strong>
             </p>
+            {checkoutHint ? (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-snug">
+                {checkoutHint}
+              </p>
+            ) : null}
             <button
               type="button"
               onClick={() => setShowLinks((v) => !v)}
@@ -448,9 +452,7 @@ const ConfiguratorPage: React.FC = () => {
     [selectedProductId, orderQuantity]
   );
   const liveSimple = isLiveSimple();
-  const orderCtaLabel = liveSimple
-    ? `${t('cta.order')}${orderQuantity > 1 ? ` (${orderQuantity})` : ''}`
-    : `${t('cta.order')}${orderQuantity > 1 ? ` (${orderQuantity})` : ''} · ${checkoutPrice.totalLabel}`;
+  const orderCtaLabel = `${t('cta.order')}${orderQuantity > 1 ? ` (${orderQuantity})` : ''} · ${checkoutPrice.totalLabel}`;
   const [activeDept, setActiveDept] = useState<Department>('digital');
   const [mobileTab, setMobileTab] = useState<'editor' | 'preview'>('preview');
   const [previewType, setPreviewType] = useState<'3d' | 'digital'>('digital');
@@ -755,6 +757,8 @@ const ConfiguratorPage: React.FC = () => {
       const variantId = priced.variantId;
       const micrositeUrl = buildMicrositeUrl(baseUrl, shortId);
       const ccpUrl = buildCcpEditUrl(baseUrl, shortId, writeToken);
+      // Cart-Permalink: KEIN Preis-Property – Shopify rechnet nur den Katalogpreis der Variante.
+      // Ein anderer Text (z. B. „1,00 €“) neben „1,50 €“ im Warenkorb verwirrt nur.
       const fallbackCartUrl = buildShopifyCartUrl(
         variantId,
         shortId,
@@ -763,7 +767,7 @@ const ConfiguratorPage: React.FC = () => {
         writeToken,
         destinationUrl,
         priced.quantity,
-        priced.cartPropertyValue
+        undefined
       );
 
       const basketLine: CheckoutBasketLine = {
@@ -834,16 +838,6 @@ const ConfiguratorPage: React.FC = () => {
   const handleBasketCheckout = useCallback(async () => {
     if (!deliveryLinks?.basket.length) return;
 
-    // Live-Shop: direkt Shopify-Warenkorb (bewährt, keine Draft-Secrets nötig)
-    if (isLiveSimple()) {
-      clearCheckoutBasket();
-      setBasketCount(0);
-      const url = deliveryLinks.cartUrl;
-      setDeliveryLinks(null);
-      window.location.href = url;
-      return;
-    }
-
     setCheckoutBusy(true);
     try {
       const lines = deliveryLinks.basket.map((l) => ({
@@ -859,6 +853,9 @@ const ConfiguratorPage: React.FC = () => {
         variantId: l.variantId,
         priceHint: l.priceHint,
       }));
+
+      // Immer zuerst Draft Order: nur so landet der Konfigurator-Preis echt in Shopify.
+      // Ohne Secrets → stiller Fallback auf Cart (Katalogpreis der Variante).
       const draft = await createDraftCheckoutResult({ lines });
       if (draft.ok) {
         clearCheckoutBasket();
@@ -868,9 +865,23 @@ const ConfiguratorPage: React.FC = () => {
         return;
       }
 
+      const cartUrl = deliveryLinks.cartUrl;
+      const canCartFallback = deliveryLinks.basket.length === 1 && !!cartUrl;
+
       if (draft.reason === 'not_configured' || draft.reason === 'setup') {
-        setCheckoutHint(draft.message);
-        if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
+        // Live: Draft ist Pflicht für den richtigen Preis – nicht still auf Katalog-Cart fallen.
+        if (isLiveSimple()) {
+          setCheckoutHint(
+            'Draft Order noch nicht eingerichtet. Anleitung: GO_LIVE_SCHRITT_DRAFT.md (Shopify-App + Supabase-Secrets + Function).'
+          );
+          showError(
+            'Die Kasse mit Konfigurator-Preis ist noch nicht eingerichtet. Bitte GO_LIVE_SCHRITT_DRAFT.md abarbeiten (Shopify-Token + Supabase Function).',
+            'Draft Order fehlt'
+          );
+          return;
+        }
+        if (canCartFallback) {
+          setCheckoutHint(draft.message);
           const goCart = window.confirm(
             `${draft.message}\n\nStattdessen den normalen Shopify-Warenkorb öffnen? (Preis dann aus dem Shop-Katalog)`
           );
@@ -878,7 +889,7 @@ const ConfiguratorPage: React.FC = () => {
             clearCheckoutBasket();
             setBasketCount(0);
             setDeliveryLinks(null);
-            window.location.href = deliveryLinks.cartUrl;
+            window.location.href = cartUrl;
           }
           return;
         }
@@ -891,7 +902,7 @@ const ConfiguratorPage: React.FC = () => {
         return;
       }
 
-      if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
+      if (canCartFallback && !isLiveSimple()) {
         const goCart = window.confirm(
           `Kasse mit berechnetem Preis hat nicht geklappt:\n${draft.message}\n\nShopify-Warenkorb als Notlösung öffnen?`
         );
@@ -899,12 +910,17 @@ const ConfiguratorPage: React.FC = () => {
           clearCheckoutBasket();
           setBasketCount(0);
           setDeliveryLinks(null);
-          window.location.href = deliveryLinks.cartUrl;
+          window.location.href = cartUrl;
         }
         return;
       }
 
-      showError(draft.message, 'Kasse fehlgeschlagen');
+      showError(
+        isLiveSimple()
+          ? `${draft.message} Ohne Draft Order kann der Konfigurator-Preis nicht greifen.`
+          : draft.message,
+        'Kasse fehlgeschlagen'
+      );
     } finally {
       setCheckoutBusy(false);
     }
@@ -1430,20 +1446,16 @@ const ConfiguratorPage: React.FC = () => {
                 </div>
                 <p className="text-[11px] text-zinc-500 leading-snug">
                   {liveSimple
-                    ? 'Den Preis und die Zahlung siehst du im Shopify-Warenkorb.'
+                    ? 'Dieser Preis geht mit in die Shopify-Kasse (Draft Order).'
                     : bulkHintForQuantity(orderQuantity)}
                 </p>
-                {!liveSimple && (
-                  <p className="text-sm font-semibold text-navy leading-snug">
-                    {checkoutPrice.unitLabel}
-                    {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
-                  </p>
-                )}
-                {!liveSimple && (
-                  <p className="text-[11px] text-zinc-500 leading-snug">
-                    {pricingHintForQuantity(selectedProductId, orderQuantity)}
-                  </p>
-                )}
+                <p className="text-sm font-semibold text-navy leading-snug">
+                  {checkoutPrice.unitLabel}
+                  {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                </p>
+                <p className="text-[11px] text-zinc-500 leading-snug">
+                  {pricingHintForQuantity(selectedProductId, orderQuantity)}
+                </p>
                 <p className="text-[11px] text-zinc-500 leading-snug">{t('legal.preview.short')}</p>
                 <button
                   type="button"
@@ -1512,20 +1524,16 @@ const ConfiguratorPage: React.FC = () => {
                 </div>
                 <p className="text-[11px] text-zinc-500 leading-snug">
                   {liveSimple
-                    ? 'Den Preis und die Zahlung siehst du im Shopify-Warenkorb.'
+                    ? 'Dieser Preis geht mit in die Shopify-Kasse (Draft Order).'
                     : bulkHintForQuantity(orderQuantity)}
                 </p>
-                {!liveSimple && (
-                  <p className="text-sm font-semibold text-navy leading-snug">
-                    {checkoutPrice.unitLabel}
-                    {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
-                  </p>
-                )}
-                {!liveSimple && (
-                  <p className="text-[11px] text-zinc-500 leading-snug">
-                    {pricingHintForQuantity(selectedProductId, orderQuantity)}
-                  </p>
-                )}
+                <p className="text-sm font-semibold text-navy leading-snug">
+                  {checkoutPrice.unitLabel}
+                  {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                </p>
+                <p className="text-[11px] text-zinc-500 leading-snug">
+                  {pricingHintForQuantity(selectedProductId, orderQuantity)}
+                </p>
                 <p className="text-[11px] text-zinc-500 leading-snug">{t('legal.preview.short')}</p>
                 <button
                   type="button"
@@ -1584,17 +1592,15 @@ const ConfiguratorPage: React.FC = () => {
                     className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
                   />
                 </div>
-                {!liveSimple && (
-                  <p className="text-sm font-semibold text-navy leading-snug">
-                    {checkoutPrice.unitLabel}
-                    {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
-                  </p>
-                )}
-                {liveSimple && (
-                  <p className="text-[11px] text-zinc-500 leading-snug">
-                    Preis und Zahlung im Shopify-Warenkorb.
-                  </p>
-                )}
+                <p className="text-sm font-semibold text-navy leading-snug">
+                  {checkoutPrice.unitLabel}
+                  {checkoutPrice.quantity > 1 ? ` · gesamt ${checkoutPrice.totalLabel}` : ''}
+                </p>
+                <p className="text-[11px] text-zinc-500 leading-snug">
+                  {liveSimple
+                    ? 'Preis geht mit in die Shopify-Kasse.'
+                    : pricingHintForQuantity(selectedProductId, orderQuantity)}
+                </p>
                 <button
                   type="button"
                   onClick={() => void initiateSave()}
@@ -1624,7 +1630,7 @@ const ConfiguratorPage: React.FC = () => {
               <p className="font-black uppercase tracking-wider text-navy text-sm">
                 {SAVING_LABELS[savingStep] || 'Wird vorbereitet…'}
               </p>
-              <p className="text-[10px] text-zinc-500 mt-1">Gleich geht’s zum Warenkorb</p>
+              <p className="text-[10px] text-zinc-500 mt-1">Gleich geht’s zur Kasse</p>
             </div>
           )}
         </main>
