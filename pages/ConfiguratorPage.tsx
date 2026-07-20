@@ -755,6 +755,8 @@ const ConfiguratorPage: React.FC = () => {
       const variantId = priced.variantId;
       const micrositeUrl = buildMicrositeUrl(baseUrl, shortId);
       const ccpUrl = buildCcpEditUrl(baseUrl, shortId, writeToken);
+      // Cart-Permalink: KEIN Preis-Property – Shopify rechnet nur den Katalogpreis der Variante.
+      // Ein anderer Text (z. B. „1,00 €“) neben „1,50 €“ im Warenkorb verwirrt nur.
       const fallbackCartUrl = buildShopifyCartUrl(
         variantId,
         shortId,
@@ -763,7 +765,7 @@ const ConfiguratorPage: React.FC = () => {
         writeToken,
         destinationUrl,
         priced.quantity,
-        priced.cartPropertyValue
+        undefined
       );
 
       const basketLine: CheckoutBasketLine = {
@@ -834,16 +836,6 @@ const ConfiguratorPage: React.FC = () => {
   const handleBasketCheckout = useCallback(async () => {
     if (!deliveryLinks?.basket.length) return;
 
-    // Live-Shop: direkt Shopify-Warenkorb (bewährt, keine Draft-Secrets nötig)
-    if (isLiveSimple()) {
-      clearCheckoutBasket();
-      setBasketCount(0);
-      const url = deliveryLinks.cartUrl;
-      setDeliveryLinks(null);
-      window.location.href = url;
-      return;
-    }
-
     setCheckoutBusy(true);
     try {
       const lines = deliveryLinks.basket.map((l) => ({
@@ -859,6 +851,9 @@ const ConfiguratorPage: React.FC = () => {
         variantId: l.variantId,
         priceHint: l.priceHint,
       }));
+
+      // Immer zuerst Draft Order: nur so landet der Konfigurator-Preis echt in Shopify.
+      // Ohne Secrets → stiller Fallback auf Cart (Katalogpreis der Variante).
       const draft = await createDraftCheckoutResult({ lines });
       if (draft.ok) {
         clearCheckoutBasket();
@@ -868,9 +863,31 @@ const ConfiguratorPage: React.FC = () => {
         return;
       }
 
+      const cartUrl = deliveryLinks.cartUrl;
+      const canCartFallback = deliveryLinks.basket.length === 1 && !!cartUrl;
+
+      if (draft.reason === 'rate_limited') {
+        if (isLiveSimple() && canCartFallback) {
+          clearCheckoutBasket();
+          setBasketCount(0);
+          setDeliveryLinks(null);
+          window.location.href = cartUrl;
+          return;
+        }
+        showError(draft.message, 'Kurz warten');
+        return;
+      }
+
       if (draft.reason === 'not_configured' || draft.reason === 'setup') {
-        setCheckoutHint(draft.message);
-        if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
+        if (canCartFallback) {
+          if (isLiveSimple()) {
+            clearCheckoutBasket();
+            setBasketCount(0);
+            setDeliveryLinks(null);
+            window.location.href = cartUrl;
+            return;
+          }
+          setCheckoutHint(draft.message);
           const goCart = window.confirm(
             `${draft.message}\n\nStattdessen den normalen Shopify-Warenkorb öffnen? (Preis dann aus dem Shop-Katalog)`
           );
@@ -878,20 +895,24 @@ const ConfiguratorPage: React.FC = () => {
             clearCheckoutBasket();
             setBasketCount(0);
             setDeliveryLinks(null);
-            window.location.href = deliveryLinks.cartUrl;
+            window.location.href = cartUrl;
           }
           return;
         }
-        showError(draft.message, 'Kasse noch nicht eingerichtet');
+        if (!isLiveSimple()) {
+          showError(draft.message, 'Kasse noch nicht eingerichtet');
+        }
         return;
       }
 
-      if (draft.reason === 'rate_limited') {
-        showError(draft.message, 'Kurz warten');
-        return;
-      }
-
-      if (deliveryLinks.basket.length === 1 && deliveryLinks.cartUrl) {
+      if (canCartFallback) {
+        if (isLiveSimple()) {
+          clearCheckoutBasket();
+          setBasketCount(0);
+          setDeliveryLinks(null);
+          window.location.href = cartUrl;
+          return;
+        }
         const goCart = window.confirm(
           `Kasse mit berechnetem Preis hat nicht geklappt:\n${draft.message}\n\nShopify-Warenkorb als Notlösung öffnen?`
         );
@@ -899,7 +920,7 @@ const ConfiguratorPage: React.FC = () => {
           clearCheckoutBasket();
           setBasketCount(0);
           setDeliveryLinks(null);
-          window.location.href = deliveryLinks.cartUrl;
+          window.location.href = cartUrl;
         }
         return;
       }

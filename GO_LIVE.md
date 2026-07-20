@@ -19,6 +19,15 @@ Mach nur diese Datei. Nichts anderes parallel.
 
 ---
 
+## Preis stimmt nicht?
+
+Wenn im Cart z. B. **1,50 €** steht, aber irgendwo **1,00 €** erwähnt wird:  
+→ **[`GO_LIVE_PREIS.md`](GO_LIVE_PREIS.md)** (Shopify-Variantenpreis = Vercel-Preis angleichen)
+
+Kurz: Der Warenkorb rechnet immer den **Shop-Katalogpreis**. Eigene Staffeln nur mit Draft Orders.
+
+---
+
 ## Kundenpfad (wenn live)
 
 1. Logo / Anhänger gestalten  
@@ -35,16 +44,18 @@ Mach nur diese Datei. Nichts anderes parallel.
 - [ ] Vercel Production: `VITE_SUPABASE_ANON_KEY` (anon, nicht service_role)  
 - [ ] Redeploy Ready  
 - [ ] Eine Testbestellung landet im Cart  
+- [ ] Shopify-Variantenpreis = `VITE_PRICE_KEYCHAIN_CENTS` (siehe `GO_LIVE_PREIS.md`)  
 
-**Nicht nötig für den ersten Erfolg:** Draft-Secrets, Webhook, Admin-Sync.
+**Nicht nötig für den ersten Erfolg:** Webhook, Admin-Sync.  
+**Für echten Staffelpreis:** Draft Orders (`SHOPIFY_DRAFT_ORDER.md`).
 
 ---
 
-## Danach (erst wenn 1–3 grün)
+## Danach (erst wenn Bestellen + Preis grün)
 
 1. Echte Variant-ID  
-2. Webhook → Admin `paid` (`PHASE0_GO_LIVE.md`)  
-3. Draft Orders / Staffelpreis  
+2. Draft Orders / Staffelpreis  
+3. Webhook → Admin `paid`  
 4. Print-QC Alltag  
 
 Siehe `PROFI_TODO.md`.

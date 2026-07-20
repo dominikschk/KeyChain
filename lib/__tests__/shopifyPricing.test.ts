@@ -44,9 +44,9 @@ describe('shopifyPricing', () => {
     expect(pricingHintForQuantity('keychain', 12)).toMatch(/10|Design|dieses/i)
   })
 
-  it('hängt Preis-Property an Cart-URL', () => {
+  it('hängt Preis-Property nur an, wenn explizit übergeben', () => {
     const priced = resolveCheckoutPrice('keychain', 3)
-    const url = buildShopifyCartUrl(
+    const withHint = buildShopifyCartUrl(
       priced.variantId,
       'ABCDEFGHJKLMNPQR',
       'https://example.com/p.png',
@@ -56,8 +56,21 @@ describe('shopifyPricing', () => {
       priced.quantity,
       priced.cartPropertyValue
     )
-    expect(url).toContain('quantity=3')
-    expect(url).toContain('properties%5BPreis%5D=')
-    expect(decodeURIComponent(url)).toContain('Stück')
+    expect(withHint).toContain('quantity=3')
+    expect(withHint).toContain('properties%5BPreis%5D=')
+    expect(decodeURIComponent(withHint)).toContain('Stück')
+
+    const liveCart = buildShopifyCartUrl(
+      priced.variantId,
+      'ABCDEFGHJKLMNPQR',
+      'https://example.com/p.png',
+      'https://konfigurator.nudaim3d.de',
+      'a'.repeat(64),
+      undefined,
+      priced.quantity,
+      undefined
+    )
+    expect(liveCart).toContain('quantity=3')
+    expect(liveCart).not.toContain('properties%5BPreis%5D=')
   })
 })

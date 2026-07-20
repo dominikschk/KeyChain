@@ -274,10 +274,14 @@ oder Checkout/Cart von Shopify.
 **Prüfen:**
 1. Liegt **ein** Produkt im Warenkorb?  
 2. Menge = 1 (oder was du gewählt hast)?  
-3. Line-Item-Properties (je nach Theme sichtbar):
+3. **Stückpreis** = Preis der Shopify-Variante (nicht ein anderer Text im Konfigurator)?  
+4. Line-Item-Properties (je nach Theme sichtbar):
    - **Config-ID** (langer Code, z. B. 16 Zeichen)  
    - oft **Preview** (Bild-Link)  
    - ggf. Handy-Seite / Bearbeiten-Link  
+   - **kein** widersprüchlicher „Preis:“-Text mehr (Katalogpreis gilt)
+
+Wenn der Cart-Preis nicht stimmt → [`GO_LIVE_PREIS.md`](GO_LIVE_PREIS.md) (Shopify-Preis und Vercel angleichen).
 
 Wenn Properties im Theme versteckt sind: im Admin unter der Testorder später sichtbar – für jetzt reicht „Produkt ist im Cart“.
 
