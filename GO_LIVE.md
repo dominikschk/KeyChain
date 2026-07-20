@@ -1,6 +1,6 @@
 # Go-Live – Überblick
 
-Ziel jetzt: **Kunden können bestellen** (Shopify-Warenkorb).  
+Ziel jetzt: **Kunden können bestellen** (Shopify-Warenkorb) – auch **vom Handy**.  
 Unfertiges ist ausgeschaltet. Später: `VITE_FEATURES_FULL=1`.
 
 ---
@@ -21,8 +21,8 @@ Mach nur diese Datei. Nichts anderes parallel.
 
 ## Kundenpfad (wenn live)
 
-1. Logo / Anhänger gestalten  
-2. Stückzahl  
+1. Logo / Anhänger gestalten (Handy: Tab „Anhänger“)  
+2. Stückzahl unten ±  
 3. **In den Warenkorb** → `nudaim3d.de` Shopify-Cart  
 4. Bezahlen im Shop  
 
@@ -35,15 +35,20 @@ Mach nur diese Datei. Nichts anderes parallel.
 - [ ] Vercel Production: `VITE_SUPABASE_ANON_KEY` (anon, nicht service_role)  
 - [ ] Redeploy Ready  
 - [ ] Eine Testbestellung landet im Cart  
+- [ ] Kurz auf dem **Handy** geprüft (Bestellen-Leiste sichtbar)
 
 **Nicht nötig für den ersten Erfolg:** Draft-Secrets, Webhook, Admin-Sync.
 
 ---
 
-## Danach (erst wenn 1–3 grün)
+## Später (kein Zeitdruck)
+
+Admin, Webhook (`paid`), Draft Orders und Print-QC kommen **erst wenn** Bestellen vom Handy/Desktop zuverlässig läuft. Kein Blocker für Umsatz.
+
+Reihenfolge dann:
 
 1. Echte Variant-ID  
-2. Webhook → Admin `paid` (`PHASE0_GO_LIVE.md`)  
+2. Webhook → Admin `paid` (siehe `PHASE0_GO_LIVE.md` wenn bereit)  
 3. Draft Orders / Staffelpreis  
 4. Print-QC Alltag  
 
