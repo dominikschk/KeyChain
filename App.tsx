@@ -1,11 +1,14 @@
 /**
- * Einstieg: Router für Konfigurator, CCP (Kunden-Panel), Admin.
- * Pfade: /, /configurator → Konfigurator | /ccp → CCP | /admin → Admin
+ * Einstieg: Router für Konfigurator, CCP, Admin, Rechtstexte.
+ * Pfade: /, /configurator | /ccp | /admin | /impressum | /datenschutz | /agb | /widerruf
  */
 import React, { useState, useEffect } from 'react';
 import ConfiguratorPage from './pages/ConfiguratorPage';
 import CcpPage from './pages/CcpPage';
 import AdminPage from './pages/AdminPage';
+import LegalPage from './pages/LegalPage';
+import { CookieConsent } from './components/CookieConsent';
+import { isLegalPath } from './lib/legalCompany';
 
 function getPath(): string {
   const p = window.location.pathname.replace(/\/$/, '') || '/';
@@ -22,13 +25,31 @@ const App: React.FC = () => {
   }, []);
 
   if (path === '/ccp') {
-    return <CcpPage />;
+    return (
+      <>
+        <CcpPage />
+        <CookieConsent />
+      </>
+    );
   }
   if (path === '/admin') {
     return <AdminPage />;
   }
+  if (isLegalPath(path)) {
+    return (
+      <>
+        <LegalPage path={path} />
+        <CookieConsent />
+      </>
+    );
+  }
 
-  return <ConfiguratorPage />;
+  return (
+    <>
+      <ConfiguratorPage />
+      <CookieConsent />
+    </>
+  );
 };
 
 export default App;

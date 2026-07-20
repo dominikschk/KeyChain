@@ -5,6 +5,14 @@
     { "source": "/admin", "destination": "/index.html" },
     { "source": "/admin/", "destination": "/index.html" },
     { "source": "/configurator", "destination": "/index.html" },
-    { "source": "/configurator/", "destination": "/index.html" }
+    { "source": "/configurator/", "destination": "/index.html" },
+    { "source": "/impressum", "destination": "/index.html" },
+    { "source": "/impressum/", "destination": "/index.html" },
+    { "source": "/datenschutz", "destination": "/index.html" },
+    { "source": "/datenschutz/", "destination": "/index.html" },
+    { "source": "/agb", "destination": "/index.html" },
+    { "source": "/agb/", "destination": "/index.html" },
+    { "source": "/widerruf", "destination": "/index.html" },
+    { "source": "/widerruf/", "destination": "/index.html" }
   ]
 }

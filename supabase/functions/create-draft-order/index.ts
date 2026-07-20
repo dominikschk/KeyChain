@@ -114,7 +114,7 @@ function serverUnitPriceForLine(productId: string, lineQty: number): number {
   return chosen.unitPriceCents;
 }
 
-const SHORT_ID_RE = /^[A-HJ-NP-Z2-9]{8,24}$/i;
+const SHORT_ID_RE = /^[A-Z0-9]{8,32}$/i;
 const MAX_UNIT_CENTS = 99_999;
 const MAX_TOTAL_CENTS = 500_000;
 const MAX_LINES = 20;
@@ -159,8 +159,17 @@ function parseLines(body: Record<string, unknown>): { ok: true; lines: LineIn[] 
   for (const row of rawList) {
     if (!row || typeof row !== 'object') return { ok: false, error: 'Ungültige Zeile' };
     const b = row as Record<string, unknown>;
-    const shortId = String(b.shortId ?? '').trim();
-    if (!SHORT_ID_RE.test(shortId)) return { ok: false, error: 'Config-ID ungültig' };
+    const shortId = String(b.shortId ?? b.short_id ?? '')
+      .trim()
+      .toUpperCase();
+    if (!SHORT_ID_RE.test(shortId)) {
+      return {
+        ok: false,
+        error: shortId
+          ? `Config-ID ungültig („${shortId.slice(0, 24)}“)`
+          : 'Config-ID fehlt',
+      };
+    }
     if (seen.has(shortId)) return { ok: false, error: 'Doppelte Config-ID' };
     seen.add(shortId);
 

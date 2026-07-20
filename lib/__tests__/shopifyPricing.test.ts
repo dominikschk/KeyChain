@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatEuroFromCents,
+  formatEuroInclVatFromCents,
   priceTiersForProduct,
   pricingHintForQuantity,
   resolveCheckoutPrice,
@@ -13,6 +14,10 @@ describe('shopifyPricing', () => {
     expect(formatEuroFromCents(100)).toBe('1,00 €')
   })
 
+  it('formatiert inkl. MwSt. für Kundenpreise', () => {
+    expect(formatEuroInclVatFromCents(150)).toBe('1,50 € inkl. MwSt.')
+  })
+
   it('wählt Einzelpreis und Summe für Menge 1', () => {
     const p = resolveCheckoutPrice('keychain', 1)
     expect(p.quantity).toBe(1)
@@ -20,6 +25,7 @@ describe('shopifyPricing', () => {
     expect(p.totalCents).toBe(2490)
     expect(p.variantId).toMatch(/^\d+$/)
     expect(p.totalLabel).toContain('€')
+    expect(p.totalLabel).toMatch(/inkl\. MwSt/i)
   })
 
   it('staffelt ab 10 und 25 Stück günstiger', () => {

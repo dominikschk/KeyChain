@@ -1,44 +1,38 @@
 # Go-Live – Überblick
 
-Ziel jetzt: **Kunden können bestellen** – mit dem **richtigen Preis** (Draft Order).  
-Unfertiges bleibt aus (`VITE_FEATURES_FULL` nicht nötig für Draft).
+Ziel: **Bestellen mit richtigem Preis** – und **rechtlich erreichbare Pflichtseiten**.
 
 ---
 
 ## Reihenfolge
 
+### 0. Recht & Datenschutz (vor/parallel zur Kasse)
+[`GO_LIVE_RECHT.md`](GO_LIVE_RECHT.md) – Impressum-Daten, Shopify-Policies, Cookie-Test
+
 ### 1. Bestellen speichern (falls noch nicht)
-[`GO_LIVE_SCHRITT_1_3.md`](GO_LIVE_SCHRITT_1_3.md) – Config → Shopify
+[`GO_LIVE_SCHRITT_1_3.md`](GO_LIVE_SCHRITT_1_3.md)
 
-### 2. Echter Preis (jetzt)
-[`GO_LIVE_SCHRITT_DRAFT.md`](GO_LIVE_SCHRITT_DRAFT.md) – Shopify-App + Supabase Secrets + Function
-
-Ohne Draft rechnet Shopify nur den Katalogpreis (z. B. 1,50 €).  
-Hintergrund: [`GO_LIVE_PREIS.md`](GO_LIVE_PREIS.md)
+### 2. Echter Preis
+[`GO_LIVE_SCHRITT_DRAFT.md`](GO_LIVE_SCHRITT_DRAFT.md)
 
 ### 3. Später
-- Handy-UX (PR #3)
-- Webhook → Admin `paid`
-- Print-QC
+- Handy-UX · Webhook Admin · Print-QC
 
 ---
 
-## Minimum Preis (Checkliste)
+## Recht (Minimum)
 
-- [ ] PR mit Draft-Checkout gemerged (PR #4)
-- [ ] Shopify Custom App + `shpat_…`
-- [ ] Supabase Secrets: `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_ADMIN_ACCESS_TOKEN`, `PRICE_KEYCHAIN_CENTS`
-- [ ] Function `create-draft-order` deployed
-- [ ] Vercel `VITE_PRICE_*` = gleiche Beträge + Redeploy
-- [ ] Test: Kasse zeigt Konfigurator-Preis (nicht Katalog 1,50 €)
+- [ ] Seiten `/impressum` `/datenschutz` `/agb` `/widerruf` erreichbar  
+- [ ] `VITE_LEGAL_*` in Vercel gesetzt (keine `[Platzhalter]`)  
+- [ ] Shopify Policies gefüllt  
+- [ ] Cookie-Hinweis getestet  
+- [ ] Texte mit Fachperson finalisiert (kein Ersatz durch Code-Vorlagen)
 
 ---
 
-## Kundenpfad (wenn Draft live)
+## Preis (Minimum)
 
-1. Anhänger gestalten  
-2. Stückzahl + Preis sehen  
-3. Bestellen → **Zur Kasse** (Draft Invoice)  
-4. Bezahlen in Shopify  
+- [ ] Draft Order live (siehe Schritt Draft)  
+- [ ] Test: Kasse = Konfigurator-Preis inkl. MwSt.-Hinweis in der App  
 
-Siehe `PROFI_TODO.md` / `SHOPIFY_DRAFT_ORDER.md`.
+Siehe `PROFI_TODO.md`.

@@ -19,6 +19,17 @@ describe('shopifyDraftOrder', () => {
     expect(clampDraftQuantity('12')).toBe(12)
   })
 
+  it('akzeptiert auch I/O/0/1 in Config-IDs (Server-kompatibel)', () => {
+    const ok = validateDraftOrderInput({
+      shortId: 'AB01IOXY23456789',
+      productId: 'keychain',
+      productTitle: 'Schlüsselanhänger',
+      quantity: 1,
+      unitPriceCents: 150,
+    })
+    expect(ok.ok).toBe(true)
+  })
+
   it('validiert kurze Config-IDs und Preise', () => {
     const bad = validateDraftOrderInput({ shortId: 'x', unitPriceCents: 2490, quantity: 1 })
     expect(bad.ok).toBe(false)

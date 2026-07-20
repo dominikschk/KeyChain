@@ -9,6 +9,7 @@ import { KeychainPreview } from '../components/KeychainPreview';
 import type { KeychainPreviewHandle } from '../components/KeychainPreview';
 import { LoginScreen } from '../components/LoginScreen';
 import { ShopifyGuide } from '../components/ShopifyGuide';
+import { LegalFooter } from '../components/LegalFooter';
 import { DEFAULT_CONFIG, buildShopifyCartUrl, buildMicrositeUrl, buildCcpEditUrl, PRODUCTS } from '../constants';
 import { ModelConfig, Department } from '../types';
 import { supabase } from '../lib/supabase';
@@ -158,6 +159,10 @@ const DeliveryHandoffModal: React.FC<{
               {checkoutBusy ? 'Kasse wird vorbereitet…' : 'Zur Kasse'}
               {!checkoutBusy && <ArrowRight size={18} />}
             </button>
+            <p className="text-[11px] text-zinc-500 leading-snug text-center">
+              {t('legal.preview.short')} Mit „Zur Kasse“ gelten AGB und Widerrufshinweise.
+            </p>
+            <LegalFooter compact />
             <p className="text-center text-xs text-zinc-500">
               Code: <strong className="text-navy">{links.shortId}</strong>
             </p>
@@ -262,6 +267,10 @@ const DeliveryHandoffModal: React.FC<{
             Zur Kasse · {totals.totalLabel}
             <ArrowRight size={18} />
           </button>
+          <p className="text-[11px] text-zinc-500 leading-snug text-center">
+            {t('legal.preview.short')} Mit „Zur Kasse“ gelten AGB und Widerrufshinweise.
+          </p>
+          <LegalFooter compact />
           {checkoutHint && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-snug">
               {checkoutHint}
@@ -897,6 +906,11 @@ const ConfiguratorPage: React.FC = () => {
         return;
       }
 
+      if (draft.reason === 'invalid') {
+        showError(draft.message, 'Kasse fehlgeschlagen');
+        return;
+      }
+
       if (draft.reason === 'rate_limited') {
         showError(draft.message, 'Kurz warten');
         return;
@@ -917,7 +931,7 @@ const ConfiguratorPage: React.FC = () => {
 
       showError(
         isLiveSimple()
-          ? `${draft.message} Ohne Draft Order kann der Konfigurator-Preis nicht greifen.`
+          ? `${draft.message} Tipp: Function create-draft-order neu deployen und GO_LIVE_SCHRITT_DRAFT.md prüfen.`
           : draft.message,
         'Kasse fehlgeschlagen'
       );
@@ -1601,6 +1615,7 @@ const ConfiguratorPage: React.FC = () => {
                     ? 'Preis geht mit in die Shopify-Kasse.'
                     : pricingHintForQuantity(selectedProductId, orderQuantity)}
                 </p>
+                <p className="text-[11px] text-zinc-500 leading-snug">{t('legal.preview.short')}</p>
                 <button
                   type="button"
                   onClick={() => void initiateSave()}
@@ -1616,6 +1631,7 @@ const ConfiguratorPage: React.FC = () => {
                 >
                   {t('cta.chip.optional')} →
                 </button>
+                <LegalFooter compact className="pt-1" />
               </div>
             ) : (
               <button type="button" onClick={() => void initiateSave()} className="w-full min-h-[48px] bg-navy text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98]">
@@ -1646,6 +1662,9 @@ const ConfiguratorPage: React.FC = () => {
           <span className="text-[10px] font-semibold">{workPhase === 'hardware' ? 'Vorschau' : 'Handy-Ansicht'}</span>
         </button>
       </nav>
+      <div className="hidden md:block shrink-0 border-t border-zinc-100 bg-white px-4 py-2">
+        <LegalFooter />
+      </div>
     </div>
   );
 };
