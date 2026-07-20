@@ -60,6 +60,11 @@ export function formatEuroFromCents(cents: number): string {
   return `${n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
 }
 
+/** Kundenpreis inkl. MwSt. (PAngV-Hinweis). */
+export function formatEuroInclVatFromCents(cents: number): string {
+  return `${formatEuroFromCents(cents)} inkl. MwSt.`
+}
+
 export function priceTiersForProduct(productId: string): PriceTier[] {
   if (productId === 'badge') {
     return [
@@ -137,8 +142,8 @@ export function resolveCheckoutPrice(
   // Wichtig: nie Staffel-Variant-ID – sonst qty=1 + günstige Variant = Preis-Lücke
   const variantId = baseVariantId(pid)
 
-  const unitLabel = `${formatEuroFromCents(unit)} / Stück`
-  const totalLabel = formatEuroFromCents(total)
+  const unitLabel = `${formatEuroInclVatFromCents(unit)} / Stück`
+  const totalLabel = formatEuroInclVatFromCents(total)
   const cartPropertyValue =
     qty > 1
       ? `${unitLabel} · ${qty}× = ${totalLabel} (${tier.label})`

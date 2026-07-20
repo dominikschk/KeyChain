@@ -1,7 +1,10 @@
 # Legal-Copy: Vorschau vs. Druck (zentral)
 
-Stand: 2026-07-19  
+Stand: 2026-07-20  
 Für Konfigurator, Checkout und Support – kurze Alltagssprache, nicht intern-technisch.
+
+**Pflichtseiten & Checkliste:** [`GO_LIVE_RECHT.md`](GO_LIVE_RECHT.md)  
+Routen: `/impressum` · `/datenschutz` · `/agb` · `/widerruf`
 
 ## Kunden (Konfigurator / Checkout)
 
@@ -9,6 +12,7 @@ Für Konfigurator, Checkout und Support – kurze Alltagssprache, nicht intern-t
 - Farbtöne und Oberflächen können durch den 3D-Druck **anders wirken**.
 - Für den Druck werden Logos auf **höchstens 3 Farben** vereinfacht.
 - Das physische Produkt (Anhänger) ist maßgeblich – nicht die Handy-Seite.
+- Preise in der App: **inkl. MwSt.** (Versand in Shopify).
 
 ## Produktion / Admin
 

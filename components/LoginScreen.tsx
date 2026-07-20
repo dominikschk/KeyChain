@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { GOOGLE_CLIENT_ID, signInWithGoogleIdToken, signInAsGuest } from '../lib/auth';
 import { showError } from '../lib/utils';
+import { LegalFooter } from './LegalFooter';
+import { LEGAL_PATHS } from '../lib/legalCompany';
 
 const GSI_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
 const LOAD_TIMEOUT_MS = 5000;
@@ -135,9 +137,32 @@ export const LoginScreen: React.FC = () => {
           Ohne Anmeldung fortfahren
         </button>
 
-        <p className="text-[11px] text-zinc-400 mt-8">
-          Mit der Anmeldung akzeptierst du die Nutzungsbedingungen.
+        <p className="text-[11px] text-zinc-400 mt-8 leading-snug max-w-[280px]">
+          Mit der Anmeldung akzeptierst du die{' '}
+          <button
+            type="button"
+            className="underline text-petrol font-semibold"
+            onClick={() => {
+              window.history.pushState({}, '', LEGAL_PATHS.agb);
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+          >
+            AGB
+          </button>{' '}
+          und bestätigst die{' '}
+          <button
+            type="button"
+            className="underline text-petrol font-semibold"
+            onClick={() => {
+              window.history.pushState({}, '', LEGAL_PATHS.datenschutz);
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+          >
+            Datenschutzerklärung
+          </button>
+          .
         </p>
+        <LegalFooter compact className="mt-4" />
       </div>
     </div>
   );

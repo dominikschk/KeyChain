@@ -132,5 +132,6 @@ export function basketTotals(lines: CheckoutBasketLine[]): {
 
 function formatBasketEuro(cents: number): string {
   const n = Math.max(0, Math.round(cents)) / 100
-  return `${n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+  const euro = `${n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+  return `${euro} inkl. MwSt.`
 }

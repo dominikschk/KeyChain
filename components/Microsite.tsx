@@ -15,6 +15,7 @@ import {
   parsePriceItems,
 } from '../lib/sectionContent';
 import { applyMicrositeShareMeta } from '../lib/shareMeta';
+import { LegalFooter } from './LegalFooter';
 import {
   buildSiteNavItems,
   filterBlocksForPage,
@@ -706,7 +707,7 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
       </div>
 
       {!embedded && (
-        <footer className="fixed bottom-0 left-0 right-0 p-5 flex justify-center pointer-events-none z-[200]">
+        <footer className="fixed bottom-0 left-0 right-0 p-4 sm:p-5 flex flex-col items-center gap-2 pointer-events-none z-[200] pb-safe">
           <button
             type="button"
             onClick={() => { window.location.href = window.location.origin; }}
@@ -716,6 +717,9 @@ export const Microsite: React.FC<MicrositeProps> = ({ config, error, googleLogoU
             <Smartphone size={18} />
             <span>Eigenen Anhänger gestalten</span>
           </button>
+          <div className="pointer-events-auto rounded-full bg-white/90 backdrop-blur px-3 py-1.5 shadow-sm">
+            <LegalFooter compact />
+          </div>
         </footer>
       )}
     </div>
