@@ -72,7 +72,7 @@ export const LegalPage: React.FC<Props> = ({ path }) => {
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 leading-snug space-y-1">
             <p className="font-semibold">Platzhalter – bitte ersetzen</p>
             <p>
-              Vercel → Environment Variable z. B.{' '}
+              Vercel → Environment Variable z.B.{' '}
               <code className="font-mono text-[10px]">
                 {key === 'impressum'
                   ? 'VITE_LEGAL_IMPRESSUM_URL'
