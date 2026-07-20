@@ -24,6 +24,6 @@ Stand: 2026-07-19
 
 ## Nächster Schritt
 
-1. **[`GO_LIVE.md`](GO_LIVE.md)** – Bestellen über Warenkorb (ohne Draft-Secrets)
-2. PR mergen / Vercel: `VITE_SUPABASE_*` (+ optional Variant-ID)
-3. Später Stück für Stück: Webhook, Draft Orders (`PHASE0_GO_LIVE.md`)
+1. ~~PR mergen + Warenkorb-Test~~ (wenn schon erledigt)  
+2. **Jetzt:** [`GO_LIVE_SCHRITT_4_WEBHOOK.md`](GO_LIVE_SCHRITT_4_WEBHOOK.md) – Order → Admin `paid`  
+3. Danach: Variant-ID / Draft Orders / Print-QC
