@@ -1,6 +1,7 @@
 // Supabase Edge Function: Shopify Draft Order mit Preis PRO ZEILE / Config
 // POST { lines: [...] } oder Legacy-Einzelobjekt
-// Secrets: SHOPIFY_SHOP_DOMAIN, SHOPIFY_ADMIN_ACCESS_TOKEN
+// Secrets (neu ab 2026): SHOPIFY_SHOP_DOMAIN + SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET
+// Optional Legacy: SHOPIFY_ADMIN_ACCESS_TOKEN (statisches shpat_…)
 // Sicherheit: Staffel nur aus quantity DIESER Zeile – nie Warenkorb-Summe
 
 const corsHeaders = {
@@ -13,6 +14,8 @@ const SHOP_DOMAIN = (Deno.env.get('SHOPIFY_SHOP_DOMAIN') ?? '')
   .replace(/^https?:\/\//i, '')
   .replace(/\/$/, '');
 const ADMIN_TOKEN = (Deno.env.get('SHOPIFY_ADMIN_ACCESS_TOKEN') ?? '').trim();
+const CLIENT_ID = (Deno.env.get('SHOPIFY_CLIENT_ID') ?? '').trim();
+const CLIENT_SECRET = (Deno.env.get('SHOPIFY_CLIENT_SECRET') ?? '').trim();
 const API_VERSION = Deno.env.get('SHOPIFY_API_VERSION')?.trim() || '2024-10';
 const SUPABASE_URL = (Deno.env.get('SUPABASE_URL') ?? '').trim();
 const SERVICE_ROLE = (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '').trim();
@@ -20,6 +23,80 @@ const RATE_LIMIT = Math.max(5, parseInt(Deno.env.get('DRAFT_ORDER_RATE_LIMIT') ?
 
 type RateBucket = { count: number; resetAt: number };
 const rateBuckets = new Map<string, RateBucket>();
+
+/** Cache für Client-Credentials-Token (ca. 24h gültig). */
+let cachedToken: { value: string; expiresAt: number } | null = null;
+
+function shopHost(): string {
+  return SHOP_DOMAIN.includes('.') ? SHOP_DOMAIN : `${SHOP_DOMAIN}.myshopify.com`;
+}
+
+function authConfigured(): boolean {
+  if (!SHOP_DOMAIN) return false;
+  if (ADMIN_TOKEN) return true;
+  return !!(CLIENT_ID && CLIENT_SECRET);
+}
+
+/**
+ * Admin-Token: Legacy shpat_ ODER Client-Credentials (Client-ID + shpss_ Secret).
+ * https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/client-credentials-grant
+ */
+async function resolveAdminAccessToken(): Promise<
+  { ok: true; token: string } | { ok: false; error: string; hint?: string }
+> {
+  if (ADMIN_TOKEN) return { ok: true, token: ADMIN_TOKEN };
+
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    return {
+      ok: false,
+      error: 'Draft Orders nicht konfiguriert',
+      hint: 'Secrets SHOPIFY_SHOP_DOMAIN + SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET (oder Legacy SHOPIFY_ADMIN_ACCESS_TOKEN)',
+    };
+  }
+
+  const now = Date.now();
+  if (cachedToken && cachedToken.expiresAt > now + 60_000) {
+    return { ok: true, token: cachedToken.value };
+  }
+
+  try {
+    const res = await fetch(`https://${shopHost()}/admin/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+      }).toString(),
+    });
+    const text = await res.text();
+    let data: { access_token?: string; expires_in?: number; error?: string } = {};
+    try {
+      data = JSON.parse(text) as typeof data;
+    } catch {
+      /* ignore */
+    }
+    if (!res.ok || !data.access_token) {
+      console.error('Shopify client_credentials failed', res.status, text.slice(0, 400));
+      return {
+        ok: false,
+        error: 'Shopify-Token konnte nicht geholt werden',
+        hint:
+          data.error ||
+          'App im Shop installieren? Scopes write_draft_orders gesetzt? Client-ID/Secret korrekt?',
+      };
+    }
+    const ttlSec = typeof data.expires_in === 'number' ? data.expires_in : 86399;
+    cachedToken = {
+      value: data.access_token,
+      expiresAt: now + Math.max(60, ttlSec - 120) * 1000,
+    };
+    return { ok: true, token: data.access_token };
+  } catch (e) {
+    console.error('Token fetch error', e);
+    return { ok: false, error: 'Token-Abruf fehlgeschlagen (Netzwerk)' };
+  }
+}
 
 function clientKey(req: Request): string {
   const xf = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || '';
@@ -221,15 +298,24 @@ Deno.serve(async (req) => {
     );
   }
 
-  if (!SHOP_DOMAIN || !ADMIN_TOKEN) {
+  if (!authConfigured()) {
     return jsonResponse(
       {
         error: 'Draft Orders nicht konfiguriert',
-        hint: 'Secrets SHOPIFY_SHOP_DOMAIN + SHOPIFY_ADMIN_ACCESS_TOKEN setzen',
+        hint: 'Secrets: SHOPIFY_SHOP_DOMAIN + SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET (Dev Dashboard). Legacy: SHOPIFY_ADMIN_ACCESS_TOKEN.',
       },
       503
     );
   }
+
+  const tokenRes = await resolveAdminAccessToken();
+  if (!tokenRes.ok) {
+    return jsonResponse(
+      { error: tokenRes.error, hint: tokenRes.hint },
+      tokenRes.error.includes('konfiguriert') ? 503 : 502
+    );
+  }
+  const accessToken = tokenRes.token;
 
   let body: Record<string, unknown>;
   try {
@@ -323,8 +409,7 @@ Deno.serve(async (req) => {
     },
   };
 
-  const shopHost = SHOP_DOMAIN.includes('.') ? SHOP_DOMAIN : `${SHOP_DOMAIN}.myshopify.com`;
-  const url = `https://${shopHost}/admin/api/${API_VERSION}/draft_orders.json`;
+  const url = `https://${shopHost()}/admin/api/${API_VERSION}/draft_orders.json`;
 
   try {
     const shopRes = await fetch(url, {
@@ -332,7 +417,7 @@ Deno.serve(async (req) => {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'X-Shopify-Access-Token': ADMIN_TOKEN,
+        'X-Shopify-Access-Token': accessToken,
       },
       body: JSON.stringify(payload),
     });
