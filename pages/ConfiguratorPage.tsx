@@ -1261,7 +1261,7 @@ const ConfiguratorPage: React.FC = () => {
       </header>
 
       {workPhase === 'site' && (
-        <div className="px-4 md:px-5 pb-3 border-b border-zinc-100 bg-white">
+        <div className="px-4 md:px-5 pb-3 border-b border-zinc-100 bg-white space-y-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Wohin soll der Chip öffnen?</p>
           <div className="grid grid-cols-2 gap-2 max-w-xl">
             <button
@@ -1293,6 +1293,16 @@ const ConfiguratorPage: React.FC = () => {
               </span>
             </button>
           </div>
+          <aside className="max-w-xl rounded-xl border border-petrol/15 bg-petrol/[0.04] px-3.5 py-3 text-[11px] text-zinc-600 leading-snug">
+            <p className="font-bold text-navy text-xs mb-1">Wie kommt das auf meine Website?</p>
+            <p>
+              Du musst keinen Code in deine Website einbauen. Nach der Bestellung programmieren wir den Chip mit deinem Link.
+              Handy dranhalten – deine NUDAIM-Seite oder deine eigene URL öffnet sich.
+            </p>
+            <p className="mt-1.5 text-zinc-500">
+              Bei „Eigene Seite“ leitet der Chip direkt zu deiner Website, Instagram oder Shop weiter.
+            </p>
+          </aside>
         </div>
       )}
 

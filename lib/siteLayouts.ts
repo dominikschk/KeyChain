@@ -25,6 +25,10 @@ export const SITE_FONTS: Record<
   elegant: { label: 'Elegant', className: 'font-site-elegant', family: 'Cormorant Garamond' },
   display: { label: 'Display', className: 'font-site-display', family: 'Playfair Display' },
   soft: { label: 'Freundlich', className: 'font-site-soft', family: 'Nunito' },
+  classic: { label: 'Klassisch', className: 'font-site-classic', family: 'Lora' },
+  bold: { label: 'Kräftig', className: 'font-site-bold', family: 'Montserrat' },
+  narrow: { label: 'Schmal', className: 'font-site-narrow', family: 'Oswald' },
+  hand: { label: 'Handschrift', className: 'font-site-hand', family: 'Caveat' },
 };
 
 export function fontClassFor(style: FontStyle | undefined): string {

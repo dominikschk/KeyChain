@@ -7,6 +7,7 @@ import { validateImageFile, isValidEmail, normalizePhoneInput } from '../lib/val
 import { uploadAndGetPublicUrl, storagePath } from '../lib/storage';
 import { SITE_FONTS, SITE_TEMPLATES, type SiteTemplate } from '../lib/siteLayouts';
 import { paletteForIndustry } from '../lib/brandPalette';
+import { HexColorField } from './HexColorField';
 import { parseFaqItems, serializeFaqItems, type FaqItem } from '../lib/contentBlocks';
 import { parsePriceItems, serializePriceItems, type PriceItem } from '../lib/sectionContent';
 import { t } from '../lib/i18n';
@@ -438,7 +439,7 @@ export const Controls: React.FC<ControlsProps> = ({
   onClearLogo,
   logoBusy = false,
 }) => {
-  const [showFineTune, setShowFineTune] = useState(false);
+  const [showFineTune, setShowFineTune] = useState(true);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -659,37 +660,22 @@ export const Controls: React.FC<ControlsProps> = ({
         <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-4">
           <div>
             <h3 className="text-sm font-bold text-navy">Farben</h3>
+            <p className="text-[11px] text-zinc-500 mt-1">Eigene Brandingfarbe? Farbcode unten eintragen.</p>
           </div>
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe vom Anhänger</p>
-            <div className="flex flex-wrap gap-2">
-              {plateColors.map((c) => (
-                <button
-                  key={`plate-${c}`}
-                  type="button"
-                  onClick={() => updateConfig('plateColor', c)}
-                  className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${(config.plateColor || '#F8F5F0').toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
-                  style={{ backgroundColor: c }}
-                  aria-label="Farbe vom Anhänger wählen"
-                />
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe von Logo und Text</p>
-            <div className="flex flex-wrap gap-2">
-              {printColors.map((c) => (
-                <button
-                  key={`print-${c}`}
-                  type="button"
-                  onClick={() => updateConfig('logoColor', c)}
-                  className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${config.logoColor?.toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
-                  style={{ backgroundColor: c }}
-                  aria-label="Farbe von Logo und Text wählen"
-                />
-              ))}
-            </div>
-          </div>
+          <HexColorField
+            label="Farbe vom Anhänger"
+            value={config.plateColor}
+            fallback="#F8F5F0"
+            swatches={plateColors}
+            onChange={(hex) => updateConfig('plateColor', hex)}
+          />
+          <HexColorField
+            label="Farbe von Logo und Text"
+            value={config.logoColor}
+            fallback="#111111"
+            swatches={printColors}
+            onChange={(hex) => updateConfig('logoColor', hex)}
+          />
         </section>
 
         <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-2">
@@ -709,15 +695,26 @@ export const Controls: React.FC<ControlsProps> = ({
         </section>
 
         <section className="space-y-2 pt-0.5">
-          <button
-            type="button"
-            onClick={() => setShowFineTune((v) => !v)}
-            className="text-xs font-bold text-petrol hover:text-navy transition-colors"
-          >
-            {showFineTune ? '− Feineinstellung schließen' : '+ Größe & Position'}
-          </button>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setShowFineTune((v) => !v)}
+              className="text-xs font-bold text-petrol hover:text-navy transition-colors"
+            >
+              {showFineTune ? '− Größe & Position einklappen' : '+ Größe & Position'}
+            </button>
+          </div>
           {showFineTune && (
             <div className="space-y-4 rounded-2xl border border-navy/10 bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfig((prev) => ({ ...prev, logoPosX: 0, logoPosY: 0 }))}
+                  className="min-h-[36px] px-3 rounded-xl border border-petrol/30 bg-petrol/5 text-xs font-bold text-navy hover:bg-petrol/10"
+                >
+                  Logo zentrieren
+                </button>
+              </div>
               <div className="space-y-1">
                 <div className="flex justify-between text-[11px] font-semibold text-zinc-500"><span>Größe</span><span>{Math.round(config.logoScale * 100)}%</span></div>
                 <input type="range" min="0.4" max="1.8" step="0.01" value={config.logoScale} onChange={(e) => updateConfig('logoScale', parseFloat(e.target.value))} className="w-full accent-petrol" />
@@ -809,24 +806,34 @@ export const Controls: React.FC<ControlsProps> = ({
              <div className="flex gap-2 flex-wrap mt-2">
                <span className="text-[7px] font-bold text-zinc-400 uppercase w-full px-1">Schriftart</span>
                {(Object.keys(SITE_FONTS) as FontStyle[]).map((style) => (
-                 <button key={style} type="button" onClick={() => updateConfig('fontStyle', style)} className={`min-w-[30%] flex-1 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${config.fontStyle === style ? 'bg-petrol text-white border-petrol' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}>
+                 <button key={style} type="button" onClick={() => updateConfig('fontStyle', style)} className={`min-w-[28%] flex-1 py-2.5 rounded-xl border text-[9px] font-black uppercase transition-all ${config.fontStyle === style ? 'bg-petrol text-white border-petrol' : 'bg-cream border-navy/10 text-zinc-500 hover:border-petrol/30'}`}>
                    {SITE_FONTS[style].label}
                  </button>
                ))}
              </div>
-             <div className="grid grid-cols-3 gap-2 mt-2">
-               <div className="space-y-1">
-                 <span className="text-[7px] font-bold text-zinc-400 uppercase px-1">Button-Farbe</span>
-                 <input type="color" value={config.accentColor || '#11235A'} onChange={(e) => updateConfig('accentColor', e.target.value)} className="w-full h-10 rounded-xl border border-navy/10 bg-cream cursor-pointer" aria-label="Button-Farbe" />
-               </div>
-               <div className="space-y-1">
-                 <span className="text-[7px] font-bold text-zinc-400 uppercase px-1">Hintergrund</span>
-                 <input type="color" value={config.surfaceColor || '#F8F5F0'} onChange={(e) => updateConfig('surfaceColor', e.target.value)} className="w-full h-10 rounded-xl border border-navy/10 bg-cream cursor-pointer" aria-label="Hintergrundfarbe" />
-               </div>
-               <div className="space-y-1">
-                 <span className="text-[7px] font-bold text-zinc-400 uppercase px-1">Textfarbe</span>
-                 <input type="color" value={config.textColor || '#1C1917'} onChange={(e) => updateConfig('textColor', e.target.value)} className="w-full h-10 rounded-xl border border-navy/10 bg-cream cursor-pointer" aria-label="Textfarbe" />
-               </div>
+             <p className="text-[10px] text-zinc-500 px-1">Gilt für die Handy-Seite nach dem Antippen des Chips.</p>
+             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+               <HexColorField
+                 label="Button-Farbe"
+                 value={config.accentColor}
+                 fallback="#11235A"
+                 onChange={(hex) => updateConfig('accentColor', hex)}
+                 compact
+               />
+               <HexColorField
+                 label="Hintergrund"
+                 value={config.surfaceColor}
+                 fallback="#F8F5F0"
+                 onChange={(hex) => updateConfig('surfaceColor', hex)}
+                 compact
+               />
+               <HexColorField
+                 label="Textfarbe"
+                 value={config.textColor}
+                 fallback="#1C1917"
+                 onChange={(hex) => updateConfig('textColor', hex)}
+                 compact
+               />
              </div>
           </div>
 

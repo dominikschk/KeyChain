@@ -81,7 +81,7 @@ function sanitizeConfig(raw: unknown): Record<string, unknown> | null {
   const accent = String(c.accentColor ?? '#11235A');
   if (!/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(accent)) return null;
   const theme = c.theme === 'dark' ? 'dark' : 'light';
-  const fontStyle = ['luxury', 'modern', 'elegant', 'display', 'soft'].includes(String(c.fontStyle))
+  const fontStyle = ['luxury', 'modern', 'elegant', 'display', 'soft', 'classic', 'bold', 'narrow', 'hand'].includes(String(c.fontStyle))
     ? String(c.fontStyle)
     : 'modern';
   let surface = String(c.surfaceColor ?? (theme === 'dark' ? '#0C0A09' : '#F8F5F0'));
