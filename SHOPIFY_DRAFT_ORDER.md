@@ -37,12 +37,13 @@ App im Shop **installieren**, Version **veröffentlichen**.
 
 ## Preise (Supabase Secrets)
 
+Beliebig viele Staffeln (muss zu Vercel `VITE_PRICE_KEYCHAIN_TIERS` passen):
+
 ```bash
-supabase secrets set PRICE_KEYCHAIN_CENTS="24.90"
-supabase secrets set PRICE_KEYCHAIN_Q10_CENTS="21.90"
-supabase secrets set PRICE_KEYCHAIN_Q25_CENTS="18.90"
+supabase secrets set PRICE_KEYCHAIN_TIERS="1:1.50,20:1.50,50:1.45,100:1.40,250:1.30,400:1.20,600:1.10,800:1.00,1000:0.95"
 ```
 
+Ohne Secret = NFC-Preisliste als Default. Anleitung: [`GO_LIVE_PREIS.md`](GO_LIVE_PREIS.md).
 ---
 
 ## Deploy

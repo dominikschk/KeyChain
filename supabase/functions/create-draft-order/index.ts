@@ -166,19 +166,82 @@ function envCents(key: string, fallback: number): number {
 
 type Tier = { minQty: number; unitPriceCents: number };
 
+/** NFC-Preisliste (Defaults). Override: PRICE_KEYCHAIN_TIERS=1:1.50,20:1.50,50:1.45,… */
+const DEFAULT_KEYCHAIN_TIERS: Tier[] = [
+  { minQty: 1, unitPriceCents: 150 },
+  { minQty: 20, unitPriceCents: 150 },
+  { minQty: 50, unitPriceCents: 145 },
+  { minQty: 100, unitPriceCents: 140 },
+  { minQty: 250, unitPriceCents: 130 },
+  { minQty: 400, unitPriceCents: 120 },
+  { minQty: 600, unitPriceCents: 110 },
+  { minQty: 800, unitPriceCents: 100 },
+  { minQty: 1000, unitPriceCents: 95 },
+];
+
+function parseTiersEnv(raw: string | undefined, fallback: Tier[]): Tier[] {
+  const s = (raw ?? '').trim();
+  if (!s) return fallback.map((t) => ({ ...t }));
+  const parts = s.split(/[,;]+/).map((p) => p.trim()).filter(Boolean);
+  const parsed: Tier[] = [];
+  for (const part of parts) {
+    const m = part.match(/^(\d+)\s*[:=]\s*(.+)$/);
+    if (!m) continue;
+    const minQty = parseInt(m[1]!, 10);
+    const money = m[2]!.trim();
+    let cents = 0;
+    if (/^\d+$/.test(money) && money.length >= 3) {
+      cents = parseInt(money, 10);
+    } else {
+      const euros = parseFloat(money.replace(',', '.'));
+      cents = Number.isFinite(euros) && euros > 0 ? Math.round(euros * 100) : 0;
+    }
+    if (!Number.isFinite(minQty) || minQty < 1 || cents < 50) continue;
+    parsed.push({ minQty, unitPriceCents: cents });
+  }
+  if (parsed.length === 0) return fallback.map((t) => ({ ...t }));
+  parsed.sort((a, b) => a.minQty - b.minQty);
+  const byQty = new Map<number, Tier>();
+  for (const t of parsed) byQty.set(t.minQty, t);
+  const unique = [...byQty.values()].sort((a, b) => a.minQty - b.minQty);
+  if (unique[0]!.minQty > 1) {
+    unique.unshift({ minQty: 1, unitPriceCents: unique[0]!.unitPriceCents });
+  }
+  return unique;
+}
+
 function tiersForProduct(productId: string): Tier[] {
   if (productId === 'badge') {
+    const fromList = parseTiersEnv(
+      Deno.env.get('PRICE_BADGE_TIERS') ?? Deno.env.get('VITE_PRICE_BADGE_TIERS') ?? '',
+      []
+    );
+    if (fromList.length > 0) return fromList;
     return [
       { minQty: 1, unitPriceCents: envCents('PRICE_BADGE_CENTS', envCents('VITE_PRICE_BADGE_CENTS', 3990)) },
       { minQty: 10, unitPriceCents: envCents('PRICE_BADGE_Q10_CENTS', envCents('VITE_PRICE_BADGE_Q10_CENTS', 3490)) },
       { minQty: 25, unitPriceCents: envCents('PRICE_BADGE_Q25_CENTS', envCents('VITE_PRICE_BADGE_Q25_CENTS', 2990)) },
     ];
   }
-  return [
-    { minQty: 1, unitPriceCents: envCents('PRICE_KEYCHAIN_CENTS', envCents('VITE_PRICE_KEYCHAIN_CENTS', 2490)) },
-    { minQty: 10, unitPriceCents: envCents('PRICE_KEYCHAIN_Q10_CENTS', envCents('VITE_PRICE_KEYCHAIN_Q10_CENTS', 2190)) },
-    { minQty: 25, unitPriceCents: envCents('PRICE_KEYCHAIN_Q25_CENTS', envCents('VITE_PRICE_KEYCHAIN_Q25_CENTS', 1890)) },
-  ];
+
+  const fromList = parseTiersEnv(
+    Deno.env.get('PRICE_KEYCHAIN_TIERS') ?? Deno.env.get('VITE_PRICE_KEYCHAIN_TIERS') ?? '',
+    []
+  );
+  if (fromList.length > 0) return fromList;
+
+  const legacyQ10 = (Deno.env.get('PRICE_KEYCHAIN_Q10_CENTS') ?? Deno.env.get('VITE_PRICE_KEYCHAIN_Q10_CENTS') ?? '').trim();
+  const legacyQ25 = (Deno.env.get('PRICE_KEYCHAIN_Q25_CENTS') ?? Deno.env.get('VITE_PRICE_KEYCHAIN_Q25_CENTS') ?? '').trim();
+  // Nur Q10/Q25 aktivieren Legacy – einzelnes PRICE_KEYCHAIN_CENTS darf NFC-Defaults nicht überschreiben
+  if (legacyQ10 || legacyQ25) {
+    return [
+      { minQty: 1, unitPriceCents: envCents('PRICE_KEYCHAIN_CENTS', envCents('VITE_PRICE_KEYCHAIN_CENTS', 150)) },
+      { minQty: 10, unitPriceCents: envCents('PRICE_KEYCHAIN_Q10_CENTS', envCents('VITE_PRICE_KEYCHAIN_Q10_CENTS', 120)) },
+      { minQty: 25, unitPriceCents: envCents('PRICE_KEYCHAIN_Q25_CENTS', envCents('VITE_PRICE_KEYCHAIN_Q25_CENTS', 100)) },
+    ];
+  }
+
+  return DEFAULT_KEYCHAIN_TIERS.map((t) => ({ ...t }));
 }
 
 /** Staffel ausschließlich aus der Stückzahl dieser einen Zeile. */

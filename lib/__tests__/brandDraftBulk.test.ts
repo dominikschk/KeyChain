@@ -56,9 +56,9 @@ describe('bulkOrder', () => {
     expect(clampOrderQuantity(12)).toBe(12);
   });
 
-  it('Mengenhinweis ab 10', () => {
+  it('Mengenhinweis ab 20', () => {
     expect(bulkHintForQuantity(1)).toMatch(/Firmen|Events|Stück/);
-    expect(bulkHintForQuantity(12)).toMatch(/10/);
+    expect(bulkHintForQuantity(25)).toMatch(/20/);
   });
 });
 
