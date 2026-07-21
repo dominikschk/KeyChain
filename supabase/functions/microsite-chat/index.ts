@@ -9,11 +9,52 @@ const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_MICROSITE_HOSTS') ?? '')
   .split(',')
   .map((h) => h.trim().toLowerCase())
   .filter(Boolean);
+const CHAT_RATE_LIMIT = Math.max(3, parseInt(Deno.env.get('MICROSITE_CHAT_RATE_LIMIT') ?? '20', 10) || 20);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+type RateBucket = { count: number; resetAt: number };
+const rateBuckets = new Map<string, RateBucket>();
+
+function clientKey(req: Request): string {
+  const xf = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || '';
+  const ip = xf.split(',')[0]?.trim() || 'unknown';
+  return `chat:${ip}`;
+}
+
+function allowRequest(key: string, limit: number, windowMs = 60_000): { ok: boolean; retryAfterSec: number } {
+  const now = Date.now();
+  if (rateBuckets.size > 4000) {
+    for (const [k, b] of rateBuckets) {
+      if (b.resetAt <= now) rateBuckets.delete(k);
+    }
+  }
+  const b = rateBuckets.get(key);
+  if (!b || b.resetAt <= now) {
+    rateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return { ok: true, retryAfterSec: Math.ceil(windowMs / 1000) };
+  }
+  if (b.count >= limit) {
+    return { ok: false, retryAfterSec: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) };
+  }
+  b.count += 1;
+  return { ok: true, retryAfterSec: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) };
+}
+
+function originAllowed(req: Request): boolean {
+  if (ALLOWED_ORIGINS.length === 0) return true;
+  const origin = (req.headers.get('origin') || '').trim();
+  if (!origin) return false;
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    return ALLOWED_ORIGINS.some((h) => host === h || host.endsWith(`.${h}`));
+  } catch {
+    return false;
+  }
+}
 
 const SYSTEM = `Du bist der NUDAIM-Assistent. Du hilfst Menschen OHNE Technik-Kenntnisse auf einfachem Deutsch.
 
@@ -126,6 +167,16 @@ const handler = async (req: Request): Promise<Response> => {
   }
   if (req.method !== 'POST') {
     return jsonResponse({ error: 'POST only' }, 405);
+  }
+  if (!originAllowed(req)) {
+    return jsonResponse({ error: 'origin denied' }, 403);
+  }
+  const rl = allowRequest(clientKey(req), CHAT_RATE_LIMIT);
+  if (!rl.ok) {
+    return jsonResponse(
+      { error: 'rate_limited', retryAfterSec: rl.retryAfterSec, fallback: true },
+      429
+    );
   }
   if (!OPENAI_API_KEY) {
     return jsonResponse({ error: 'OPENAI_API_KEY not configured', fallback: true }, 503);

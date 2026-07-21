@@ -54,6 +54,9 @@ export async function sendMicrositeChat(
     if (res.status === 503) {
       return { message: '', ready: false, config: null, fallback: true };
     }
+    if (res.status === 429 || res.status === 403) {
+      return { message: '', ready: false, config: null, fallback: true, error: 'rate_or_origin' };
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       return {

@@ -177,6 +177,8 @@ AS $$
   LIMIT 1;
 $$;
 
+-- Öffentlich: settings ohne secretKey (Stempelkarte). WLAN-Passwort bleibt
+-- absichtlich (Button „WLAN teilen“). Owner-Vollzugriff → get_blocks_for_owner.
 CREATE OR REPLACE FUNCTION public.get_blocks_for_config(p_config_id uuid)
 RETURNS SETOF public.nfc_blocks
 LANGUAGE sql
@@ -184,10 +186,96 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT *
-  FROM public.nfc_blocks
+  SELECT
+    b.id,
+    b.config_id,
+    b.type,
+    b.title,
+    b.content,
+    b.button_type,
+    b.image_url,
+    CASE
+      WHEN b.settings IS NULL THEN NULL
+      ELSE (b.settings - 'secretKey')
+    END AS settings,
+    b.sort_order
+  FROM public.nfc_blocks b
+  WHERE b.config_id = p_config_id
+  ORDER BY b.sort_order ASC;
+$$;
+
+-- CCP mit write_token: volle settings inkl. secretKey (QR-Druck)
+CREATE OR REPLACE FUNCTION public.get_blocks_for_owner(
+  p_config_id uuid,
+  p_write_token text
+)
+RETURNS SETOF public.nfc_blocks
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF p_write_token IS NULL OR length(trim(p_write_token)) < 32 THEN
+    RAISE EXCEPTION 'write_token required';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.nfc_configs c
+    WHERE c.id = p_config_id
+      AND c.write_token IS NOT NULL
+      AND c.write_token = p_write_token
+  ) THEN
+    RAISE EXCEPTION 'not allowed';
+  END IF;
+  RETURN QUERY
+    SELECT b.*
+    FROM public.nfc_blocks b
+    WHERE b.config_id = p_config_id
+    ORDER BY b.sort_order ASC;
+END;
+$$;
+
+-- Stempel prüfen ohne secretKey an den Client zu geben (Rate-Limit 30/min/Block)
+CREATE OR REPLACE FUNCTION public.verify_nfc_stamp(
+  p_config_id uuid,
+  p_block_id uuid,
+  p_candidate text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_key text;
+  v_recent integer;
+BEGIN
+  IF p_candidate IS NULL OR length(trim(p_candidate)) < 8 OR length(p_candidate) > 128 THEN
+    RETURN false;
+  END IF;
+
+  SELECT count(*)::integer INTO v_recent
+  FROM public.nfc_scans
   WHERE config_id = p_config_id
-  ORDER BY sort_order ASC;
+    AND scanned_at > now() - interval '1 minute';
+  IF v_recent > 60 THEN
+    RETURN false;
+  END IF;
+
+  SELECT nullif(b.settings->>'secretKey', '') INTO v_key
+  FROM public.nfc_blocks b
+  WHERE b.id = p_block_id
+    AND b.config_id = p_config_id
+    AND b.button_type = 'stamp_card'
+  LIMIT 1;
+
+  IF v_key IS NULL OR length(v_key) < 8 THEN
+    RETURN false;
+  END IF;
+
+  RETURN (v_key = trim(p_candidate));
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.get_scan_count(p_config_id uuid)
@@ -271,6 +359,7 @@ DECLARE
   block_count integer;
   elem jsonb;
   i integer := 0;
+  v_image text;
 BEGIN
   IF p_write_token IS NULL OR length(trim(p_write_token)) < 32 THEN
     RAISE EXCEPTION 'write_token required';
@@ -302,6 +391,11 @@ BEGIN
 
   FOR elem IN SELECT value FROM jsonb_array_elements(p_blocks)
   LOOP
+    v_image := nullif(left(nullif(elem->>'image_url', ''), 2048), '');
+    IF v_image IS NOT NULL AND v_image !~* '^https://' THEN
+      RAISE EXCEPTION 'image_url must be https';
+    END IF;
+
     INSERT INTO public.nfc_blocks (
       config_id, type, title, content, button_type, image_url, settings, sort_order
     ) VALUES (
@@ -310,7 +404,7 @@ BEGIN
       left(nullif(elem->>'title', ''), 200),
       left(nullif(elem->>'content', ''), 5000),
       left(nullif(elem->>'button_type', ''), 64),
-      left(nullif(elem->>'image_url', ''), 2048),
+      v_image,
       CASE
         WHEN elem->'settings' IS NULL OR jsonb_typeof(elem->'settings') = 'null' THEN NULL
         ELSE elem->'settings'
@@ -466,6 +560,8 @@ $$;
 
 REVOKE ALL ON FUNCTION public.get_config_by_short_id(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_blocks_for_config(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_blocks_for_owner(uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.verify_nfc_stamp(uuid, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_scan_count(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_scan_count_last_30_days(uuid) FROM PUBLIC;
 -- Alte 2-Argument-Signatur entfernen (war ungeschützt)
@@ -477,6 +573,8 @@ REVOKE ALL ON FUNCTION public.replace_nfc_blocks(uuid, text, jsonb) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.get_config_by_short_id(text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_blocks_for_config(uuid) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_blocks_for_owner(uuid, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.verify_nfc_stamp(uuid, uuid, text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_scan_count(uuid) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_scan_count_last_30_days(uuid) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.set_nfc_config_stl_url(uuid, text, text) TO anon, authenticated;

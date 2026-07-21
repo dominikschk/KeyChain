@@ -88,7 +88,7 @@ export const CcpPage: React.FC = () => {
       return;
     }
     setError(null);
-    getConfigByShortId(shortId)
+    getConfigByShortId(shortId, writeTokenRef.current)
       .then((result) => {
         if (!result) {
           setError('Konfiguration nicht gefunden.');

@@ -3,10 +3,12 @@
 // Secrets (neu ab 2026): SHOPIFY_SHOP_DOMAIN + SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET
 // Optional Legacy: SHOPIFY_ADMIN_ACCESS_TOKEN (statisches shpat_…)
 // Sicherheit: Staffel nur aus quantity DIESER Zeile – nie Warenkorb-Summe
+// Optional: DRAFT_ORDER_SHARED_SECRET + ALLOWED_MICROSITE_HOSTS (Origin)
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-draft-order-secret',
 };
 
 const SHOP_DOMAIN = (Deno.env.get('SHOPIFY_SHOP_DOMAIN') ?? '')
@@ -20,6 +22,11 @@ const API_VERSION = Deno.env.get('SHOPIFY_API_VERSION')?.trim() || '2024-10';
 const SUPABASE_URL = (Deno.env.get('SUPABASE_URL') ?? '').trim();
 const SERVICE_ROLE = (Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '').trim();
 const RATE_LIMIT = Math.max(5, parseInt(Deno.env.get('DRAFT_ORDER_RATE_LIMIT') ?? '15', 10) || 15);
+const DRAFT_SECRET = (Deno.env.get('DRAFT_ORDER_SHARED_SECRET') ?? '').trim();
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_MICROSITE_HOSTS') ?? '')
+  .split(',')
+  .map((h) => h.trim().toLowerCase())
+  .filter(Boolean);
 
 type RateBucket = { count: number; resetAt: number };
 const rateBuckets = new Map<string, RateBucket>();
@@ -121,6 +128,34 @@ function allowRequest(key: string, limit: number, windowMs = 60_000): { ok: bool
   }
   b.count += 1;
   return { ok: true, retryAfterSec: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) };
+}
+
+function timingSafeEqualString(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/** Wenn Secret gesetzt: Header x-draft-order-secret muss matchen. */
+function draftSecretOk(req: Request): boolean {
+  if (!DRAFT_SECRET) return true;
+  const provided = (req.headers.get('x-draft-order-secret') ?? '').trim();
+  if (!provided || provided.length !== DRAFT_SECRET.length) return false;
+  return timingSafeEqualString(provided, DRAFT_SECRET);
+}
+
+/** Wenn ALLOWED_MICROSITE_HOSTS gesetzt: Origin muss matchen (kein leerer Origin). */
+function originAllowed(req: Request): boolean {
+  if (ALLOWED_ORIGINS.length === 0) return true;
+  const origin = (req.headers.get('origin') || '').trim();
+  if (!origin) return false;
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    return ALLOWED_ORIGINS.some((h) => host === h || host.endsWith(`.${h}`));
+  } catch {
+    return false;
+  }
 }
 
 /** Bind quantity to saved pricing snapshot when present (anti-tamper). */
@@ -353,6 +388,13 @@ Deno.serve(async (req) => {
   }
   if (req.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, 405);
+  }
+
+  if (!originAllowed(req)) {
+    return jsonResponse({ error: 'origin denied' }, 403);
+  }
+  if (!draftSecretOk(req)) {
+    return jsonResponse({ error: 'unauthorized' }, 401);
   }
 
   const rl = allowRequest(clientKey(req), RATE_LIMIT);

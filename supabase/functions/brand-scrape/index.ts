@@ -1,6 +1,6 @@
 // Supabase Edge Function: Brand-Hinweise aus öffentlicher https-Website
 // POST { url: "https://…" } → { hints: BrandHints }
-// Kein JWT nötig für anon; nur https, Timeout, Größenlimit.
+// Kein JWT nötig für anon; nur https, kein Redirect-Follow, Timeout, Größenlimit.
 
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_MICROSITE_HOSTS') ?? '')
   .split(',')
@@ -12,14 +12,36 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const PRIVATE_HOST =
-  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[::1\]|0\.0\.0\.0)/i;
+/** Hostname-Patterns die nie gefetcht werden (SSRF). */
+const BLOCKED_HOST =
+  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|\[::1\]|::1$|0\.0\.0\.0|metadata\.google|metadata\.goog|100\.100\.100\.200)/i;
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+function isBlockedHostname(hostname: string): boolean {
+  const h = hostname.trim().toLowerCase().replace(/\.$/, '');
+  if (!h) return true;
+  if (BLOCKED_HOST.test(h)) return true;
+  // IPv6 unique-local / link-local
+  if (h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80')) return true;
+  // Bare IPv4 in dotted form
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (ipv4) {
+    const parts = ipv4.slice(1).map(Number);
+    if (parts.some((n) => n > 255)) return true;
+    const [a, b] = parts;
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b === 64) return true; // CGNAT
+  }
+  return false;
 }
 
 function safeHttps(raw: unknown): string | null {
@@ -30,10 +52,22 @@ function safeHttps(raw: unknown): string | null {
     const u = new URL(t);
     if (u.protocol !== 'https:') return null;
     if (u.username || u.password) return null;
-    if (PRIVATE_HOST.test(u.hostname)) return null;
+    if (isBlockedHostname(u.hostname)) return null;
     return u.toString();
   } catch {
     return null;
+  }
+}
+
+function originAllowed(req: Request): boolean {
+  if (ALLOWED_ORIGINS.length === 0) return true;
+  const origin = (req.headers.get('origin') || '').trim();
+  if (!origin) return false;
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    return ALLOWED_ORIGINS.some((h) => host === h || host.endsWith(`.${h}`));
+  } catch {
+    return false;
   }
 }
 
@@ -66,7 +100,9 @@ function parseHints(html: string, pageUrl: string) {
     .trim()
     .slice(0, 80);
   let logoUrl: string | null = null;
-  if (ogImage && /^https:\/\//i.test(ogImage)) logoUrl = ogImage.slice(0, 2048);
+  if (ogImage && /^https:\/\//i.test(ogImage) && safeHttps(ogImage)) {
+    logoUrl = ogImage.slice(0, 2048);
+  }
   let accentColor: string | undefined;
   if (theme && /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(theme.trim())) {
     accentColor = theme.trim();
@@ -90,16 +126,8 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'POST only' }, 405);
   }
 
-  const origin = (req.headers.get('origin') || '').toLowerCase();
-  if (ALLOWED_ORIGINS.length > 0 && origin) {
-    try {
-      const host = new URL(origin).hostname.toLowerCase();
-      if (!ALLOWED_ORIGINS.some((h) => host === h || host.endsWith(`.${h}`))) {
-        return jsonResponse({ error: 'origin denied' }, 403);
-      }
-    } catch {
-      /* ignore */
-    }
+  if (!originAllowed(req)) {
+    return jsonResponse({ error: 'origin denied' }, 403);
   }
 
   let body: { url?: string };
@@ -117,14 +145,18 @@ Deno.serve(async (req) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
+    // Kein automatisches Redirect-Follow → SSRF über 302 auf internes Ziel blockiert
     const res = await fetch(url, {
       signal: controller.signal,
-      redirect: 'follow',
+      redirect: 'manual',
       headers: {
         Accept: 'text/html,application/xhtml+xml',
         'User-Agent': 'NUDAIM-BrandBot/1.0',
       },
     });
+    if (res.status >= 300 && res.status < 400) {
+      return jsonResponse({ error: 'Redirects nicht erlaubt' }, 400);
+    }
     if (!res.ok) {
       return jsonResponse({ error: 'Seite nicht erreichbar', status: res.status }, 502);
     }
@@ -140,8 +172,8 @@ Deno.serve(async (req) => {
     const hints = parseHints(html, url);
     return jsonResponse({ hints });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'fetch failed';
-    return jsonResponse({ error: msg }, 502);
+    const aborted = e instanceof DOMException && e.name === 'AbortError';
+    return jsonResponse({ error: aborted ? 'Timeout' : 'Abruf fehlgeschlagen' }, 502);
   } finally {
     clearTimeout(timer);
   }

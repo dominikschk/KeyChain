@@ -15,6 +15,7 @@ import {
   parsePriceItems,
 } from '../lib/sectionContent';
 import { applyMicrositeShareMeta } from '../lib/shareMeta';
+import { verifyStamp } from '../lib/configApi';
 import { LegalFooter } from './LegalFooter';
 import {
   buildSiteNavItems,
@@ -122,6 +123,7 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string, accentColor: stri
   const [stamps, setStamps] = useState(0);
   const [showScanner, setShowScanner] = useState(false);
   const [isFull, setIsFull] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(`stamps_${configId}_${block.id}`);
@@ -133,8 +135,21 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string, accentColor: stri
     if (n >= slots) setIsFull(true); setShowScanner(false);
   };
 
+  const onScan = async (v: string) => {
+    if (verifying) return;
+    setVerifying(true);
+    try {
+      const ok = await verifyStamp(configId, block.id, v);
+      if (ok) addStamp();
+      else showError('Code ungültig');
+    } finally {
+      setVerifying(false);
+      setShowScanner(false);
+    }
+  };
+
   return (
-    <div onClick={() => !isFull && setShowScanner(true)} className="bg-white p-8 rounded-[2.5rem] border border-navy/5 shadow-xl space-y-8 relative overflow-hidden pointer-events-auto hover:shadow-2xl transition-all active:scale-[0.98] group">
+    <div onClick={() => !isFull && !verifying && setShowScanner(true)} className="bg-white p-8 rounded-[2.5rem] border border-navy/5 shadow-xl space-y-8 relative overflow-hidden pointer-events-auto hover:shadow-2xl transition-all active:scale-[0.98] group">
       {isFull && (
         <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-8 text-center text-white animate-in zoom-in duration-500" style={{ backgroundColor: `${accentColor}f2`, backdropFilter: 'blur(12px)' }}>
            <Gift size={48} className="mb-4 animate-bounce" />
@@ -160,7 +175,7 @@ const StampCard: React.FC<{ block: NFCBlock, configId: string, accentColor: stri
           </div>
         ))}
       </div>
-      {showScanner && <QRScanner onScan={(v) => v === block.settings?.secretKey && addStamp()} onCancel={() => setShowScanner(false)} />}
+      {showScanner && <QRScanner onScan={(v) => { void onScan(v); }} onCancel={() => setShowScanner(false)} />}
     </div>
   );
 };

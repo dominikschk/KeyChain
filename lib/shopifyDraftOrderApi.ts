@@ -6,6 +6,28 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from './supabase'
 import type { DraftOrderLineInput } from './shopifyDraftOrder'
 import { validateDraftOrderInput } from './shopifyDraftOrder'
 
+function getDraftOrderSecret(): string {
+  try {
+    return (
+      (import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_DRAFT_ORDER_SECRET ??
+      ''
+    ).trim()
+  } catch {
+    return ''
+  }
+}
+
+function draftOrderHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    apikey: SUPABASE_ANON_KEY,
+  }
+  const secret = getDraftOrderSecret()
+  if (secret) headers['x-draft-order-secret'] = secret
+  return headers
+}
+
 export type DraftCheckoutOk = {
   ok: true
   invoiceUrl: string
@@ -53,14 +75,19 @@ export async function createDraftCheckoutResult(
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/create-draft-order`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        apikey: SUPABASE_ANON_KEY,
-      },
+      headers: draftOrderHeaders(),
       body: JSON.stringify({ lines: checked.value.lines }),
     })
 
+    if (res.status === 401 || res.status === 403) {
+      return {
+        ok: false,
+        reason: 'setup',
+        message:
+          'Kasse abgelehnt (Secret/Origin). VITE_DRAFT_ORDER_SECRET und ALLOWED_MICROSITE_HOSTS prüfen.',
+        status: res.status,
+      }
+    }
     if (res.status === 503) {
       return {
         ok: false,
@@ -168,13 +195,16 @@ export async function probeDraftOrderFunction(): Promise<{
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/create-draft-order`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        apikey: SUPABASE_ANON_KEY,
-      },
+      headers: draftOrderHeaders(),
       body: JSON.stringify({}),
     })
+    if (res.status === 401 || res.status === 403) {
+      return {
+        reachable: true,
+        configured: false,
+        detail: 'Function da, aber Secret/Origin falsch (401/403)',
+      }
+    }
     if (res.status === 404) {
       return { reachable: false, configured: false, detail: 'Function nicht deployed (404)' }
     }

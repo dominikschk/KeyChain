@@ -1,6 +1,6 @@
 # Sicherheitsprobleme & Fixes (KeyChain / NUDAIM)
 
-Stand: 2026-07-17  
+Stand: 2026-07-21  
 Dieses Dokument listet die gefundenen Sicherheitslücken, den jeweiligen Fix und was du in Supabase noch ausführen musst.
 
 ---
@@ -106,6 +106,44 @@ Dieses Dokument listet die gefundenen Sicherheitslücken, den jeweiligen Fix und
 
 ---
 
+### S8 – Draft-Order ohne Caller-Auth (2026-07)
+
+**Problem:** Jeder mit Anon-Key konnte `create-draft-order` aufrufen → Shopify Draft Orders / Invoice-URLs.
+
+**Fix:**
+- Optional `DRAFT_ORDER_SHARED_SECRET` (Edge) + `VITE_DRAFT_ORDER_SECRET` (Client-Header `x-draft-order-secret`), timing-safe.
+- Wenn `ALLOWED_MICROSITE_HOSTS` gesetzt: Origin-Pflicht.
+- Rate-Limit bleibt (~15/min/IP).
+
+**Aktion:** Secrets setzen + Function neu deployen. Hinweis: Client-Secret ist im Bundle lesbar – kombiniert mit Origin + Cloudflare sinnvoll.
+
+---
+
+### S9 – brand-scrape SSRF (2026-07)
+
+**Problem:** `redirect: 'follow'` + Private-IP-Check nur am Hostname → Redirect/DNS-Rebinding/Metadata möglich.
+
+**Fix:** `redirect: 'manual'` (Redirects abgelehnt); erweiterte Blocklist (169.254, CGNAT, Metadata-Hosts); Origin-Allowlist strikt wenn gesetzt.
+
+**Aktion:** `brand-scrape` neu deployen + `ALLOWED_MICROSITE_HOSTS`.
+
+---
+
+### S10 – Stempel-secretKey öffentlich + Chat-DoS (2026-07)
+
+**Problem:** `get_blocks_for_config` lieferte `secretKey`; `microsite-chat` ohne Rate-Limit/Origin.
+
+**Fix:**
+- Öffentliche Blocks ohne `secretKey`; Owner via `get_blocks_for_owner(write_token)`.
+- Stempel-Check: `verify_nfc_stamp` RPC.
+- Chat: Rate-Limit + Origin-Enforcement.
+- `insert_nfc_blocks`: `image_url` nur `https://` (wie replace).
+- Vercel: CSP + `nosniff` / `X-Frame-Options`.
+
+**Aktion:** Migration `supabase/migrations/security_harden_2026_07.sql` bzw. Schema ausführen; Functions `microsite-chat` / `brand-scrape` / `create-draft-order` deployen.
+
+---
+
 ## Bereits zuvor behoben (Referenz)
 
 - Admin über Supabase Auth + `admin_users` / `is_admin()` + RLS auf Orders
@@ -116,14 +154,17 @@ Dieses Dokument listet die gefundenen Sicherheitslücken, den jeweiligen Fix und
 
 ## Deployment-Checkliste
 
-1. [ ] `supabase-schema.sql` im Supabase SQL Editor ausführen (inkl. Q1: Order-Upsert + `record_nfc_scan`)
+1. [ ] `supabase-schema.sql` **oder** `supabase/migrations/security_harden_2026_07.sql` im SQL Editor ausführen
 2. [ ] Edge Function `send-microsite-email` neu deployen
 3. [ ] Edge Function `shopify-order-webhook` deployen (`--no-verify-jwt`) – siehe [`SHOPIFY_WEBHOOK.md`](SHOPIFY_WEBHOOK.md)
-4. [ ] Secret `ALLOWED_MICROSITE_HOSTS` setzen (empfohlen)
-5. [ ] Secret `SHOPIFY_WEBHOOK_SECRET` setzen + Shopify Webhook `orders/paid`
-6. [ ] App neu bauen/deployen (Short-ID, write_token, Storage-Pfade, Sentry optional)
-7. [ ] Smoke-Test: Konfigurator speichern → Shopify (`_CCP-URL`) → Microsite → CCP-Edit → Admin-Login
-8. [ ] Smoke-Test: bezahlte Order → Admin zeigt Status `paid`
+4. [ ] Edge Functions `create-draft-order`, `brand-scrape`, `microsite-chat` neu deployen (`--no-verify-jwt`)
+5. [ ] Secret `ALLOWED_MICROSITE_HOSTS` setzen (empfohlen, z. B. `konfigurator.nudaim3d.de`)
+6. [ ] Secrets `DRAFT_ORDER_SHARED_SECRET` (Supabase) + `VITE_DRAFT_ORDER_SECRET` (Vercel, gleicher Wert)
+7. [ ] Secret `SHOPIFY_WEBHOOK_SECRET` setzen + Shopify Webhook `orders/paid`
+8. [ ] App neu bauen/deployen (Short-ID, write_token, Storage-Pfade, Sentry optional, CSP)
+9. [ ] Smoke-Test: Konfigurator speichern → Shopify (`_CCP-URL`) → Microsite → CCP-Edit → Admin-Login
+10. [ ] Smoke-Test: bezahlte Order → Admin zeigt Status `paid`
+11. [ ] Smoke-Test: Stempelkarte (QR) + Draft-Checkout mit Secret
 
 ### Rate-Limits (Infrastruktur)
 
@@ -150,6 +191,11 @@ Optional `VITE_SENTRY_DSN` setzen – siehe `.env.example`. Ohne DSN kein Browse
 | Öffentlicher Storage-Read | Microsite/STL müssen öffentlich lesbar sein |
 | Scan-INSERT | Nur noch via `record_nfc_scan` RPC (Rate-Limit); Missbrauch verfälscht weiter Zähler |
 | App-Level-Rate-Limit | Scan-RPC + Cloudflare/WAF (siehe oben) |
+| WLAN-Passwort in Blocks | Absichtlich öffentlich (Button „WLAN teilen“); Stempel-`secretKey` nicht mehr |
+| `VITE_DRAFT_ORDER_SECRET` im Bundle | Obfuscation + Origin; kein Ersatz für WAF |
+| Google-Login nur UI-Gate | Backend bleibt anon; Guest-Bypass bewusst |
+| SVG in öffentlichem Storage | CSP + nosniff; SVG nicht als HTML öffnen |
+| Stempel-Zähler in localStorage | Clientseitig fälschbar – serverseitige Stempelkarte später (Roadmap) |
 
 ---
 

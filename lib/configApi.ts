@@ -54,8 +54,12 @@ function mapBlockRow(row: BlockRow): NFCBlock {
 
 /**
  * Konfiguration anhand short_id (RPC – für Microsite und CCP).
+ * Mit writeToken: Owner-Blocks inkl. Stempel-secretKey (CCP-Edit).
  */
-export async function getConfigByShortId(shortId: string): Promise<{ config: ModelConfig; configId: string; logoSvg?: string | null } | null> {
+export async function getConfigByShortId(
+  shortId: string,
+  writeToken?: string | null
+): Promise<{ config: ModelConfig; configId: string; logoSvg?: string | null } | null> {
   if (!supabase) return null;
 
   const { data: configRows, error: configError } = await supabase
@@ -64,8 +68,13 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
   if (configError || !configRows?.length) return null;
   const configRow = configRows[0] as ConfigRow;
 
-  const { data: blocks, error: blocksError } = await supabase
-    .rpc('get_blocks_for_config', { p_config_id: configRow.id });
+  const token = writeToken?.trim() && writeToken.trim().length >= 32 ? writeToken.trim() : null;
+  const { data: blocks, error: blocksError } = token
+    ? await supabase.rpc('get_blocks_for_owner', {
+        p_config_id: configRow.id,
+        p_write_token: token,
+      })
+    : await supabase.rpc('get_blocks_for_config', { p_config_id: configRow.id });
 
   const plate = (configRow.plate_data as Record<string, unknown>) || {};
   const base = { ...DEFAULT_CONFIG };
@@ -263,6 +272,27 @@ export async function recordScan(configId: string): Promise<void> {
   if (!supabase || !configId) return;
   const { error } = await supabase.rpc('record_nfc_scan', { p_config_id: configId });
   if (error) console.warn('recordScan:', error.message);
+}
+
+/**
+ * Stempelkarte: QR-Inhalt serverseitig prüfen (secretKey nicht öffentlich).
+ */
+export async function verifyStamp(
+  configId: string,
+  blockId: string,
+  candidate: string
+): Promise<boolean> {
+  if (!supabase || !configId || !blockId || !candidate) return false;
+  const { data, error } = await supabase.rpc('verify_nfc_stamp', {
+    p_config_id: configId,
+    p_block_id: blockId,
+    p_candidate: candidate,
+  });
+  if (error) {
+    console.warn('verifyStamp:', error.message);
+    return false;
+  }
+  return data === true;
 }
 
 /**
