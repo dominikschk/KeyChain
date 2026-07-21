@@ -722,6 +722,7 @@ const ConfiguratorPage: React.FC = () => {
           logoScale: config.logoScale,
           logoColor: config.logoColor,
           plateColor: config.plateColor || '#F8F5F0',
+          engraveColor: config.engraveColor || config.logoColor || '#111111',
           logoDepth: config.logoDepth,
           logoPosX: config.logoPosX,
           logoPosY: config.logoPosY,
@@ -731,6 +732,7 @@ const ConfiguratorPage: React.FC = () => {
           logo_svg: productionSvg,
           print_png_url: printPngUrl,
           engraveText: config.engraveText || '',
+          engraveFont: config.engraveFont || 'bold',
           engraveLayout: config.engraveLayout || 'logo_above',
           engraveGap: config.engraveGap ?? 40,
           surfaceColor: config.surfaceColor || null,
@@ -1578,7 +1580,12 @@ const ConfiguratorPage: React.FC = () => {
                 label={config.landingMode === 'external' ? 'Ziel-Link für Kunden' : 'So sehen es deine Kunden'}
               />
             ) : (
-              <KeychainPreview ref={viewerRef} config={config} svgContent={svgContent} />
+              <KeychainPreview
+                ref={viewerRef}
+                config={config}
+                svgContent={svgContent}
+                onConfigChange={(patch) => setConfig((prev) => ({ ...prev, ...patch }))}
+              />
             )}
             {workPhase === 'hardware' && logoHealth.level === 'warn' && logoHealth.message && (
               <div

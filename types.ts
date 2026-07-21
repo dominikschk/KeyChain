@@ -15,6 +15,8 @@ export type ProfileTheme = 'light' | 'dark';
 export type LayoutMode = 'stack' | 'landing';
 /** Chip öffnet NUDAIM-Seite oder leitet auf eine eigene URL weiter. */
 export type LandingMode = 'microsite' | 'external';
+/** Schrift für Text auf dem physischen Anhänger */
+export type EngraveFont = 'bold' | 'modern' | 'classic' | 'elegant' | 'soft' | 'display';
 
 export interface NFCBlock {
   id: string;
@@ -68,6 +70,8 @@ export interface ModelConfig {
   logoColor: string;
   /** Farbe der Platte (Kunststoff) */
   plateColor?: string;
+  /** Farbe nur für Prägetext auf dem Anhänger (getrennt vom Logo) */
+  engraveColor?: string;
   mirrorX: boolean;
   hasChain: boolean;
   eyeletPosX: number;
@@ -99,6 +103,8 @@ export interface ModelConfig {
   externalUrl?: string;
   /** Prägetext auf dem Anhänger (live in der Vorschau) */
   engraveText?: string;
+  /** Schriftart für Prägetext auf dem Anhänger */
+  engraveFont?: EngraveFont;
   /** Anordnung Logo/Text */
   engraveLayout?: 'logo_only' | 'text_only' | 'logo_above' | 'text_above';
   /** Abstand Logo ↔ Text (0–100) */

@@ -9,6 +9,7 @@ import { SITE_FONTS, SITE_TEMPLATES, type SiteTemplate } from '../lib/siteLayout
 import { paletteForIndustry } from '../lib/brandPalette';
 import { parseFaqItems, serializeFaqItems, type FaqItem } from '../lib/contentBlocks';
 import { parsePriceItems, serializePriceItems, type PriceItem } from '../lib/sectionContent';
+import { ENGRAVE_FONTS, clampLogoPos, type EngraveFontId } from '../lib/engraveFonts';
 import { t } from '../lib/i18n';
 
 interface ControlsProps {
@@ -438,7 +439,7 @@ export const Controls: React.FC<ControlsProps> = ({
   onClearLogo,
   logoBusy = false,
 }) => {
-  const [showFineTune, setShowFineTune] = useState(false);
+  const [showFineTune, setShowFineTune] = useState(true);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -627,7 +628,7 @@ export const Controls: React.FC<ControlsProps> = ({
           )}
         </section>
 
-        <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-2">
+        <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-3">
           <h3 className="text-sm font-bold text-navy">Text auf dem Anhänger</h3>
           <input
             type="text"
@@ -638,6 +639,22 @@ export const Controls: React.FC<ControlsProps> = ({
             className="w-full px-3.5 py-3 rounded-xl border border-navy/10 text-sm text-navy bg-cream/50 outline-none focus:border-petrol/40 focus:bg-white transition-colors"
           />
           <p className="text-[11px] text-zinc-400">{(config.engraveText || '').length}/28 Zeichen</p>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2">Schriftart</p>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(ENGRAVE_FONTS) as EngraveFontId[]).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => updateConfig('engraveFont', id)}
+                  className={`min-h-[40px] px-3 rounded-xl border text-xs font-bold transition-colors ${(config.engraveFont || 'bold') === id ? 'border-navy bg-navy text-white' : 'border-navy/10 bg-cream/40 text-navy hover:border-petrol/40'}`}
+                  style={{ fontFamily: ENGRAVE_FONTS[id].family }}
+                >
+                  {ENGRAVE_FONTS[id].label}
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
 
         <section className="rounded-2xl border border-navy/10 bg-white p-4 shadow-sm space-y-2">
@@ -676,16 +693,31 @@ export const Controls: React.FC<ControlsProps> = ({
             </div>
           </div>
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe von Logo und Text</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe vom Logo</p>
             <div className="flex flex-wrap gap-2">
               {printColors.map((c) => (
                 <button
-                  key={`print-${c}`}
+                  key={`logo-${c}`}
                   type="button"
                   onClick={() => updateConfig('logoColor', c)}
                   className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${config.logoColor?.toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
                   style={{ backgroundColor: c }}
-                  aria-label="Farbe von Logo und Text wählen"
+                  aria-label="Farbe vom Logo wählen"
+                />
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe vom Text</p>
+            <div className="flex flex-wrap gap-2">
+              {printColors.map((c) => (
+                <button
+                  key={`text-${c}`}
+                  type="button"
+                  onClick={() => updateConfig('engraveColor', c)}
+                  className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${(config.engraveColor || config.logoColor || '#111111').toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
+                  style={{ backgroundColor: c }}
+                  aria-label="Farbe vom Text wählen"
                 />
               ))}
             </div>
@@ -714,10 +746,23 @@ export const Controls: React.FC<ControlsProps> = ({
             onClick={() => setShowFineTune((v) => !v)}
             className="text-xs font-bold text-petrol hover:text-navy transition-colors"
           >
-            {showFineTune ? '− Feineinstellung schließen' : '+ Größe & Position'}
+            {showFineTune ? '− Größe & Position einklappen' : '+ Größe & Position'}
           </button>
           {showFineTune && (
             <div className="space-y-4 rounded-2xl border border-navy/10 bg-white p-4 shadow-sm">
+              <p className="text-[11px] text-zinc-500 leading-snug">
+                In der Vorschau kannst du Logo und Text auch direkt ziehen. Lineal: Größe am rechten Rand.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  updateConfig('logoPosX', 0);
+                  updateConfig('logoPosY', 0);
+                }}
+                className="min-h-[36px] px-3 rounded-xl border border-petrol/30 bg-petrol/5 text-xs font-bold text-navy hover:bg-petrol/10"
+              >
+                Logo zentrieren
+              </button>
               <div className="space-y-1">
                 <div className="flex justify-between text-[11px] font-semibold text-zinc-500"><span>Größe</span><span>{Math.round(config.logoScale * 100)}%</span></div>
                 <input type="range" min="0.4" max="1.8" step="0.01" value={config.logoScale} onChange={(e) => updateConfig('logoScale', parseFloat(e.target.value))} className="w-full accent-petrol" />
@@ -725,11 +770,11 @@ export const Controls: React.FC<ControlsProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <div className="text-[11px] font-semibold text-zinc-500">Links / Rechts</div>
-                  <input type="range" min="-15" max="15" step="0.5" value={config.logoPosX} onChange={(e) => updateConfig('logoPosX', parseFloat(e.target.value))} className="w-full accent-petrol" />
+                  <input type="range" min="-25" max="25" step="0.5" value={config.logoPosX} onChange={(e) => updateConfig('logoPosX', clampLogoPos(parseFloat(e.target.value)))} className="w-full accent-petrol" />
                 </div>
                 <div className="space-y-1">
                   <div className="text-[11px] font-semibold text-zinc-500">Hoch / Runter</div>
-                  <input type="range" min="-15" max="15" step="0.5" value={config.logoPosY} onChange={(e) => updateConfig('logoPosY', parseFloat(e.target.value))} className="w-full accent-petrol" />
+                  <input type="range" min="-25" max="25" step="0.5" value={config.logoPosY} onChange={(e) => updateConfig('logoPosY', clampLogoPos(parseFloat(e.target.value)))} className="w-full accent-petrol" />
                 </div>
               </div>
               <label className="flex items-center gap-2 text-xs font-semibold text-navy">

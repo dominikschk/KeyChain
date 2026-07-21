@@ -1,7 +1,14 @@
 /**
- * Produktvorschau: Anhänger-Foto + Logo (Raster eingefärbt oder SVG-Pfade).
+ * Produktvorschau: Anhänger-Foto + Logo (frei verschiebbar) + Text + optionales Lineal.
  */
-import React, { forwardRef, useImperativeHandle, useRef, useEffect, useCallback } from 'react';
+import React, {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useEffect,
+  useCallback,
+  useState,
+} from 'react';
 import type { ModelConfig } from '../types';
 import { extractRasterPngFromSvg, isRasterLogoSvg, shouldShowOriginalLogoColors } from '../lib/logoFromRaster';
 import { exportKeychainStl } from '../lib/stlExport';
@@ -13,8 +20,13 @@ import {
   rectToCssPercent,
   zoneToPixels,
 } from '../lib/keychainPlacement';
-
-const BASE_IMG = '/keychain-base.png';
+import {
+  clampLogoPos,
+  engraveFontCanvas,
+  engraveFontCss,
+} from '../lib/engraveFonts';
+import { PreviewRuler } from './PreviewRuler';
+import { keychainPhotoForPlate } from '../lib/keychainPhotos';
 
 function tintSvg(svg: string, color: string): string {
   let out = svg;
@@ -47,7 +59,6 @@ function parseCssColor(color: string): { r: number; g: number; b: number } {
   return { r: 17, g: 17, b: 17 };
 }
 
-/** Nur Alpha behalten, eine Druckfarbe – keine Geisterfarben. */
 async function colorizeLogoPng(pngDataUrl: string, color: string): Promise<string> {
   const { r, g, b } = parseCssColor(color);
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -83,29 +94,45 @@ export type KeychainPreviewHandle = {
 type Props = {
   config: ModelConfig;
   svgContent: string | null;
+  onConfigChange?: (patch: Partial<ModelConfig>) => void;
 };
 
 export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
-  ({ config, svgContent }, ref) => {
+  ({ config, svgContent, onConfigChange }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const baseImgRef = useRef<HTMLImageElement | null>(null);
-    const [logoUrl, setLogoUrl] = React.useState<string | null>(null);
+    const zoneRef = useRef<HTMLDivElement>(null);
+    const dragRef = useRef<{
+      pointerId: number;
+      startX: number;
+      startY: number;
+      originPosX: number;
+      originPosY: number;
+      zoneW: number;
+      zoneH: number;
+    } | null>(null);
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+    const [showRuler, setShowRuler] = useState(true);
+    const [dragging, setDragging] = useState(false);
 
     const plate = config.plateColor || '#F8F5F0';
-    const printColor = config.logoColor || '#111111';
+    const plateW = config.plateWidth || 40;
+    const plateH = config.plateHeight || 40;
+    const logoColor = config.logoColor || '#111111';
+    const textColor = config.engraveColor || config.logoColor || '#111111';
     const layout = config.engraveLayout || 'logo_above';
     const text = (config.engraveText || '').trim();
     const gap = Math.max(0, Math.min(100, config.engraveGap ?? 40));
+    const engraveFont = config.engraveFont || 'bold';
+    const platePhoto = keychainPhotoForPlate(plate);
     const showLogo =
       (layout === 'logo_only' || layout === 'logo_above' || layout === 'text_above') &&
       !!svgContent?.trim();
     const showText =
       (layout === 'text_only' || layout === 'logo_above' || layout === 'text_above') && !!text;
-
-    const isDefaultPlate =
-      !config.plateColor ||
-      config.plateColor.toLowerCase() === '#f8f5f0' ||
-      config.plateColor.toLowerCase() === '#ffffff';
+    const canDrag = !!onConfigChange && (showLogo || showText);
+    /** Overlay nur wenn kein passendes Farbfoto – und dann weich, ohne harten Kantenrahmen */
+    const useSoftPlateTint = !platePhoto.bakedIn;
 
     useEffect(() => {
       let cancelled = false;
@@ -118,19 +145,18 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
           if (isRasterLogoSvg(svgContent)) {
             const png = extractRasterPngFromSvg(svgContent);
             if (!png) {
-              if (!cancelled) setLogoUrl(null);
+              setLogoUrl(null);
               return;
             }
-            // Originalfarben (weich), solange Druckfarbe ≈ Upload-Farbe; sonst sauberes Mono
-            if (shouldShowOriginalLogoColors(svgContent, printColor)) {
+            if (shouldShowOriginalLogoColors(svgContent, logoColor)) {
               if (!cancelled) setLogoUrl(png);
               return;
             }
-            const colored = await colorizeLogoPng(png, printColor);
-            if (!cancelled) setLogoUrl(colored);
+            const tinted = await colorizeLogoPng(png, logoColor);
+            if (!cancelled) setLogoUrl(tinted);
             return;
           }
-          if (!cancelled) setLogoUrl(svgToDataUrl(tintSvg(svgContent, printColor)));
+          if (!cancelled) setLogoUrl(svgToDataUrl(tintSvg(svgContent, logoColor)));
         } catch {
           if (!cancelled) setLogoUrl(null);
         }
@@ -138,23 +164,20 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
       return () => {
         cancelled = true;
       };
-    }, [svgContent, printColor]);
+    }, [svgContent, logoColor]);
 
-    const loadBase = useCallback(() => {
-      return new Promise<HTMLImageElement>((resolve, reject) => {
-        if (baseImgRef.current?.complete && baseImgRef.current.naturalWidth) {
-          resolve(baseImgRef.current);
-          return;
-        }
+    const loadBase = useCallback((): Promise<HTMLImageElement> => {
+      const src = platePhoto.src;
+      return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
           baseImgRef.current = img;
           resolve(img);
         };
         img.onerror = () => reject(new Error('Basisbild fehlt'));
-        img.src = BASE_IMG;
+        img.src = src;
       });
-    }, []);
+    }, [platePhoto.src]);
 
     const paintCanvas = useCallback(async (): Promise<string> => {
       const canvas = canvasRef.current;
@@ -183,17 +206,16 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
         const contentY = dy + center.y * drawH - config.logoPosY * (zonePx.h * 0.02);
         const gapPx = 8 + gap * 0.35;
 
-        if (!isDefaultPlate) {
+        if (useSoftPlateTint) {
           ctx.save();
           ctx.globalCompositeOperation = 'multiply';
-          ctx.globalAlpha = 0.45;
+          ctx.globalAlpha = 0.35;
           ctx.fillStyle = plate;
           roundRect(ctx, platePx.x, platePx.y, platePx.w, platePx.h, Math.min(platePx.w, platePx.h) * 0.12);
           ctx.fill();
           ctx.restore();
         }
 
-        // Logo/Text nur auf der Platte – Ringe und Hintergrund ausclippen
         ctx.save();
         clipContentZone(ctx, dx, dy, drawW, drawH);
 
@@ -233,9 +255,10 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
           if (layout === 'text_above' && showLogo) ty = contentY - gapPx / 2 - zonePx.h * 0.1;
           if (layout === 'text_only') ty = contentY;
           if (layout === 'logo_above' && !showLogo) ty = contentY;
+          const fontPx = Math.round(zonePx.w * 0.09 * Math.min(1.35, config.logoScale));
           ctx.save();
-          ctx.fillStyle = printColor;
-          ctx.font = `800 ${Math.round(zonePx.w * 0.09 * Math.min(1.35, config.logoScale))}px Arial, Helvetica, sans-serif`;
+          ctx.fillStyle = textColor;
+          ctx.font = `700 ${fontPx}px ${engraveFontCanvas(engraveFont)}`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.shadowColor = 'rgba(0,0,0,0.15)';
@@ -258,7 +281,7 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
       return canvas.toDataURL('image/jpeg', 0.92);
     }, [
       loadBase,
-      isDefaultPlate,
+      useSoftPlateTint,
       plate,
       showLogo,
       showText,
@@ -266,7 +289,8 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
       text,
       layout,
       gap,
-      printColor,
+      textColor,
+      engraveFont,
       config,
     ]);
 
@@ -278,6 +302,49 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
       takeScreenshot: () => paintCanvas(),
       exportSTL: () => exportKeychainStl(config, svgContent),
     }));
+
+    const onDragPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!canDrag || !zoneRef.current) return;
+      e.preventDefault();
+      const rect = zoneRef.current.getBoundingClientRect();
+      dragRef.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        originPosX: config.logoPosX,
+        originPosY: config.logoPosY,
+        zoneW: Math.max(1, rect.width),
+        zoneH: Math.max(1, rect.height),
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDragging(true);
+    };
+
+    const onDragPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+      const d = dragRef.current;
+      if (!d || d.pointerId !== e.pointerId || !onConfigChange) return;
+      const dxPx = e.clientX - d.startX;
+      const dyPx = e.clientY - d.startY;
+      // transform: translate(posX * 1.2%, -posY * 1.2%) of content zone
+      const deltaPosX = (dxPx / d.zoneW) * 100 / 1.2;
+      const deltaPosY = (-dyPx / d.zoneH) * 100 / 1.2;
+      onConfigChange({
+        logoPosX: clampLogoPos(d.originPosX + deltaPosX),
+        logoPosY: clampLogoPos(d.originPosY + deltaPosY),
+      });
+    };
+
+    const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+      const d = dragRef.current;
+      if (!d || d.pointerId !== e.pointerId) return;
+      dragRef.current = null;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      setDragging(false);
+    };
 
     return (
       <div
@@ -297,45 +364,88 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
         />
         <canvas ref={canvasRef} className="hidden" aria-hidden />
         <div className="relative w-full max-w-[560px]">
-          <div className="absolute -inset-3 rounded-[1.25rem] bg-white/40 blur-xl" aria-hidden />
-          <div className="relative aspect-square rounded-2xl bg-white/90 border border-navy/10 shadow-[0_20px_60px_-28px_rgba(17,35,90,0.45)] flex items-center justify-center overflow-hidden">
-            <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10 pointer-events-none">
-              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-navy/40">Live-Vorschau</span>
+          <div className="relative aspect-square flex items-center justify-center overflow-visible">
+            <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between gap-2 px-1">
+              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-navy/40 pointer-events-none">
+                Live-Vorschau
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-semibold tabular-nums text-navy/35 pointer-events-none">
+                  {plateW}×{plateH} mm
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowRuler((v) => !v)}
+                  className={`min-h-[32px] px-2.5 rounded-lg border text-[10px] font-bold transition-colors ${
+                    showRuler
+                      ? 'bg-navy text-white border-navy'
+                      : 'bg-white/90 text-navy border-navy/15 hover:border-petrol/40'
+                  }`}
+                  aria-pressed={showRuler}
+                >
+                  {showRuler ? 'Lineal aus' : 'Lineal an'}
+                </button>
+              </div>
             </div>
-            <div className="relative w-[92%] max-w-[480px] mt-2">
+
+            <div className={`relative w-[92%] max-w-[500px] ${showRuler ? 'mt-9 mb-7 mx-3' : 'mt-8'}`}>
+              {showRuler && (
+                <PreviewRuler
+                  widthMm={plateW}
+                  heightMm={plateH}
+                  logoScale={config.logoScale}
+                  onLogoScaleChange={
+                    onConfigChange
+                      ? (scale) => onConfigChange({ logoScale: Math.min(1.8, Math.max(0.4, scale)) })
+                      : undefined
+                  }
+                />
+              )}
               <img
-                src={BASE_IMG}
+                src={platePhoto.src}
                 alt="Schlüsselanhänger"
-                className="w-full h-auto select-none pointer-events-none drop-shadow-md"
+                className="w-full h-auto select-none pointer-events-none"
                 draggable={false}
               />
-              {!isDefaultPlate && (
+              {useSoftPlateTint && (
                 <div
-                  className="absolute rounded-[14%] pointer-events-none mix-blend-multiply opacity-45"
+                  className="absolute pointer-events-none mix-blend-multiply opacity-30"
                   style={{
                     ...rectToCssPercent(KEYCHAIN_PLATE_BOUNDS),
                     backgroundColor: plate,
+                    borderRadius: '18%',
+                    filter: 'blur(0.6px)',
                   }}
                   aria-hidden
                 />
               )}
 
-              {/* Nur flache Platte – Ringe/Öse/Hintergrund sind außerhalb */}
               <div
-                className="absolute overflow-hidden flex flex-col items-center justify-center pointer-events-none"
+                ref={zoneRef}
+                className={`absolute overflow-hidden flex flex-col items-center justify-center z-10 ${
+                  canDrag ? 'cursor-grab touch-none select-none' : 'pointer-events-none'
+                } ${dragging ? 'cursor-grabbing' : ''}`}
                 style={{
                   ...rectToCssPercent(KEYCHAIN_CONTENT_ZONE),
                   gap: `${4 + gap * 0.1}px`,
                   flexDirection: layout === 'text_above' ? 'column-reverse' : 'column',
                   transform: `translate(${config.logoPosX * 1.2}%, ${-config.logoPosY * 1.2}%)`,
                   borderRadius: '10%',
+                  outline: dragging ? '1px dashed rgba(0,102,153,0.45)' : undefined,
                 }}
+                onPointerDown={canDrag ? onDragPointerDown : undefined}
+                onPointerMove={canDrag ? onDragPointerMove : undefined}
+                onPointerUp={canDrag ? endDrag : undefined}
+                onPointerCancel={canDrag ? endDrag : undefined}
+                role={canDrag ? 'button' : undefined}
+                aria-label={canDrag ? 'Logo und Text verschieben' : undefined}
+                title={canDrag ? 'Ziehen zum Verschieben' : undefined}
               >
                 {showLogo && logoUrl && (
                   <img
                     src={logoUrl}
                     alt=""
-                    className="max-w-[72%] max-h-[58%] object-contain drop-shadow-sm"
+                    className="max-w-[72%] max-h-[58%] object-contain drop-shadow-sm pointer-events-none"
                     style={{
                       transform: `scale(${config.mirrorX ? -config.logoScale : config.logoScale}, ${config.logoScale}) rotate(${config.logoRotation || 0}deg)`,
                       filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.18))',
@@ -346,9 +456,9 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
                 )}
                 {showText && (
                   <p
-                    className="text-center font-extrabold uppercase tracking-wide leading-none px-1 max-w-full"
+                    className={`text-center uppercase tracking-wide leading-none px-1 max-w-full pointer-events-none ${engraveFontCss(engraveFont)}`}
                     style={{
-                      color: printColor,
+                      color: textColor,
                       fontSize: `clamp(10px, ${2.1 * config.logoScale}vw, 18px)`,
                       textShadow: '0 1px 1px rgba(0,0,0,0.15)',
                     }}
@@ -360,7 +470,9 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
             </div>
           </div>
           <p className="mt-3 text-center text-[10px] font-medium tracking-wide text-navy/40 max-w-sm mx-auto leading-snug">
-            Unverbindliche Vorschau – Farben können im 3D-Druck abweichen.
+            {canDrag
+              ? 'Logo/Text ziehen · Lineal an/aus · Größe am rechten Griff · unverbindliche Vorschau'
+              : 'Unverbindliche Vorschau – Farben können im 3D-Druck abweichen.'}
           </p>
         </div>
       </div>

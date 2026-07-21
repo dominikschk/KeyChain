@@ -95,6 +95,7 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     logoScale: numOr(plate.logoScale, base.logoScale),
     logoColor: (plate.logoColor as string) ?? base.logoColor,
     plateColor: (plate.plateColor as string) ?? base.plateColor ?? '#F8F5F0',
+    engraveColor: (plate.engraveColor as string) ?? (plate.logoColor as string) ?? base.engraveColor ?? '#111111',
     logoDepth: numOr(plate.logoDepth, base.logoDepth),
     logoPosX: numOr(plate.logoPosX, base.logoPosX),
     logoPosY: numOr(plate.logoPosY, base.logoPosY),
@@ -102,6 +103,11 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     mirrorX: plate.mirrorX === true,
     hasChain: plate.hasChain !== false,
     engraveText: typeof plate.engraveText === 'string' ? plate.engraveText : '',
+    engraveFont: (['bold', 'modern', 'classic', 'elegant', 'soft', 'display'] as const).includes(
+      plate.engraveFont as never
+    )
+      ? (plate.engraveFont as ModelConfig['engraveFont'])
+      : 'bold',
     engraveLayout: (['logo_only', 'text_only', 'logo_above', 'text_above'] as const).includes(
       plate.engraveLayout as never
     )
