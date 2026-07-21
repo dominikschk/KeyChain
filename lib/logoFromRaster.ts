@@ -42,12 +42,6 @@ function lum(r: number, g: number, b: number): number {
   return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
-function sat(r: number, g: number, b: number): number {
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  return max === 0 ? 0 : (max - min) / max;
-}
-
 function dist2(a: Rgb, b: Rgb): number {
   const dr = a.r - b.r;
   const dg = a.g - b.g;
@@ -55,16 +49,11 @@ function dist2(a: Rgb, b: Rgb): number {
   return dr * dr + dg * dg + db * db;
 }
 
-/** Weiche Matte gegen Weiß (nur Außenkante). */
-function alphaMatte(r: number, g: number, b: number): number {
-  const L = lum(r, g, b);
-  const S = sat(r, g, b);
-  if (L > 248 && S < 0.06) return 0;
-  const dr = 255 - r;
-  const dg = 255 - g;
-  const db = 255 - b;
-  const a = Math.min(255, Math.round(Math.sqrt(dr * dr + dg * dg + db * db) * 1.3 + S * 80));
-  return a < 8 ? 0 : a;
+/** Weiche Matte: Alpha aus Cutout nutzen – Weiß im Motiv bleibt. */
+function alphaFromCutout(srcA: number): number {
+  if (srcA < 8) return 0;
+  if (srcA > 140) return 255;
+  return srcA;
 }
 
 function buildPalette(samples: Rgb[], maxColors: number): Rgb[] {
@@ -166,24 +155,21 @@ function nearestIdx(p: Rgb, palette: Rgb[]): number {
 
 /**
  * Max. 3 Farben + weiche Außenkante – nur für die Produktion / den 3D-Druck.
+ * Erwartet Cutout mit Alpha (weiße Logo-Pixel behalten).
  */
-function toThreeColorLogo(traceOnWhite: ImageData): { image: ImageData; dominant: Rgb } {
-  const w = traceOnWhite.width;
-  const h = traceOnWhite.height;
-  const src = traceOnWhite.data;
+function toThreeColorLogo(cutout: ImageData): { image: ImageData; dominant: Rgb } {
+  const w = cutout.width;
+  const h = cutout.height;
+  const src = cutout.data;
 
   const alphas = new Float32Array(w * h);
   const samples: Rgb[] = [];
 
   for (let p = 0, i = 0; i < src.length; i += 4, p++) {
-    const r = src[i]!;
-    const g = src[i + 1]!;
-    const b = src[i + 2]!;
-    const a = alphaMatte(r, g, b) / 255;
+    const a = alphaFromCutout(src[i + 3]!) / 255;
     alphas[p] = a;
-    // nur solide Pixel für Palette (kein AA-Rand → saubere 3 Farben)
-    if (a > 0.72 && lum(r, g, b) < 235) {
-      samples.push({ r, g, b });
+    if (a > 0.55) {
+      samples.push({ r: src[i]!, g: src[i + 1]!, b: src[i + 2]! });
     }
   }
 
@@ -272,11 +258,11 @@ function toThreeColorLogo(traceOnWhite: ImageData): { image: ImageData; dominant
   return { image: out, dominant: palette[domIdx]! };
 }
 
-/** Vorschau: Originalfarben, weich freigestellt – keine Posterize. */
-function toCleanPreviewLogo(traceOnWhite: ImageData): { image: ImageData; dominant: Rgb } {
-  const w = traceOnWhite.width;
-  const h = traceOnWhite.height;
-  const src = traceOnWhite.data;
+/** Vorschau: Originalfarben inkl. Weiß – Alpha aus Cutout, keine Weiß-Löschung. */
+function toCleanPreviewLogo(cutout: ImageData): { image: ImageData; dominant: Rgb } {
+  const w = cutout.width;
+  const h = cutout.height;
+  const src = cutout.data;
   const out = new ImageData(w, h);
   const d = out.data;
 
@@ -289,23 +275,22 @@ function toCleanPreviewLogo(traceOnWhite: ImageData): { image: ImageData; domina
     const r = src[i]!;
     const g = src[i + 1]!;
     const b = src[i + 2]!;
-    let a = alphaMatte(r, g, b);
+    const a = alphaFromCutout(src[i + 3]!);
     if (a < 8) {
       d[i] = d[i + 1] = d[i + 2] = 0;
       d[i + 3] = 0;
       continue;
     }
-    if (a > 140 || (lum(r, g, b) < 210 && sat(r, g, b) > 0.05)) {
-      a = 255;
+    d[i] = r;
+    d[i + 1] = g;
+    d[i + 2] = b;
+    d[i + 3] = a;
+    if (a > 140) {
       sumR += r;
       sumG += g;
       sumB += b;
       sumW += 1;
     }
-    d[i] = r;
-    d[i + 1] = g;
-    d[i + 2] = b;
-    d[i + 3] = a;
   }
 
   const dominant: Rgb =
@@ -474,8 +459,8 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
     throw new Error(processed.message);
   }
 
-  const preview = toCleanPreviewLogo(processed.traceImage);
-  const print = toThreeColorLogo(processed.traceImage);
+  const preview = toCleanPreviewLogo(processed.cutout);
+  const print = toThreeColorLogo(processed.cutout);
   const dominantHex = rgbToHex(preview.dominant);
   const previewPng = imageDataToPngDataUrl(preview.image);
   const printPng = imageDataToPngDataUrl(print.image);

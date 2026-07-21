@@ -9,7 +9,9 @@ export type LogoProcessOk = {
   ok: true;
   /** Druck-/Prüfmaske (binär). */
   image: ImageData;
-  /** Saubere Vorlage fürs Vektorisieren (Logo auf Weiß, ohne Treppen-Maske). */
+  /** Saubere Vorlage mit Alpha (weiße Logo-Pixel bleiben). */
+  cutout: ImageData;
+  /** Optional: Motiv auf Weiß (Legacy / Trace). */
   traceImage: ImageData;
   meta: {
     bgRemoved: boolean;
@@ -94,8 +96,8 @@ function edgeColorSpread(samples: { r: number; g: number; b: number }[]): number
 }
 
 /**
- * Hintergrund per Kanten-Floodfill + Farbnähe entfernen.
- * Kein ML – nur Geometrie/Farbregeln.
+ * Hintergrund nur vom Bildrand her entfernen (Flood-Fill).
+ * Weiße Logo-Pixel in der Mitte bleiben – kein globales „alles Helle weg“.
  */
 export function removeBackground(src: ImageData): { image: ImageData; removed: boolean; bgUniform: boolean } {
   const w = src.width;
@@ -103,64 +105,40 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
   const out = new ImageData(new Uint8ClampedArray(src.data), w, h);
   const d = out.data;
 
-  // Bereits transparente Logos: Alpha behalten, nur Rest ggf. säubern
   let transparentShare = 0;
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3]! < 40) transparentShare++;
   }
   transparentShare /= d.length / 4;
 
+  // PNG mit Alpha: Transparenz vertrauen – keine zusätzliche Weiß-Löschung
+  if (transparentShare > 0.04) {
+    return { image: out, removed: true, bgUniform: false };
+  }
+
   const samples = sampleEdgeColors(src);
   const bg = dominantColor(samples);
   const spread = edgeColorSpread(samples);
   const bgUniform = spread < 48;
-  const bgLum = bg ? lum(bg.r, bg.g, bg.b) : 255;
-  const bgIsLight = bgLum > 220;
-  const bgIsDark = bgLum < 40;
-
-  // Helle Studio-/PNG-Hintergründe etwas großzügiger entfernen
-  let tol = bgUniform ? 52 : 34;
-  if (bgIsLight) tol = Math.max(tol, 58);
-  if (bgIsDark) tol = Math.max(tol, 48);
-
-  const wipeNearNeutral = (threshold: number) => {
-    let removedAny = false;
-    for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3]! < 10) continue;
-      const L = lum(d[i]!, d[i + 1]!, d[i + 2]!);
-      const max = Math.max(d[i]!, d[i + 1]!, d[i + 2]!);
-      const min = Math.min(d[i]!, d[i + 1]!, d[i + 2]!);
-      const sat = max === 0 ? 0 : (max - min) / max;
-      if (L > threshold && sat < 0.14) {
-        d[i + 3] = 0;
-        removedAny = true;
-      }
-    }
-    return removedAny;
-  };
 
   if (!bg || (!bgUniform && spread > 85)) {
-    const removedAny = wipeNearNeutral(242);
-    return { image: out, removed: removedAny || transparentShare > 0.02, bgUniform: false };
+    // Kein klarer Rand-Hintergrund → nichts entfernen (weiße Logos schützen)
+    return { image: out, removed: false, bgUniform: false };
   }
+
+  const bgLum = lum(bg.r, bg.g, bg.b);
+  let tol = bgUniform ? 42 : 28;
+  if (bgLum > 220) tol = Math.min(tol, 36);
+  if (bgLum < 40) tol = Math.max(tol, 40);
+
+  const matchesBg = (r: number, g: number, b: number, limit: number) =>
+    colorDist(r, g, b, bg.r, bg.g, bg.b) <= limit;
 
   const visited = new Uint8Array(w * h);
   const qx = new Int32Array(w * h);
   const qy = new Int32Array(w * h);
   let qh = 0;
   let qt = 0;
-
-  const matchesBg = (r: number, g: number, b: number, limit: number) => {
-    if (colorDist(r, g, b, bg.r, bg.g, bg.b) <= limit) return true;
-    // Zusätzlich: fast weiß/schwarz wie der Rand
-    const L = lum(r, g, b);
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const sat = max === 0 ? 0 : (max - min) / max;
-    if (bgIsLight && L > 232 && sat < 0.16) return true;
-    if (bgIsDark && L < 28 && sat < 0.2) return true;
-    return false;
-  };
 
   const trySeed = (x: number, y: number) => {
     const idx = y * w + x;
@@ -212,18 +190,46 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
     }
   }
 
-  // Restnahe BG-Farbe (JPEG-Rauschen) vorsichtig nachziehen
-  const tight = Math.max(22, tol * 0.62);
-  for (let i = 0; i < d.length; i += 4) {
-    if (d[i + 3]! < 10) continue;
-    if (matchesBg(d[i]!, d[i + 1]!, d[i + 2]!, tight)) {
-      d[i + 3] = 0;
+  // Nur JPEG-Saum: 1 Pixel angrenzend an schon transparente Fläche, eng am BG
+  const fringeTol = Math.max(16, tol * 0.45);
+  const kill = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = y * w + x;
+      const i = idx * 4;
+      if (d[i + 3]! < 10) continue;
+      if (!matchesBg(d[i]!, d[i + 1]!, d[i + 2]!, fringeTol)) continue;
+      let nearClear = false;
+      for (let k = 0; k < 4; k++) {
+        const nx = x + dirs[k * 2]!;
+        const ny = y + dirs[k * 2 + 1]!;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (d[(ny * w + nx) * 4 + 3]! < 10) {
+          nearClear = true;
+          break;
+        }
+      }
+      if (nearClear) kill[idx] = 1;
     }
   }
+  for (let idx = 0; idx < kill.length; idx++) {
+    if (kill[idx]) d[idx * 4 + 3] = 0;
+  }
 
-  if (bgIsLight) wipeNearNeutral(248);
+  // Weiß-auf-Weiß: Flood-Fill hat fast alles weggefressen → Original behalten
+  let opaqueLeft = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3]! >= 40) opaqueLeft++;
+  }
+  if (opaqueLeft / (w * h) < 0.01 && qt > w * h * 0.5) {
+    return {
+      image: new ImageData(new Uint8ClampedArray(src.data), w, h),
+      removed: false,
+      bgUniform,
+    };
+  }
 
-  return { image: out, removed: qt > 0 || transparentShare > 0.02, bgUniform };
+  return { image: out, removed: qt > 0, bgUniform };
 }
 
 function quantKey(r: number, g: number, b: number): number {
@@ -455,12 +461,13 @@ export function cropToForeground(img: ImageData, pad = 4): ImageData {
 }
 
 /**
- * Binarisieren: nach RemBg ist fast alles Opake = Motiv (auch helle/farbige Logos).
+ * Binarisieren: nach RemBg ist jedes opake Pixel Motiv – auch Weiß.
  */
 export function toPrintBinary(img: ImageData): ImageData {
   const out = new ImageData(new Uint8ClampedArray(img.data), img.width, img.height);
   const d = out.data;
 
+  let opaque = 0;
   for (let i = 0; i < d.length; i += 4) {
     const a = d[i + 3]!;
     if (a < 40) {
@@ -468,34 +475,30 @@ export function toPrintBinary(img: ImageData): ImageData {
       d[i + 3] = 255;
       continue;
     }
-    const r = d[i]!;
-    const g = d[i + 1]!;
-    const b = d[i + 2]!;
-    const L = lum(r, g, b);
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const sat = max === 0 ? 0 : (max - min) / max;
-    // Rest-Hintergrund (fast weiß, ungesättigt) verwerfen – farbige/helle Logos behalten
-    const leftoverBg = L > 236 && sat < 0.12;
-    const ink = !leftoverBg;
-    const v = ink ? 0 : 255;
-    d[i] = d[i + 1] = d[i + 2] = v;
+    opaque++;
+    // Opak = Motiv (weiße Logo-Pixel mitzählen)
+    d[i] = d[i + 1] = d[i + 2] = 0;
     d[i + 3] = 255;
   }
 
-  let black = 0;
-  let white = 0;
-  for (let i = 0; i < d.length; i += 4) {
-    if (d[i]! < 128) black++;
-    else white++;
-  }
-  // Falls RemBg nichts getan hat und Motiv dunkel auf hell: klassische Schwelle
-  if (black / Math.max(1, black + white) < 0.015) {
+  // Kein RemBg / alles opak: klassische Schwelle nur wenn wirklich fast kein Motiv
+  if (opaque / Math.max(1, d.length / 4) > 0.92) {
+    let black = 0;
     for (let i = 0; i < img.data.length; i += 4) {
       const L = lum(img.data[i]!, img.data[i + 1]!, img.data[i + 2]!);
       const v = L < 160 ? 0 : 255;
+      if (v === 0) black++;
       d[i] = d[i + 1] = d[i + 2] = v;
       d[i + 3] = 255;
+    }
+    // Wenn Schwelle fast nichts findet: alles Opake als Motiv behalten (weiße Logos)
+    if (black / Math.max(1, d.length / 4) < 0.015) {
+      for (let i = 0; i < img.data.length; i += 4) {
+        const a = img.data[i + 3]!;
+        const v = a >= 40 ? 0 : 255;
+        d[i] = d[i + 1] = d[i + 2] = v;
+        d[i + 3] = 255;
+      }
     }
   }
   return out;
@@ -663,10 +666,16 @@ export type ProcessLogoOptions = {
 
 function okResult(
   printImage: ImageData,
-  traceImage: ImageData,
+  cutout: ImageData,
   meta: LogoProcessOk['meta']
 ): LogoProcessOk {
-  return { ok: true, image: printImage, traceImage, meta };
+  return {
+    ok: true,
+    image: printImage,
+    cutout,
+    traceImage: compositeOnWhite(cutout),
+    meta,
+  };
 }
 
 /**
@@ -700,38 +709,32 @@ export function processLogoForPrint(src: ImageData, options: ProcessLogoOptions 
     const fallback = toPrintBinary(opaque);
     const printFb = checkPrintability(fallback);
     if (!printFb.ok) return { ok: false, reason: 'empty', message: COVERAGE_MSG };
-    return okResult(printFb.image, compositeOnWhite(opaque), {
+    return okResult(printFb.image, opaque, {
       ...baseMeta,
       bgRemoved: false,
       foregroundRatio: printFb.foregroundRatio,
     });
   }
 
-  const traceImage = compositeOnWhite(cropped);
   const binary = toPrintBinary(cropped);
   const print = checkPrintability(binary);
   if (!print.ok) {
-    const copy = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
-    const d = copy.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const L = lum(d[i]!, d[i + 1]!, d[i + 2]!);
-      const max = Math.max(d[i]!, d[i + 1]!, d[i + 2]!);
-      const min = Math.min(d[i]!, d[i + 1]!, d[i + 2]!);
-      const sat = max === 0 ? 0 : (max - min) / max;
-      if (L > 240 && sat < 0.1) d[i + 3] = 0;
-      else d[i + 3] = 255;
-    }
-    const cropped2 = cropToForeground(copy, 4);
+    // Ohne Weiß-Löschung: Original mit Alpha=255 versuchen
+    const opaque = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
+    const d = opaque.data;
+    for (let i = 0; i < d.length; i += 4) d[i + 3] = 255;
+    const cropped2 = cropToForeground(opaque, 4);
     const direct = toPrintBinary(cropped2);
     const print2 = checkPrintability(direct);
     if (!print2.ok) return print;
-    return okResult(print2.image, compositeOnWhite(cropped2), {
+    return okResult(print2.image, cropped2, {
       ...baseMeta,
+      bgRemoved: false,
       foregroundRatio: print2.foregroundRatio,
     });
   }
 
-  return okResult(print.image, traceImage, {
+  return okResult(print.image, cropped, {
     ...baseMeta,
     foregroundRatio: print.foregroundRatio,
   });
