@@ -706,12 +706,12 @@ export const AdminPage: React.FC = () => {
 
       {qcModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 overflow-y-auto"
           role="dialog"
           aria-modal="true"
           aria-labelledby="qc-title"
         >
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full overflow-hidden">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-w-2xl w-full max-h-[92dvh] overflow-y-auto my-auto">
             <div className="px-5 py-4 border-b border-zinc-200">
               <h3 id="qc-title" className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy">
                 Druck prüfen · {qcModal.short_id}

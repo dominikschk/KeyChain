@@ -15,6 +15,11 @@ function getPath(): string {
   return p;
 }
 
+/** Seiten mit normalem Dokument-Scroll (nicht Konfigurator-App-Shell). */
+function pathNeedsDocumentScroll(path: string): boolean {
+  return path === '/admin' || path === '/ccp' || isLegalPath(path);
+}
+
 const App: React.FC = () => {
   const [path, setPath] = useState(getPath);
 
@@ -23,6 +28,16 @@ const App: React.FC = () => {
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (pathNeedsDocumentScroll(path)) {
+      root.classList.add('route-document-scroll');
+    } else {
+      root.classList.remove('route-document-scroll');
+    }
+    return () => root.classList.remove('route-document-scroll');
+  }, [path]);
 
   if (path === '/ccp') {
     return (

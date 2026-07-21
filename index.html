@@ -101,6 +101,22 @@
         flex-direction: column;
         overflow: hidden;
       }
+      /* Admin / CCP / Recht: normale Seiten-Scroll (Konfigurator bleibt locked) */
+      html.route-document-scroll,
+      html.route-document-scroll body {
+        height: auto;
+        min-height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: auto;
+      }
+      html.route-document-scroll #root {
+        height: auto;
+        min-height: 100%;
+        min-height: 100dvh;
+        overflow: visible;
+        display: block;
+      }
       .scroll-container {
         flex: 1;
         overflow-y: auto;
