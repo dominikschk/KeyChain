@@ -15,10 +15,13 @@ export const BULK_TIERS: BulkTier[] = [
 export const BULK_CONTACT_HINT =
   'Für Firmen und Events: Schreib uns nach der Bestellung oder vorab – wir klären Mengenpreis und Lieferung.';
 
+/** Max. Stückzahl pro Design / Bestellzeile (Firmen- und Event-Mengen). */
+export const MAX_ORDER_QUANTITY = 15_000;
+
 export function clampOrderQuantity(n: unknown): number {
   const x = typeof n === 'number' ? n : parseInt(String(n), 10);
   if (!Number.isFinite(x)) return 1;
-  return Math.min(99, Math.max(1, Math.round(x)));
+  return Math.min(MAX_ORDER_QUANTITY, Math.max(1, Math.round(x)));
 }
 
 /** Passender Hinweis zur gewählten Menge (oder Basis-Hinweis). */
