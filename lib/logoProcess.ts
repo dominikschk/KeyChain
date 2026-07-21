@@ -96,6 +96,18 @@ function edgeColorSpread(samples: { r: number; g: number; b: number }[]): number
 }
 
 /**
+ * Papier-/Studio-Weiß (nicht hellgraues Motiv).
+ * Wird bei hellem Hintergrund inkl. Buchstaben-Innenlöchern entfernt.
+ */
+function isPaperWhite(r: number, g: number, b: number): boolean {
+  const L = lum(r, g, b);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const sat = max === 0 ? 0 : (max - min) / max;
+  return L >= 220 && sat < 0.18;
+}
+
+/**
  * Geschlossene Hintergrund-Löcher (z. B. Zwischenraum D–P, Innenraum von O/D)
  * entfernen – aber weiße Logo-Flächen auf Transparent/Dunkel behalten.
  */
@@ -109,20 +121,20 @@ function clearEnclosedBackgroundHoles(
   const visited = new Uint8Array(w * h);
   const qx = new Int32Array(w * h);
   const qy = new Int32Array(w * h);
-  const dirs = [1, 0, -1, 0, 0, 1, 0, -1];
+  const dirs = [1, 0, -1, 0, 0, 1, 0, -1, 1, 1, 1, -1, -1, 1, -1, -1];
   let cleared = 0;
 
   const isBgOpaque = (idx: number) => {
     const i = idx * 4;
     if (d[i + 3]! < 40) return false;
-    return matchesBg(d[i]!, d[i + 1]!, d[i + 2]!, tol);
+    return matchesBg(d[i]!, d[i + 1]!, d[i + 2]!, tol) || isPaperWhite(d[i]!, d[i + 1]!, d[i + 2]!);
   };
 
   const isOpaqueNonBg = (x: number, y: number) => {
     if (x < 0 || y < 0 || x >= w || y >= h) return false;
     const i = (y * w + x) * 4;
     if (d[i + 3]! < 40) return false;
-    return !matchesBg(d[i]!, d[i + 1]!, d[i + 2]!, tol);
+    return !matchesBg(d[i]!, d[i + 1]!, d[i + 2]!, tol) && !isPaperWhite(d[i]!, d[i + 1]!, d[i + 2]!);
   };
 
   for (let start = 0; start < w * h; start++) {
@@ -147,7 +159,7 @@ function clearEnclosedBackgroundHoles(
       comp.push(idx);
       if (x === 0 || y === 0 || x === w - 1 || y === h - 1) touchesBorder = true;
 
-      for (let k = 0; k < 4; k++) {
+      for (let k = 0; k < 8; k++) {
         const nx = x + dirs[k * 2]!;
         const ny = y + dirs[k * 2 + 1]!;
         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
@@ -173,10 +185,30 @@ function clearEnclosedBackgroundHoles(
   return cleared;
 }
 
+/** Bei hellem Studio-BG: restliches Papierweiß entfernen (Buchstaben-Counter, Lücken). */
+function wipeRemainingPaperWhite(d: Uint8ClampedArray): number {
+  let n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3]! < 40) continue;
+    if (!isPaperWhite(d[i]!, d[i + 1]!, d[i + 2]!)) continue;
+    d[i + 3] = 0;
+    n++;
+  }
+  return n;
+}
+
+function hasNonPaperInk(d: Uint8ClampedArray): boolean {
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3]! < 40) continue;
+    if (!isPaperWhite(d[i]!, d[i + 1]!, d[i + 2]!)) return true;
+  }
+  return false;
+}
+
 /**
  * Hintergrund nur vom Bildrand her entfernen (Flood-Fill),
- * danach geschlossene BG-Löcher zwischen Buchstaben.
- * Weiße Logo-Pixel (Motiv) bleiben erhalten.
+ * danach geschlossene BG-Löcher / Papierweiß in Buchstaben.
+ * Weiße Logos auf dunklem Grund bleiben erhalten.
  */
 export function removeBackground(src: ImageData): { image: ImageData; removed: boolean; bgUniform: boolean } {
   const w = src.width;
@@ -190,18 +222,12 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
   }
   transparentShare /= d.length / 4;
 
-  const nearWhiteBg = (r: number, g: number, b: number, limit: number) => {
-    const L = lum(r, g, b);
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const sat = max === 0 ? 0 : (max - min) / max;
-    // „Papierweiß“ / Studio-BG – nicht farbiges Motiv
-    return L >= 235 && sat < 0.12 && colorDist(r, g, b, 255, 255, 255) <= limit + 20;
-  };
+  const nearWhiteBg = (r: number, g: number, b: number, _limit: number) => isPaperWhite(r, g, b);
 
-  // PNG mit Alpha: Transparenz vertrauen, aber Innenlöcher (D/P/O) noch leeren
+  // PNG mit Alpha: Transparenz vertrauen, Innenlöcher + Papierweiß leeren wenn Motiv-Tinte da ist
   if (transparentShare > 0.04) {
     clearEnclosedBackgroundHoles(d, w, h, nearWhiteBg, 40);
+    if (hasNonPaperInk(d)) wipeRemainingPaperWhite(d);
     return { image: out, removed: true, bgUniform: false };
   }
 
@@ -221,7 +247,7 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
   if (bgLum < 40) tol = Math.max(tol, 40);
 
   const matchesBg = (r: number, g: number, b: number, limit: number) =>
-    colorDist(r, g, b, bg.r, bg.g, bg.b) <= limit;
+    colorDist(r, g, b, bg.r, bg.g, bg.b) <= limit || (bgLum > 200 && isPaperWhite(r, g, b));
 
   const visited = new Uint8Array(w * h);
   const qx = new Int32Array(w * h);
@@ -305,10 +331,13 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
     if (kill[idx]) d[idx * 4 + 3] = 0;
   }
 
-  // Innenlöcher (Zwischenräume / Buchstaben-Counter) bei hellem Studio-Hintergrund
+  // Innenlöcher + restliches Papierweiß bei hellem Studio-Hintergrund
   let holeCleared = 0;
+  let paperWiped = 0;
   if (bgLum > 200) {
-    holeCleared = clearEnclosedBackgroundHoles(d, w, h, matchesBg, Math.max(tol, 38));
+    holeCleared = clearEnclosedBackgroundHoles(d, w, h, matchesBg, Math.max(tol, 48));
+    // Wichtig für O/R/S: weißes Innenpapier weg, hellgraues Motiv bleibt
+    paperWiped = wipeRemainingPaperWhite(d);
   }
 
   // Weiß-auf-Weiß: Flood-Fill hat fast alles weggefressen → Original behalten
@@ -324,7 +353,7 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
     };
   }
 
-  return { image: out, removed: qt > 0 || holeCleared > 0, bgUniform };
+  return { image: out, removed: qt > 0 || holeCleared > 0 || paperWiped > 0, bgUniform };
 }
 
 function quantKey(r: number, g: number, b: number): number {

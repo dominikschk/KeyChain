@@ -78,12 +78,11 @@ describe('white logo preservation', () => {
       const border = x < 3 || y < 3 || x > 44 || y > 28
       if (border) return [255, 255, 255, 255]
       // dunkler Ring / Buchstabenkörper
-      const ring = x === 8 || x === 39 || y === 8 || y === 23 || (x >= 8 && x <= 39 && (y === 8 || y === 23))
       const leftBar = x >= 8 && x <= 14 && y >= 8 && y <= 23
       const rightBar = x >= 33 && x <= 39 && y >= 8 && y <= 23
       const top = y >= 8 && y <= 12 && x >= 8 && x <= 39
       const bottom = y >= 19 && y <= 23 && x >= 8 && x <= 39
-      if (leftBar || rightBar || top || bottom || ring) return [20, 20, 30, 255]
+      if (leftBar || rightBar || top || bottom) return [20, 20, 30, 255]
       // Innenraum zwischen „Buchstaben“
       if (x > 14 && x < 33 && y > 12 && y < 19) return [255, 255, 255, 255]
       return [255, 255, 255, 255]
@@ -96,5 +95,22 @@ describe('white logo preservation', () => {
     const bar = (16 * 48 + 11) * 4
     expect(image.data[bar + 3]!).toBeGreaterThan(200)
     expect(image.data[bar]!).toBeLessThan(40)
+  })
+
+  it('leert O-Innenraum (Counter) bei hellem Hintergrund', () => {
+    const src = makeImage(40, 40, (x, y) => {
+      const dx = x - 20
+      const dy = y - 20
+      const r2 = dx * dx + dy * dy
+      if (r2 > 18 * 18) return [255, 255, 255, 255] // Studio-BG
+      if (r2 >= 12 * 12) return [25, 25, 35, 255] // dunkler O-Ring
+      return [255, 255, 255, 255] // Innenloch
+    })
+    const { image } = removeBackground(src)
+    const center = (20 * 40 + 20) * 4
+    expect(image.data[center + 3]!).toBeLessThan(40)
+    const ring = (20 * 40 + 5) * 4 // Abstand 15 vom Zentrum → O-Ring
+    expect(image.data[ring + 3]!).toBeGreaterThan(200)
+    expect(image.data[ring]!).toBeLessThan(50)
   })
 })
