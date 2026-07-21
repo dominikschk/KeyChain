@@ -9,12 +9,14 @@ export interface AiChatMessage {
   content: string;
 }
 
+import type { FontStyle } from '../types';
+
 export interface AiChatConfigPayload {
   profileTitle: string;
   accentColor: string;
   surfaceColor?: string;
   theme: 'light' | 'dark';
-  fontStyle: 'luxury' | 'modern' | 'elegant' | 'display' | 'soft';
+  fontStyle: FontStyle;
   profileIcon: string;
   profileLogoUrl?: string | null;
   slogan?: string;

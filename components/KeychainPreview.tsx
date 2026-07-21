@@ -13,6 +13,7 @@ import {
   rectToCssPercent,
   zoneToPixels,
 } from '../lib/keychainPlacement';
+import { PreviewRuler } from './PreviewRuler';
 
 const BASE_IMG = '/keychain-base.png';
 
@@ -92,6 +93,8 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
     const [logoUrl, setLogoUrl] = React.useState<string | null>(null);
 
     const plate = config.plateColor || '#F8F5F0';
+    const plateW = config.plateWidth || 40;
+    const plateH = config.plateHeight || 40;
     const printColor = config.logoColor || '#111111';
     const layout = config.engraveLayout || 'logo_above';
     const text = (config.engraveText || '').trim();
@@ -301,8 +304,10 @@ export const KeychainPreview = forwardRef<KeychainPreviewHandle, Props>(
           <div className="relative aspect-square rounded-2xl bg-white/90 border border-navy/10 shadow-[0_20px_60px_-28px_rgba(17,35,90,0.45)] flex items-center justify-center overflow-hidden">
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10 pointer-events-none">
               <span className="text-[9px] font-black uppercase tracking-[0.2em] text-navy/40">Live-Vorschau</span>
+              <span className="text-[9px] font-semibold tabular-nums text-navy/35">{plateW}×{plateH} mm</span>
             </div>
-            <div className="relative w-[92%] max-w-[480px] mt-2">
+            <div className="relative w-[88%] max-w-[460px] mt-4 ml-6">
+              <PreviewRuler widthMm={plateW} heightMm={plateH} />
               <img
                 src={BASE_IMG}
                 alt="Schlüsselanhänger"
