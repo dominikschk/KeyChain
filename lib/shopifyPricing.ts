@@ -8,12 +8,16 @@
 
 import { PRODUCTS } from '../constants'
 import { clampOrderQuantity } from './bulkOrder'
+import {
+  DEFAULT_BADGE_TIERS,
+  DEFAULT_KEYCHAIN_TIERS,
+  parseMoneyToCents,
+  parseTiersEnvString,
+  pickTierFromList,
+  type PriceTierDef,
+} from './priceTiers'
 
-export type PriceTier = {
-  minQty: number
-  unitPriceCents: number
-  label: string
-}
+export type PriceTier = PriceTierDef
 
 export type ResolvedCheckoutPrice = {
   productId: string
@@ -44,15 +48,7 @@ function envString(key: string): string | undefined {
 }
 
 function envCents(key: string, fallback: number): number {
-  const raw = envString(key)
-  if (!raw) return fallback
-  if (/^\d+$/.test(raw) && raw.length >= 3) {
-    const n = parseInt(raw, 10)
-    return Number.isFinite(n) && n > 0 ? n : fallback
-  }
-  const euros = parseFloat(raw.replace(',', '.'))
-  if (!Number.isFinite(euros) || euros <= 0) return fallback
-  return Math.round(euros * 100)
+  return parseMoneyToCents(envString(key) ?? '', fallback)
 }
 
 export function formatEuroFromCents(cents: number): string {
@@ -65,55 +61,67 @@ export function formatEuroInclVatFromCents(cents: number): string {
   return `${formatEuroFromCents(cents)} inkl. MwSt.`
 }
 
+/**
+ * Staffeln: bevorzugt `VITE_PRICE_*_TIERS` (beliebig viele Stufen).
+ * Fallback: feste Defaults (NFC-Preisliste) bzw. Legacy Q10/Q25 wenn gesetzt.
+ */
 export function priceTiersForProduct(productId: string): PriceTier[] {
   if (productId === 'badge') {
+    const fromList = parseTiersEnvString(envString('VITE_PRICE_BADGE_TIERS'), [])
+    if (fromList.length > 0) return fromList
     return [
       {
         minQty: 1,
-        unitPriceCents: envCents('VITE_PRICE_BADGE_CENTS', 3990),
+        unitPriceCents: envCents('VITE_PRICE_BADGE_CENTS', DEFAULT_BADGE_TIERS[0]!.unitPriceCents),
         label: 'Einzelpreis',
       },
       {
         minQty: 10,
-        unitPriceCents: envCents('VITE_PRICE_BADGE_Q10_CENTS', 3490),
+        unitPriceCents: envCents('VITE_PRICE_BADGE_Q10_CENTS', DEFAULT_BADGE_TIERS[1]!.unitPriceCents),
         label: 'Ab 10 Stück',
       },
       {
         minQty: 25,
-        unitPriceCents: envCents('VITE_PRICE_BADGE_Q25_CENTS', 2990),
+        unitPriceCents: envCents('VITE_PRICE_BADGE_Q25_CENTS', DEFAULT_BADGE_TIERS[2]!.unitPriceCents),
         label: 'Ab 25 Stück',
       },
     ]
   }
 
-  return [
-    {
-      minQty: 1,
-      unitPriceCents: envCents('VITE_PRICE_KEYCHAIN_CENTS', 2490),
-      label: 'Einzelpreis',
-    },
-    {
-      minQty: 10,
-      unitPriceCents: envCents('VITE_PRICE_KEYCHAIN_Q10_CENTS', 2190),
-      label: 'Ab 10 Stück',
-    },
-    {
-      minQty: 25,
-      unitPriceCents: envCents('VITE_PRICE_KEYCHAIN_Q25_CENTS', 1890),
-      label: 'Ab 25 Stück',
-    },
-  ]
+  const fromList = parseTiersEnvString(envString('VITE_PRICE_KEYCHAIN_TIERS'), [])
+  if (fromList.length > 0) return fromList
+
+  // Legacy: einzelne Env-Vars → 3 Stufen (sonst NFC-Preisliste)
+  const legacyBase = envString('VITE_PRICE_KEYCHAIN_CENTS')
+  const legacyQ10 = envString('VITE_PRICE_KEYCHAIN_Q10_CENTS')
+  const legacyQ25 = envString('VITE_PRICE_KEYCHAIN_Q25_CENTS')
+  if (legacyBase || legacyQ10 || legacyQ25) {
+    return [
+      {
+        minQty: 1,
+        unitPriceCents: envCents('VITE_PRICE_KEYCHAIN_CENTS', DEFAULT_KEYCHAIN_TIERS[0]!.unitPriceCents),
+        label: 'Einzelpreis',
+      },
+      {
+        minQty: 10,
+        unitPriceCents: envCents('VITE_PRICE_KEYCHAIN_Q10_CENTS', 120),
+        label: 'Ab 10 Stück',
+      },
+      {
+        minQty: 25,
+        unitPriceCents: envCents('VITE_PRICE_KEYCHAIN_Q25_CENTS', 100),
+        label: 'Ab 25 Stück',
+      },
+    ]
+  }
+
+  return DEFAULT_KEYCHAIN_TIERS.map((t) => ({ ...t }))
 }
 
 /** Staffel nur aus der Stückzahl DIESER Zeile – nie aus Warenkorb-Summe. */
 export function pickTierForLineQuantity(productId: string, lineQuantity: number): PriceTier {
   const qty = clampOrderQuantity(lineQuantity)
-  const tiers = [...priceTiersForProduct(productId)].sort((a, b) => a.minQty - b.minQty)
-  let chosen = tiers[0]!
-  for (const t of tiers) {
-    if (qty >= t.minQty) chosen = t
-  }
-  return chosen
+  return pickTierFromList(priceTiersForProduct(productId), qty)
 }
 
 export function unitPriceCentsForLine(productId: string, lineQuantity: unknown): number {
@@ -209,7 +217,7 @@ export function assertPerLinePricing(lines: BasketPriceLineInput[]): {
 
 export function pricingHintForQuantity(productId: string, quantity: unknown): string {
   const p = resolveCheckoutPrice(productId, quantity)
-  if (p.quantity >= 10) {
+  if (p.quantity >= 20) {
     return `${p.tierLabel} nur für dieses Design (${p.quantity}×): ${p.unitLabel}. Gesamt ca. ${p.totalLabel}.`
   }
   return `Ca. ${p.unitLabel}. Mengenrabatt gilt nur für dieselbe Konfiguration, nicht für andere Designs.`
