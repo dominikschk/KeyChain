@@ -10,6 +10,7 @@ import { paletteForIndustry } from '../lib/brandPalette';
 import { parseFaqItems, serializeFaqItems, type FaqItem } from '../lib/contentBlocks';
 import { parsePriceItems, serializePriceItems, type PriceItem } from '../lib/sectionContent';
 import { ENGRAVE_FONTS, clampLogoPos, type EngraveFontId } from '../lib/engraveFonts';
+import { KEYCHAIN_PLATE_COLORS, colorwayByHex } from '../lib/keychainPhotos';
 import { t } from '../lib/i18n';
 
 interface ControlsProps {
@@ -565,7 +566,7 @@ export const Controls: React.FC<ControlsProps> = ({
   };
 
   if (activeDept === '3d') {
-    const plateColors = ['#F8F5F0', '#FFFFFF', '#2A2A2A', '#11235A', '#12A9E0', '#D6C3A8', '#1F4D3A', '#ff4d4d'];
+    const plateColors = [...KEYCHAIN_PLATE_COLORS];
     const printColors = ['#111111', '#FFFFFF', '#11235A', '#12A9E0', '#d4af37', '#ff4d4d', '#2ecc71', '#8B5E3C'];
     const layout = config.engraveLayout || 'logo_above';
     const layouts: { id: NonNullable<ModelConfig['engraveLayout']>; label: string }[] = [
@@ -687,7 +688,8 @@ export const Controls: React.FC<ControlsProps> = ({
                   onClick={() => updateConfig('plateColor', c)}
                   className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${(config.plateColor || '#F8F5F0').toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
                   style={{ backgroundColor: c }}
-                  aria-label="Farbe vom Anhänger wählen"
+                  title={colorwayByHex(c)?.label ?? c}
+                  aria-label={`Anhängerfarbe ${colorwayByHex(c)?.label ?? c}`}
                 />
               ))}
             </div>

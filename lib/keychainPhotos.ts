@@ -1,7 +1,10 @@
 /**
- * Anhänger-Fotos je Plattenfarbe.
- * Echte Produktfotos unter /public ablegen – Dateinamen unten.
+ * Anhänger-Colorways: echte Produktfotos unter /public.
  * Fehlt ein Foto, fällt der Code auf keychain-base.png + sanftes Tinting zurück.
+ *
+ * Update-Kurzbeschreibung (PR/Release):
+ * „Live-Vorschau mit echten Platten-Fotos je Farbe (inkl. Schwarz, Sky, Navy,
+ * Braun, Orange, Rot, Lime) – Farbe steckt im Foto, kein künstliches Overlay.“
  */
 
 export type KeychainPhoto = {
@@ -10,18 +13,137 @@ export type KeychainPhoto = {
   bakedIn: boolean
 }
 
+export type KeychainColorway = {
+  id: string
+  /** Kundenname */
+  label: string
+  /** Hex für Config / Shopify-Properties */
+  hex: string
+  photo: string
+  bakedIn: boolean
+  /** Kurz für Druckerei / Filament */
+  filamentHint?: string
+}
+
 const DEFAULT_PHOTO = '/keychain-base.png'
 
+/**
+ * Offizielle Colorways (Studiofotos 2026-07).
+ * Hex = Auswahl im Konfigurator; Foto = Live-Vorschau.
+ */
+export const KEYCHAIN_COLORWAYS: readonly KeychainColorway[] = [
+  {
+    id: 'cream',
+    label: 'Sandhell',
+    hex: '#F8F5F0',
+    photo: DEFAULT_PHOTO,
+    bakedIn: true,
+    filamentHint: 'PLA matt hell / Natur',
+  },
+  {
+    id: 'white',
+    label: 'Weiß',
+    hex: '#FFFFFF',
+    photo: DEFAULT_PHOTO,
+    bakedIn: true,
+    filamentHint: 'PLA matt weiß',
+  },
+  {
+    id: 'black',
+    label: 'Schwarz',
+    hex: '#2A2A2A',
+    photo: '/keychain-black.png',
+    bakedIn: true,
+    filamentHint: 'PLA matt schwarz',
+  },
+  {
+    id: 'sky',
+    label: 'Himmelblau',
+    hex: '#7EB8E8',
+    photo: '/keychain-sky.png',
+    bakedIn: true,
+    filamentHint: 'PLA matt hellblau',
+  },
+  {
+    id: 'navy',
+    label: 'Navy',
+    hex: '#11235A',
+    photo: '/keychain-navy.png',
+    bakedIn: true,
+    filamentHint: 'PLA matt navy',
+  },
+  {
+    id: 'petrol',
+    label: 'Petrol',
+    hex: '#12A9E0',
+    photo: '/keychain-petrol.png',
+    bakedIn: true,
+    filamentHint: 'PLA matt petrol',
+  },
+  {
+    id: 'sand',
+    label: 'Sand',
+    hex: '#D6C3A8',
+    photo: '/keychain-sand.png',
+    bakedIn: true,
+    filamentHint: 'PLA matt sand',
+  },
+  {
+    id: 'brown',
+    label: 'Braun',
+    hex: '#6B4A2E',
+    photo: '/keychain-brown.png',
+    bakedIn: true,
+    filamentHint: 'PLA matt braun',
+  },
+  {
+    id: 'forest',
+    label: 'Tannengrün',
+    hex: '#1F4D3A',
+    photo: '/keychain-green.png',
+    bakedIn: true,
+    filamentHint: 'PLA matt dunkelgrün',
+  },
+  {
+    id: 'lime',
+    label: 'Limette',
+    hex: '#A8D83A',
+    photo: '/keychain-lime.png',
+    bakedIn: true,
+    filamentHint: 'PLA matt limette',
+  },
+  {
+    id: 'orange',
+    label: 'Orange',
+    hex: '#E85D04',
+    photo: '/keychain-orange.png',
+    bakedIn: true,
+    filamentHint: 'PLA matt orange',
+  },
+  {
+    id: 'red',
+    label: 'Rot',
+    hex: '#FF4D4D',
+    photo: '/keychain-red.png',
+    bakedIn: true,
+    filamentHint: 'PLA matt rot',
+  },
+] as const
+
+/** Hex-Liste für die Farbwahl im Konfigurator (Reihenfolge = UI). */
+export const KEYCHAIN_PLATE_COLORS: readonly string[] = KEYCHAIN_COLORWAYS.map((c) => c.hex)
+
 /** Hex (klein) → Foto */
-const PLATE_PHOTO_MAP: Record<string, KeychainPhoto> = {
-  '#f8f5f0': { src: DEFAULT_PHOTO, bakedIn: true },
-  '#ffffff': { src: DEFAULT_PHOTO, bakedIn: true },
-  '#2a2a2a': { src: '/keychain-black.png', bakedIn: true },
-  '#11235a': { src: '/keychain-navy.png', bakedIn: true },
-  '#12a9e0': { src: '/keychain-petrol.png', bakedIn: true },
-  '#d6c3a8': { src: '/keychain-sand.png', bakedIn: true },
-  '#1f4d3a': { src: '/keychain-green.png', bakedIn: true },
-  '#ff4d4d': { src: '/keychain-red.png', bakedIn: true },
+const PLATE_PHOTO_MAP: Record<string, KeychainPhoto> = Object.fromEntries(
+  KEYCHAIN_COLORWAYS.map((c) => [
+    c.hex.toLowerCase(),
+    { src: c.photo, bakedIn: c.bakedIn } satisfies KeychainPhoto,
+  ])
+)
+
+export function colorwayByHex(plateColor: string | undefined | null): KeychainColorway | null {
+  const hex = normHex(plateColor)
+  return KEYCHAIN_COLORWAYS.find((c) => c.hex.toLowerCase() === hex) ?? null
 }
 
 function normHex(c: string | undefined | null): string {
