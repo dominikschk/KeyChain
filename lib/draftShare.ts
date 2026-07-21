@@ -25,6 +25,7 @@ export interface DraftSharePayload {
   externalUrl?: string;
   plateColor?: string;
   logoColor?: string;
+  engraveColor?: string;
   engraveText?: string;
   engraveFont?: ModelConfig['engraveFont'];
   nfcBlocks: ModelConfig['nfcBlocks'];
@@ -95,6 +96,7 @@ export function slimConfigForShare(config: ModelConfig): DraftSharePayload {
     externalUrl: config.externalUrl,
     plateColor: config.plateColor,
     logoColor: config.logoColor,
+    engraveColor: config.engraveColor || config.logoColor,
     engraveText: (config.engraveText || '').slice(0, 40),
     engraveFont: config.engraveFont || 'bold',
     nfcBlocks: (config.nfcBlocks || []).slice(0, 40).map((b) => ({

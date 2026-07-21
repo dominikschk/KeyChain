@@ -3,7 +3,6 @@ import React from 'react'
 type Props = {
   widthMm: number
   heightMm: number
-  /** Optional: Logo-Größe (0.4–1.8) – Drag am rechten Lineal */
   logoScale?: number
   onLogoScaleChange?: (scale: number) => void
 }
@@ -18,31 +17,26 @@ function RulerTicks({ lengthMm, horizontal }: { lengthMm: number; horizontal: bo
   const step = tickStep(lengthMm)
   const ticks: React.ReactNode[] = []
   for (let mm = 0; mm <= lengthMm; mm += step) {
-    const major = mm % (step * 2) === 0
+    const major = mm === 0 || mm === lengthMm || mm % (step * 2) === 0
     const pct = lengthMm > 0 ? (mm / lengthMm) * 100 : 0
     ticks.push(
       <div
         key={mm}
-        className="absolute flex items-end justify-center"
+        className="absolute"
         style={
           horizontal
             ? { left: `${pct}%`, bottom: 0, transform: 'translateX(-50%)' }
-            : { top: `${pct}%`, right: 0, transform: 'translateY(-50%)' }
+            : { top: `${pct}%`, left: 0, transform: 'translateY(-50%)' }
         }
       >
         <div
-          className={horizontal ? 'border-l border-navy/30' : 'border-t border-navy/30'}
-          style={horizontal ? { height: major ? 10 : 6 } : { width: major ? 10 : 6 }}
+          className={horizontal ? 'bg-navy/35' : 'bg-navy/35'}
+          style={
+            horizontal
+              ? { width: 1, height: major ? 8 : 4 }
+              : { height: 1, width: major ? 8 : 4 }
+          }
         />
-        {major && mm > 0 && mm < lengthMm && (
-          <span
-            className={`absolute text-[8px] font-semibold tabular-nums text-navy/50 whitespace-nowrap ${
-              horizontal ? '-top-3.5' : '-left-7'
-            }`}
-          >
-            {mm}
-          </span>
-        )}
       </div>
     )
   }
@@ -50,8 +44,8 @@ function RulerTicks({ lengthMm, horizontal }: { lengthMm: number; horizontal: bo
 }
 
 /**
- * mm-Lineal an den Seiten der Anhänger-Vorschau.
- * Am rechten Lineal kann man die Logo-Größe ziehen (wenn onLogoScaleChange gesetzt).
+ * Dezentes mm-Lineal. Container lässt Klicks durch (pointer-events-none),
+ * nur der Größen-Griff fängt Pointer – sonst blockiert das Lineal das Logo-Ziehen.
  */
 export const PreviewRuler: React.FC<Props> = ({
   widthMm,
@@ -73,7 +67,6 @@ export const PreviewRuler: React.FC<Props> = ({
 
     const apply = (clientY: number) => {
       const t = Math.min(1, Math.max(0, (clientY - rect.top) / Math.max(1, rect.height)))
-      // Oben = größer, unten = kleiner
       const scale = 1.8 - t * (1.8 - 0.4)
       onLogoScaleChange(Math.round(scale * 100) / 100)
     }
@@ -81,7 +74,11 @@ export const PreviewRuler: React.FC<Props> = ({
 
     const onMove = (ev: PointerEvent) => apply(ev.clientY)
     const onUp = () => {
-      el.releasePointerCapture(e.pointerId)
+      try {
+        el.releasePointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
     }
@@ -90,49 +87,47 @@ export const PreviewRuler: React.FC<Props> = ({
   }
 
   return (
-    <div className="absolute inset-0 z-20" aria-hidden={!onLogoScaleChange}>
-      {/* Linkes Lineal (Höhe) */}
-      <div className="absolute left-0 top-[8%] bottom-[16%] w-8 flex flex-col items-end pr-1 pointer-events-none">
-        <span className="text-[8px] font-bold uppercase tracking-wider text-navy/40 mb-1">mm</span>
-        <div className="relative flex-1 w-full border-r border-navy/25">
+    <div className="absolute inset-0 z-20 pointer-events-none" aria-hidden>
+      {/* Links: Höhe */}
+      <div className="absolute left-1 top-[12%] bottom-[14%] w-5 flex flex-col">
+        <div className="relative flex-1 border-l border-navy/20 pl-0.5">
           <RulerTicks lengthMm={h} horizontal={false} />
         </div>
-        <span className="text-[8px] font-semibold tabular-nums text-navy/45 mt-1">{h}</span>
+        <span className="text-[7px] font-semibold tabular-nums text-navy/40 mt-0.5">{h}</span>
       </div>
 
-      {/* Unteres Lineal (Breite) */}
-      <div className="absolute left-[12%] right-[14%] bottom-0.5 h-7 pointer-events-none">
-        <div className="relative h-full border-t border-navy/25">
+      {/* Unten: Breite */}
+      <div className="absolute left-[10%] right-[12%] bottom-1 h-5">
+        <div className="relative w-full border-b border-navy/20 h-2">
           <RulerTicks lengthMm={w} horizontal />
         </div>
-        <div className="flex justify-between text-[8px] font-semibold tabular-nums text-navy/45 mt-0.5 px-0.5">
+        <div className="flex justify-between text-[7px] font-semibold tabular-nums text-navy/40 mt-0.5">
           <span>0</span>
           <span>{w} mm</span>
         </div>
       </div>
 
-      {/* Rechtes Lineal = Logo-Größe ziehen */}
+      {/* Rechts: Größen-Griff (einziger klickbarer Teil) */}
       {onLogoScaleChange && (
         <div
-          className="absolute right-0 top-[10%] bottom-[18%] w-9 flex flex-col items-center touch-none cursor-ns-resize select-none"
+          className="absolute right-0.5 top-[14%] bottom-[16%] w-7 flex flex-col items-center touch-none cursor-ns-resize select-none pointer-events-auto"
           onPointerDown={onScalePointerDown}
           role="slider"
           aria-label="Logo-Größe"
           aria-valuemin={40}
           aria-valuemax={180}
           aria-valuenow={Math.round(logoScale * 100)}
-          title="Ziehen: Logo größer/kleiner"
+          title="Ziehen: Logo größer oder kleiner"
         >
-          <span className="text-[8px] font-bold uppercase tracking-wider text-navy/45 mb-1">
+          <span className="text-[7px] font-bold tabular-nums text-navy/45 mb-1">
             {Math.round(logoScale * 100)}%
           </span>
-          <div className="relative flex-1 w-2 rounded-full bg-navy/10 border border-navy/15">
+          <div className="relative flex-1 w-1.5 rounded-full bg-navy/10">
             <div
-              className="absolute left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-petrol border-2 border-white shadow-sm"
+              className="absolute left-1/2 w-3.5 h-3.5 rounded-full bg-petrol border-2 border-white shadow-sm"
               style={{ top: `${scalePct}%`, transform: 'translate(-50%, -50%)' }}
             />
           </div>
-          <span className="text-[8px] font-semibold text-navy/40 mt-1">Größe</span>
         </div>
       )}
     </div>

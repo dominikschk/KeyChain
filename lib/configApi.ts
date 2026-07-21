@@ -95,6 +95,7 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     logoScale: numOr(plate.logoScale, base.logoScale),
     logoColor: (plate.logoColor as string) ?? base.logoColor,
     plateColor: (plate.plateColor as string) ?? base.plateColor ?? '#F8F5F0',
+    engraveColor: (plate.engraveColor as string) ?? (plate.logoColor as string) ?? base.engraveColor ?? '#111111',
     logoDepth: numOr(plate.logoDepth, base.logoDepth),
     logoPosX: numOr(plate.logoPosX, base.logoPosX),
     logoPosY: numOr(plate.logoPosY, base.logoPosY),

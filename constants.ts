@@ -128,6 +128,7 @@ export const DEFAULT_CONFIG: ModelConfig = {
   logoRotation: 0,
   logoColor: '#12A9E0',
   plateColor: '#F8F5F0',
+  engraveColor: '#111111',
   mirrorX: false,
   hasChain: true,
   eyeletPosX: -20,

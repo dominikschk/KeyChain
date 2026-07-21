@@ -70,6 +70,8 @@ export interface ModelConfig {
   logoColor: string;
   /** Farbe der Platte (Kunststoff) */
   plateColor?: string;
+  /** Farbe nur für Prägetext auf dem Anhänger (getrennt vom Logo) */
+  engraveColor?: string;
   mirrorX: boolean;
   hasChain: boolean;
   eyeletPosX: number;

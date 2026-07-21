@@ -722,6 +722,7 @@ const ConfiguratorPage: React.FC = () => {
           logoScale: config.logoScale,
           logoColor: config.logoColor,
           plateColor: config.plateColor || '#F8F5F0',
+          engraveColor: config.engraveColor || config.logoColor || '#111111',
           logoDepth: config.logoDepth,
           logoPosX: config.logoPosX,
           logoPosY: config.logoPosY,

@@ -693,16 +693,31 @@ export const Controls: React.FC<ControlsProps> = ({
             </div>
           </div>
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe von Logo und Text</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe vom Logo</p>
             <div className="flex flex-wrap gap-2">
               {printColors.map((c) => (
                 <button
-                  key={`print-${c}`}
+                  key={`logo-${c}`}
                   type="button"
                   onClick={() => updateConfig('logoColor', c)}
                   className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${config.logoColor?.toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
                   style={{ backgroundColor: c }}
-                  aria-label="Farbe von Logo und Text wählen"
+                  aria-label="Farbe vom Logo wählen"
+                />
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Farbe vom Text</p>
+            <div className="flex flex-wrap gap-2">
+              {printColors.map((c) => (
+                <button
+                  key={`text-${c}`}
+                  type="button"
+                  onClick={() => updateConfig('engraveColor', c)}
+                  className={`w-9 h-9 rounded-full border-2 transition-transform active:scale-95 ${(config.engraveColor || config.logoColor || '#111111').toLowerCase() === c.toLowerCase() ? 'border-navy ring-2 ring-offset-2 ring-petrol/40 scale-105' : 'border-white shadow-sm ring-1 ring-zinc-200'}`}
+                  style={{ backgroundColor: c }}
+                  aria-label="Farbe vom Text wählen"
                 />
               ))}
             </div>
