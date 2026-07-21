@@ -102,6 +102,11 @@ export async function getConfigByShortId(shortId: string): Promise<{ config: Mod
     mirrorX: plate.mirrorX === true,
     hasChain: plate.hasChain !== false,
     engraveText: typeof plate.engraveText === 'string' ? plate.engraveText : '',
+    engraveFont: (['bold', 'modern', 'classic', 'elegant', 'soft', 'display'] as const).includes(
+      plate.engraveFont as never
+    )
+      ? (plate.engraveFont as ModelConfig['engraveFont'])
+      : 'bold',
     engraveLayout: (['logo_only', 'text_only', 'logo_above', 'text_above'] as const).includes(
       plate.engraveLayout as never
     )
