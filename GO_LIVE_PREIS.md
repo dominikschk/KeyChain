@@ -73,8 +73,10 @@ Ab 2000 Stück 0,90 € – einfach anhängen:
 
 ## Alte 3er-Staffel (Legacy)
 
-Wenn du noch `VITE_PRICE_KEYCHAIN_CENTS` / `_Q10_` / `_Q25_` gesetzt hast **ohne** `*_TIERS`, greifen nur diese drei Stufen.  
-Für die NFC-Liste: `*_TIERS` setzen **oder** die alten `PRICE_KEYCHAIN_*` / `VITE_PRICE_KEYCHAIN_*` Einzelvars entfernen.
+Nur aktiv, wenn **`VITE_PRICE_KEYCHAIN_Q10_CENTS` oder `_Q25_`** (bzw. Supabase `PRICE_KEYCHAIN_Q10/Q25`) gesetzt sind.
+
+- **`VITE_PRICE_KEYCHAIN_CENTS` allein** → ignoriert, NFC-Liste aus dem Code gilt.
+- Wenn Preise „wieder falsch“ sind: in **Vercel** und **Supabase** die alten `*_Q10_` / `*_Q25_` löschen **oder** überall dieselbe `*_TIERS`-Zeile setzen.
 
 ---
 

@@ -91,11 +91,10 @@ export function priceTiersForProduct(productId: string): PriceTier[] {
   const fromList = parseTiersEnvString(envString('VITE_PRICE_KEYCHAIN_TIERS'), [])
   if (fromList.length > 0) return fromList
 
-  // Legacy: einzelne Env-Vars → 3 Stufen (sonst NFC-Preisliste)
-  const legacyBase = envString('VITE_PRICE_KEYCHAIN_CENTS')
+  // Legacy 3er-Staffel nur wenn Q10/Q25 explizit gesetzt (nicht bei nur CENTS – sonst NFC-Liste kaputt)
   const legacyQ10 = envString('VITE_PRICE_KEYCHAIN_Q10_CENTS')
   const legacyQ25 = envString('VITE_PRICE_KEYCHAIN_Q25_CENTS')
-  if (legacyBase || legacyQ10 || legacyQ25) {
+  if (legacyQ10 || legacyQ25) {
     return [
       {
         minQty: 1,

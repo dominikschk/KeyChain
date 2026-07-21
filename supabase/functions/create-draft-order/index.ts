@@ -230,10 +230,10 @@ function tiersForProduct(productId: string): Tier[] {
   );
   if (fromList.length > 0) return fromList;
 
-  const legacyBase = (Deno.env.get('PRICE_KEYCHAIN_CENTS') ?? Deno.env.get('VITE_PRICE_KEYCHAIN_CENTS') ?? '').trim();
   const legacyQ10 = (Deno.env.get('PRICE_KEYCHAIN_Q10_CENTS') ?? Deno.env.get('VITE_PRICE_KEYCHAIN_Q10_CENTS') ?? '').trim();
   const legacyQ25 = (Deno.env.get('PRICE_KEYCHAIN_Q25_CENTS') ?? Deno.env.get('VITE_PRICE_KEYCHAIN_Q25_CENTS') ?? '').trim();
-  if (legacyBase || legacyQ10 || legacyQ25) {
+  // Nur Q10/Q25 aktivieren Legacy – einzelnes PRICE_KEYCHAIN_CENTS darf NFC-Defaults nicht überschreiben
+  if (legacyQ10 || legacyQ25) {
     return [
       { minQty: 1, unitPriceCents: envCents('PRICE_KEYCHAIN_CENTS', envCents('VITE_PRICE_KEYCHAIN_CENTS', 150)) },
       { minQty: 10, unitPriceCents: envCents('PRICE_KEYCHAIN_Q10_CENTS', envCents('VITE_PRICE_KEYCHAIN_Q10_CENTS', 120)) },
