@@ -1,4 +1,5 @@
 import { ModelConfig } from './types';
+import { MAX_ORDER_QUANTITY } from './lib/bulkOrder';
 
 export const SHOPIFY_CART_URL = 'https://nudaim3d.de/cart/add';
 /** Link zu Bestellungen im Shopify Admin (Order-ID anhängen: /admin/orders/ORDER_ID) */
@@ -87,7 +88,7 @@ export function buildShopifyCartUrl(
    */
   priceHint?: string
 ): string {
-  const qty = Math.min(99, Math.max(1, Math.round(Number(quantity) || 1)));
+  const qty = Math.min(MAX_ORDER_QUANTITY, Math.max(1, Math.round(Number(quantity) || 1)));
   const origin = baseUrl ? baseUrl.replace(/\/$/, '') : '';
   const params: Record<string, string> = {
     id: variantId,

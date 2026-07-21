@@ -3,6 +3,8 @@
  * Staffel immer pro Zeile / Config-ID – nie über Warenkorb-Summe.
  */
 
+import { MAX_ORDER_QUANTITY } from './bulkOrder'
+
 export type DraftOrderProperty = { name: string; value: string }
 
 export type DraftOrderLineInput = {
@@ -34,7 +36,8 @@ export type DraftOrderLineBuild = {
 
 const SHORT_ID_RE = /^[A-Z0-9]{8,32}$/i
 const MAX_UNIT_CENTS = 99_999
-const MAX_TOTAL_CENTS = 500_000
+/** Obergrenze Gesamtbetrag (€500.000) – erlaubt Firmenmengen bis 15.000 Stück. */
+const MAX_TOTAL_CENTS = 50_000_000
 const MAX_LINES = 20
 
 export function normalizeShortId(raw: unknown): string {
@@ -55,7 +58,7 @@ export function centsToShopifyPrice(cents: number): string {
 export function clampDraftQuantity(n: unknown): number {
   const x = typeof n === 'number' ? n : parseInt(String(n), 10)
   if (!Number.isFinite(x)) return 1
-  return Math.min(99, Math.max(1, Math.round(x)))
+  return Math.min(MAX_ORDER_QUANTITY, Math.max(1, Math.round(x)))
 }
 
 function optHttps(v: unknown, max = 2048): string | undefined {

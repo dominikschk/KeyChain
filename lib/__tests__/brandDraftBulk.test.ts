@@ -51,7 +51,8 @@ describe('brandScrape', () => {
 describe('bulkOrder', () => {
   it('clamped quantity', () => {
     expect(clampOrderQuantity(0)).toBe(1);
-    expect(clampOrderQuantity(150)).toBe(99);
+    expect(clampOrderQuantity(150)).toBe(150);
+    expect(clampOrderQuantity(20_000)).toBe(15_000);
     expect(clampOrderQuantity(12)).toBe(12);
   });
 

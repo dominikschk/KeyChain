@@ -138,7 +138,7 @@ async function snapshotQuantityForShortId(shortId: string): Promise<number | nul
     if (!res.ok) return null;
     const rows = (await res.json()) as Array<{ plate_data?: { pricing?: { quantity?: number } } }>;
     const q = rows[0]?.plate_data?.pricing?.quantity;
-    if (typeof q === 'number' && q >= 1 && q <= 99) return Math.round(q);
+    if (typeof q === 'number' && q >= 1 && q <= 15_000) return Math.round(q);
     return null;
   } catch {
     return null;
@@ -193,13 +193,15 @@ function serverUnitPriceForLine(productId: string, lineQty: number): number {
 
 const SHORT_ID_RE = /^[A-Z0-9]{8,32}$/i;
 const MAX_UNIT_CENTS = 99_999;
-const MAX_TOTAL_CENTS = 500_000;
+/** Obergrenze Gesamtbetrag (€500.000) – erlaubt Firmenmengen bis 15.000 Stück. */
+const MAX_TOTAL_CENTS = 50_000_000;
+const MAX_ORDER_QUANTITY = 15_000;
 const MAX_LINES = 20;
 
 function clampQty(n: unknown): number {
   const x = typeof n === 'number' ? n : parseInt(String(n), 10);
   if (!Number.isFinite(x)) return 1;
-  return Math.min(99, Math.max(1, Math.round(x)));
+  return Math.min(MAX_ORDER_QUANTITY, Math.max(1, Math.round(x)));
 }
 
 function centsToPrice(cents: number): string {

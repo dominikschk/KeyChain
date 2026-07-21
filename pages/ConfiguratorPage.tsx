@@ -39,7 +39,7 @@ import {
   decodeDraftShare,
   readDraftParamFromLocation,
 } from '../lib/draftShare';
-import { bulkHintForQuantity, clampOrderQuantity } from '../lib/bulkOrder';
+import { bulkHintForQuantity, clampOrderQuantity, MAX_ORDER_QUANTITY } from '../lib/bulkOrder';
 import { pricingHintForQuantity, resolveCheckoutPrice } from '../lib/shopifyPricing';
 import { buildPricingSnapshot } from '../lib/pricingSnapshot';
 import { createDraftCheckoutResult, probeDraftOrderFunction } from '../lib/shopifyDraftOrderApi';
@@ -1452,7 +1452,7 @@ const ConfiguratorPage: React.FC = () => {
                     id="order-qty-site"
                     type="number"
                     min={1}
-                    max={99}
+                    max={MAX_ORDER_QUANTITY}
                     value={orderQuantity}
                     onChange={(e) => setOrderQuantity(clampOrderQuantity(e.target.value))}
                     className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
@@ -1530,7 +1530,7 @@ const ConfiguratorPage: React.FC = () => {
                     id="order-qty-hw"
                     type="number"
                     min={1}
-                    max={99}
+                    max={MAX_ORDER_QUANTITY}
                     value={orderQuantity}
                     onChange={(e) => setOrderQuantity(clampOrderQuantity(e.target.value))}
                     className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"
@@ -1600,7 +1600,7 @@ const ConfiguratorPage: React.FC = () => {
                     id="order-qty-m"
                     type="number"
                     min={1}
-                    max={99}
+                    max={MAX_ORDER_QUANTITY}
                     value={orderQuantity}
                     onChange={(e) => setOrderQuantity(clampOrderQuantity(e.target.value))}
                     className="w-20 h-9 px-2 rounded-lg border border-zinc-200 text-sm font-semibold text-navy text-center"

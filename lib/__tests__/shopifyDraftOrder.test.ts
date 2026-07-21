@@ -13,9 +13,10 @@ describe('shopifyDraftOrder', () => {
     expect(centsToShopifyPrice(100)).toBe('1.00')
   })
 
-  it('clamped quantity 1–99', () => {
+  it('clamped quantity 1–15000', () => {
     expect(clampDraftQuantity(0)).toBe(1)
-    expect(clampDraftQuantity(150)).toBe(99)
+    expect(clampDraftQuantity(150)).toBe(150)
+    expect(clampDraftQuantity(20_000)).toBe(15_000)
     expect(clampDraftQuantity('12')).toBe(12)
   })
 
