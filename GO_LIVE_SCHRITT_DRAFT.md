@@ -78,13 +78,13 @@ Supabase → Project → **Edge Functions** → **Secrets**:
 | `SHOPIFY_CLIENT_ID` | Client-ID aus Einstellungen |
 | `SHOPIFY_CLIENT_SECRET` | `shpss_…` |
 
-Preise (wie im Konfigurator / Vercel):
+Preise (wie im Konfigurator / Vercel) – Details: [`GO_LIVE_PREIS.md`](GO_LIVE_PREIS.md):
 
 | Name | Beispiel |
 |------|----------|
-| `PRICE_KEYCHAIN_CENTS` | `1.00` oder `24.90` |
-| `PRICE_KEYCHAIN_Q10_CENTS` | … |
-| `PRICE_KEYCHAIN_Q25_CENTS` | … |
+| `PRICE_KEYCHAIN_TIERS` | `1:1.50,20:1.50,50:1.45,100:1.40,250:1.30,400:1.20,600:1.10,800:1.00,1000:0.95` |
+
+Ohne Secret gilt dieselbe NFC-Liste als Default im Code. Legacy `PRICE_KEYCHAIN_CENTS` / `_Q10_` / `_Q25_` nur wenn `*_TIERS` nicht gesetzt.
 
 **Nicht nötig:** `SHOPIFY_ADMIN_ACCESS_TOKEN` (nur falls du noch ein altes `shpat_` hast).
 
