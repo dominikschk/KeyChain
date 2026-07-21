@@ -71,4 +71,30 @@ describe('white logo preservation', () => {
     }
     expect(ink).toBeGreaterThan(100)
   })
+
+  it('entfernt geschlossene Weißlöcher zwischen dunklen Buchstaben', () => {
+    // Weißer Rand + dunkler Rahmen (wie D/P), innen noch Weiß – Loch soll weg
+    const src = makeImage(48, 32, (x, y) => {
+      const border = x < 3 || y < 3 || x > 44 || y > 28
+      if (border) return [255, 255, 255, 255]
+      // dunkler Ring / Buchstabenkörper
+      const ring = x === 8 || x === 39 || y === 8 || y === 23 || (x >= 8 && x <= 39 && (y === 8 || y === 23))
+      const leftBar = x >= 8 && x <= 14 && y >= 8 && y <= 23
+      const rightBar = x >= 33 && x <= 39 && y >= 8 && y <= 23
+      const top = y >= 8 && y <= 12 && x >= 8 && x <= 39
+      const bottom = y >= 19 && y <= 23 && x >= 8 && x <= 39
+      if (leftBar || rightBar || top || bottom || ring) return [20, 20, 30, 255]
+      // Innenraum zwischen „Buchstaben“
+      if (x > 14 && x < 33 && y > 12 && y < 19) return [255, 255, 255, 255]
+      return [255, 255, 255, 255]
+    })
+    const { image } = removeBackground(src)
+    // Pixel in der Lochmitte muss transparent sein
+    const mid = (16 * 48 + 24) * 4
+    expect(image.data[mid + 3]!).toBeLessThan(40)
+    // Dunkler Buchstabenstrich bleibt
+    const bar = (16 * 48 + 11) * 4
+    expect(image.data[bar + 3]!).toBeGreaterThan(200)
+    expect(image.data[bar]!).toBeLessThan(40)
+  })
 })
