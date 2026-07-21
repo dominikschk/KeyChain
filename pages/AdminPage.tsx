@@ -724,6 +724,9 @@ export const AdminPage: React.FC = () => {
               {(() => {
                 const cfg = list.find((c) => c.short_id === qcModal.short_id);
                 const printPng = cfg ? getPrintPngUrl(cfg) : null;
+                const plate = (cfg?.plate_data as Record<string, unknown> | null) ?? {};
+                const logoSvg = typeof plate.logo_svg === 'string' ? (plate.logo_svg as string) : null;
+                const logoSvgUrl = logoSvg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(logoSvg)}` : null;
                 return (
                   <>
                     <div>
@@ -764,6 +767,134 @@ export const AdminPage: React.FC = () => {
                 );
               })()}
             </div>
+
+            {(() => {
+              const cfg = list.find((c) => c.short_id === qcModal.short_id);
+              const plate = (cfg?.plate_data as Record<string, unknown> | null) ?? {};
+              const logoSvg = typeof plate.logo_svg === 'string' ? (plate.logo_svg as string) : null;
+              const logoSvgUrl = logoSvg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(logoSvg)}` : null;
+
+              const micrositeUrl = `${baseUrl}/?id=${encodeURIComponent(qcModal.short_id)}`;
+              const ccpUrl = `${baseUrl}/ccp?id=${encodeURIComponent(qcModal.short_id)}`;
+
+              const chipParamsFull = {
+                short_id: qcModal.short_id,
+                profile_title: cfg?.profile_title ?? null,
+                links: { micrositeUrl, ccpUrl },
+                // Für die Produktion nützlich:
+                product_type: cfg?.product_type ?? null,
+                theme: cfg?.theme ?? null,
+                font_style: cfg?.font_style ?? null,
+                accent_color: cfg?.accent_color ?? null,
+                plate_data: plate,
+                // Logo SVG als String (kann lang sein) – absichtlich drin fürs "Logo direkt haben".
+                logo_svg: logoSvg,
+              };
+
+              const chipParamsPublic = {
+                ...chipParamsFull,
+                // Clipboard soll handlich bleiben: nur Availability + ggf. Lesezeichen statt kompletter SVG.
+                logo_svg: logoSvg ? '[SVG enthalten]' : null,
+              };
+
+              const designId = `chip-design-${cfg?.id ?? qcModal.short_id}`;
+
+              return (
+                <div className="px-5 pb-5 border-t border-zinc-200 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <p className="text-sm font-extrabold text-navy">Chip-Design: Logo & Parameter</p>
+                    <div className="flex flex-wrap gap-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(JSON.stringify(chipParamsPublic, null, 2), designId)}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                      >
+                        JSON kopieren
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          downloadTextFile(
+                            `${qcModal.short_id}-chip-design.json`,
+                            JSON.stringify(chipParamsFull, null, 2),
+                            'application/json;charset=utf-8'
+                          )
+                        }
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-navy text-white text-xs font-semibold hover:bg-navy/90"
+                      >
+                        JSON herunterladen
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50/30 p-3">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Hochgeladenes Logo</p>
+                      {logoSvgUrl ? (
+                        <img
+                          src={logoSvgUrl}
+                          alt="Kunden-Logo (SVG)"
+                          className="w-full h-44 rounded-lg border border-zinc-200 bg-white object-contain"
+                        />
+                      ) : (
+                        <p className="text-sm text-zinc-500">Kein Logo-SVG gespeichert (ggf. nur Raster-Preview vorhanden).</p>
+                      )}
+                    </div>
+
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50/30 p-3">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Wichtige Parameter</p>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                        <div>
+                          <p className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider">Anhänger-Grund</p>
+                          <p className="text-navy font-semibold">{String(plate.plateColor ?? '—')}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider">Logo/Text-Farbe</p>
+                          <p className="text-navy font-semibold">{String(plate.logoColor ?? '—')}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider">Button-Farbe</p>
+                          <p className="text-navy font-semibold">{String(cfg?.accent_color ?? '—')}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider">Hintergrund</p>
+                          <p className="text-navy font-semibold">{String(plate.surfaceColor ?? '—')}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider">Schrift</p>
+                          <p className="text-navy font-semibold">{String(cfg?.font_style ?? 'modern')}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider">Layout</p>
+                          <p className="text-navy font-semibold">{String(plate.engraveLayout ?? 'logo_above')}</p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider">Position/Skalierung</p>
+                          <p className="text-navy font-semibold">
+                            {String(plate.logoPosX ?? 0)} / {String(plate.logoPosY ?? 0)} · {String(plate.logoScale ?? 1)}×
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider">Plattengröße</p>
+                          <p className="text-navy font-semibold">
+                            {String(plate.plateWidth ?? '—')}×{String(plate.plateHeight ?? '—')} mm
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider">Tiefe</p>
+                          <p className="text-navy font-semibold">{String(plate.logoDepth ?? '—')}</p>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-zinc-600 mt-3 leading-snug">
+                        Alles kann über „JSON kopieren“ oder „JSON herunterladen“ weitergegeben werden (inkl. Logo-SVG im Download).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="px-5 py-4 border-t border-zinc-200 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 shrink-0" htmlFor="reprint-reason">
