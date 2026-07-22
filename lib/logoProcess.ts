@@ -104,7 +104,15 @@ function isPaperWhite(r: number, g: number, b: number): boolean {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const sat = max === 0 ? 0 : (max - min) / max;
-  return L >= 220 && sat < 0.18;
+  // Etwas großzügiger: JPEG-Weiß oft ~230–250
+  return L >= 210 && sat < 0.22;
+}
+
+function paperWhiteEdgeShare(samples: { r: number; g: number; b: number }[]): number {
+  if (!samples.length) return 0;
+  let n = 0;
+  for (const s of samples) if (isPaperWhite(s.r, s.g, s.b)) n++;
+  return n / samples.length;
 }
 
 /**
@@ -205,10 +213,83 @@ function hasNonPaperInk(d: Uint8ClampedArray): boolean {
   return false;
 }
 
+/** Flood-Fill nur über Papierweiß vom Bildrand (auch bei buntem Motiv am Rand). */
+function floodPaperWhiteFromEdges(d: Uint8ClampedArray, w: number, h: number): number {
+  const visited = new Uint8Array(w * h);
+  const qx = new Int32Array(w * h);
+  const qy = new Int32Array(w * h);
+  const dirs = [1, 0, -1, 0, 0, 1, 0, -1];
+  let qh = 0;
+  let qt = 0;
+  let cleared = 0;
+
+  const trySeed = (x: number, y: number) => {
+    const idx = y * w + x;
+    if (visited[idx]) return;
+    const i = idx * 4;
+    if (d[i + 3]! < 10) {
+      visited[idx] = 1;
+      return;
+    }
+    if (!isPaperWhite(d[i]!, d[i + 1]!, d[i + 2]!)) return;
+    visited[idx] = 1;
+    qx[qt] = x;
+    qy[qt] = y;
+    qt++;
+  };
+
+  for (let x = 0; x < w; x++) {
+    trySeed(x, 0);
+    trySeed(x, h - 1);
+  }
+  for (let y = 0; y < h; y++) {
+    trySeed(0, y);
+    trySeed(w - 1, y);
+  }
+
+  while (qh < qt) {
+    const x = qx[qh]!;
+    const y = qy[qh]!;
+    qh++;
+    const i = (y * w + x) * 4;
+    d[i + 3] = 0;
+    cleared++;
+    for (let k = 0; k < 4; k++) {
+      const nx = x + dirs[k * 2]!;
+      const ny = y + dirs[k * 2 + 1]!;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nidx = ny * w + nx;
+      if (visited[nidx]) continue;
+      const ni = nidx * 4;
+      if (d[ni + 3]! < 10) {
+        visited[nidx] = 1;
+        continue;
+      }
+      if (!isPaperWhite(d[ni]!, d[ni + 1]!, d[ni + 2]!)) continue;
+      visited[nidx] = 1;
+      qx[qt] = nx;
+      qy[qt] = ny;
+      qt++;
+    }
+  }
+  return cleared;
+}
+
 /**
- * Hintergrund nur vom Bildrand her entfernen (Flood-Fill),
- * danach geschlossene BG-Löcher / Papierweiß in Buchstaben.
- * Weiße Logos auf dunklem Grund bleiben erhalten.
+ * Heller Studio-Hintergrund: Außenweiß + Buchstaben-Innenlöcher (O/R/S) entfernen.
+ * Hellgraues/farbiges Motiv bleibt.
+ */
+function stripLightStudioBackground(d: Uint8ClampedArray, w: number, h: number): number {
+  const nearWhiteBg = (r: number, g: number, b: number, _limit: number) => isPaperWhite(r, g, b);
+  let n = floodPaperWhiteFromEdges(d, w, h);
+  n += clearEnclosedBackgroundHoles(d, w, h, nearWhiteBg, 40);
+  if (hasNonPaperInk(d)) n += wipeRemainingPaperWhite(d);
+  return n;
+}
+
+/**
+ * Hintergrund entfernen.
+ * Weiße Logos auf dunklem Grund bleiben; bei Studio-Weiß inkl. Buchstaben-Counter.
  */
 export function removeBackground(src: ImageData): { image: ImageData; removed: boolean; bgUniform: boolean } {
   const w = src.width;
@@ -235,9 +316,30 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
   const bg = dominantColor(samples);
   const spread = edgeColorSpread(samples);
   const bgUniform = spread < 48;
+  const whiteShare = paperWhiteEdgeShare(samples);
+  // Auch bei buntem Motiv am Rand (Kreis, Waves): Mehrheit Weiß am Rand = Studio
+  const forceLightStudio = whiteShare >= 0.45;
+
+  if (forceLightStudio) {
+    const cleared = stripLightStudioBackground(d, w, h);
+    let opaqueLeft = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3]! >= 40) opaqueLeft++;
+    if (opaqueLeft / (w * h) < 0.008 && cleared > w * h * 0.4) {
+      return {
+        image: new ImageData(new Uint8ClampedArray(src.data), w, h),
+        removed: false,
+        bgUniform: false,
+      };
+    }
+    return { image: out, removed: cleared > 0, bgUniform: false };
+  }
 
   if (!bg || (!bgUniform && spread > 85)) {
-    // Kein klarer Rand-Hintergrund → nichts entfernen (weiße Logos schützen)
+    // Kein klarer Rand – wenn trotzdem viel Weiß + Tinte: Studio-Fallback
+    if (whiteShare >= 0.3 && hasNonPaperInk(d)) {
+      const cleared = stripLightStudioBackground(d, w, h);
+      return { image: out, removed: cleared > 0, bgUniform: false };
+    }
     return { image: out, removed: false, bgUniform: false };
   }
 
@@ -336,7 +438,6 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
   let paperWiped = 0;
   if (bgLum > 200) {
     holeCleared = clearEnclosedBackgroundHoles(d, w, h, matchesBg, Math.max(tol, 48));
-    // Wichtig für O/R/S: weißes Innenpapier weg, hellgraues Motiv bleibt
     paperWiped = wipeRemainingPaperWhite(d);
   }
 

@@ -113,4 +113,24 @@ describe('white logo preservation', () => {
     expect(image.data[ring + 3]!).toBeGreaterThan(200)
     expect(image.data[ring]!).toBeLessThan(50)
   })
+
+  it('entfernt Studio-Weiß auch wenn Motiv den Rand bunt macht', () => {
+    // Wie ASK MENTORING: Ecken teils blau/bunt, Mehrheit Weiß, O mit weißem Counter
+    const src = makeImage(48, 48, (x, y) => {
+      if (x < 6 && y < 6) return [30, 60, 140, 255] // bunte Ecke
+      if (x > 41 && y < 6) return [40, 80, 160, 255]
+      const dx = x - 24
+      const dy = y - 24
+      const r2 = dx * dx + dy * dy
+      if (r2 >= 10 * 10 && r2 <= 14 * 14) return [30, 30, 40, 255]
+      if (r2 < 10 * 10) return [255, 255, 255, 255]
+      return [252, 252, 252, 255]
+    })
+    const { image, removed } = removeBackground(src)
+    expect(removed).toBe(true)
+    const hole = (24 * 48 + 24) * 4
+    expect(image.data[hole + 3]!).toBeLessThan(40)
+    const ring = (24 * 48 + 12) * 4
+    expect(image.data[ring + 3]!).toBeGreaterThan(200)
+  })
 })
