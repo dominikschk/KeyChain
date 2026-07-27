@@ -179,30 +179,30 @@ describe('white logo preservation', () => {
   })
 
   it('leert dunkle Fremdfüllung im Loch heller Buchstaben (ASK-Fall)', () => {
-    // Helles „ASK“-ähnliches Rechteck mit Loch, darin Navy-Blob; dunkle Schrift daneben vom Rand erreichbar
+    // Helles ASK + Wave die durch AA-Lücke ins Loch reicht + Navy-Blob im Counter
     const src = makeImage(64, 40, (x, y) => {
       const border = x < 2 || y < 2 || x > 61 || y > 37
       if (border) return [250, 250, 250, 255]
-      // dunkle Wave vom Rand in die Fläche (wie MENTORING-Verbindung)
-      if (y >= 2 && y <= 5 && x >= 2 && x <= 60) return [20, 28, 45, 255]
-      // helles Lavendel-Rechteck mit Innenloch
+      // dunkle Wave vom Rand
+      if (y >= 2 && y <= 4 && x >= 2 && x <= 40) return [20, 28, 45, 255]
+      // helles Lavendel mit Innenloch; absichtlich 1px Lücke oben (x=27)
       const inLetter = x >= 12 && x <= 44 && y >= 10 && y <= 32
       const inHole = x >= 20 && x <= 34 && y >= 16 && y <= 26
+      const gap = x === 27 && y === 10
+      if (gap) return [20, 28, 45, 255] // Wave-Tunnel in die Lücke
       if (inLetter && !inHole) return [170, 168, 185, 255]
-      if (inHole) return [18, 28, 48, 255] // dunkle Fehlfüllung im Counter
-      // dunkle Schrift rechts, über hellen Bereich hinaus zum Rand-Streifen verbunden
+      if (inHole) return [18, 28, 48, 255] // dunkle Fehlfüllung
+      // dunkle Schrift rechts, mit Wave verbunden
       if (x >= 48 && x <= 58 && y >= 14 && y <= 28) return [20, 28, 45, 255]
-      if (x >= 48 && x <= 60 && y >= 2 && y <= 5) return [20, 28, 45, 255]
+      if (x >= 48 && x <= 60 && y >= 2 && y <= 4) return [20, 28, 45, 255]
       return [250, 250, 250, 255]
     })
     const { image } = removeBackground(src)
     const hole = (21 * 64 + 27) * 4
     expect(image.data[hole + 3]!).toBeLessThan(40)
-    // heller Buchstabenkörper bleibt
     const body = (12 * 64 + 14) * 4
     expect(image.data[body + 3]!).toBeGreaterThan(200)
     expect(image.data[body]!).toBeGreaterThan(140)
-    // dunkle Schrift bleibt (Rand-verbunden)
     const dark = (20 * 64 + 52) * 4
     expect(image.data[dark + 3]!).toBeGreaterThan(200)
     expect(image.data[dark]!).toBeLessThan(40)

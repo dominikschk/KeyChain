@@ -386,71 +386,54 @@ function floodPaperWhiteFromEdges(d: Uint8ClampedArray, w: number, h: number): n
 }
 
 /**
- * Fremdfüllungen in Buchstaben-Löchern entfernen (z. B. dunkelblau in S/O von ASK),
- * ohne überlagerte dunkle Schrift (MENTORING) zu löschen, wenn sie vom Rand erreichbar ist.
+ * Fremdfüllungen in Buchstaben-Löchern entfernen (z. B. Navy-Blobs in S/O bei ASK).
  *
- * Idee: größte helle Motiv-Komponente (z. B. „ASK“) finden; alles Opake in deren
- * Innenlöchern (vom Bildrand aus nicht erreichbar ohne die Helle zu kreuzen) leeren.
+ * Problem: Wave-Linien verbinden Löcher über AA-Lücken mit dem Rand → einfache
+ * Flood-Logik behält die Blobs. Lösung: helle Motiv-Maske leicht dilatieren,
+ * morphologische Löcher finden, dunkle Komponenten nur löschen wenn sie
+ * überwiegend im Loch liegen (MENTORING/Waves bleiben).
  */
 function clearHolesInsideLightLetters(d: Uint8ClampedArray, w: number, h: number): number {
   const nPix = w * h;
   const light = new Uint8Array(nPix);
+  let lightCount = 0;
   for (let p = 0, i = 0; i < d.length; i += 4, p++) {
     if (d[i + 3]! < 40) continue;
-    const L = lum(d[i]!, d[i + 1]!, d[i + 2]!);
-    // Hell/mittel (Lavendel-ASK), keine dunkle Navy-Schrift
-    if (L >= 100) light[p] = 1;
+    if (lum(d[i]!, d[i + 1]!, d[i + 2]!) >= 100) {
+      light[p] = 1;
+      lightCount++;
+    }
   }
+  if (lightCount < Math.max(80, nPix * 0.015)) return 0;
 
-  const visited = new Uint8Array(nPix);
-  const qx = new Int32Array(nPix);
-  const qy = new Int32Array(nPix);
-  const dirs = [1, 0, -1, 0, 0, 1, 0, -1];
-  let bestComp: number[] = [];
-
-  for (let start = 0; start < nPix; start++) {
-    if (visited[start] || !light[start]) continue;
-    let qh = 0;
-    let qt = 0;
-    qx[0] = start % w;
-    qy[0] = Math.floor(start / w);
-    visited[start] = 1;
-    qt = 1;
-    const comp: number[] = [];
-    while (qh < qt) {
-      const x = qx[qh]!;
-      const y = qy[qh]!;
-      qh++;
-      const idx = y * w + x;
-      comp.push(idx);
-      for (let k = 0; k < 4; k++) {
-        const nx = x + dirs[k * 2]!;
-        const ny = y + dirs[k * 2 + 1]!;
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        const nidx = ny * w + nx;
-        if (visited[nidx] || !light[nidx]) continue;
-        visited[nidx] = 1;
-        qx[qt] = nx;
-        qy[qt] = ny;
-        qt++;
+  // Helle Maske abdichten (schließt AA-Lücken gegen Wave-Linien)
+  const barrier = new Uint8Array(light);
+  const radius = 2;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!light[y * w + x]) continue;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          if (dx * dx + dy * dy > radius * radius) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          barrier[ny * w + nx] = 1;
+        }
       }
     }
-    if (comp.length > bestComp.length) bestComp = comp;
   }
 
-  // Zu klein = kein großes helles Wortzeichen
-  if (bestComp.length < Math.max(80, nPix * 0.02)) return 0;
-
-  const inLight = new Uint8Array(nPix);
-  for (const idx of bestComp) inLight[idx] = 1;
-
-  // Vom Rand durch alles außer der hellen Hauptkomponente fluten
+  // Morphologische Löcher der abgedichteten Hell-Maske
   const reached = new Uint8Array(nPix);
+  const qx = new Int32Array(nPix);
+  const qy = new Int32Array(nPix);
+  const dirs4 = [1, 0, -1, 0, 0, 1, 0, -1];
   let qh = 0;
   let qt = 0;
   const trySeed = (x: number, y: number) => {
     const idx = y * w + x;
-    if (reached[idx] || inLight[idx]) return;
+    if (reached[idx] || barrier[idx]) return;
     reached[idx] = 1;
     qx[qt] = x;
     qy[qt] = y;
@@ -469,11 +452,11 @@ function clearHolesInsideLightLetters(d: Uint8ClampedArray, w: number, h: number
     const y = qy[qh]!;
     qh++;
     for (let k = 0; k < 4; k++) {
-      const nx = x + dirs[k * 2]!;
-      const ny = y + dirs[k * 2 + 1]!;
+      const nx = x + dirs4[k * 2]!;
+      const ny = y + dirs4[k * 2 + 1]!;
       if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
       const nidx = ny * w + nx;
-      if (reached[nidx] || inLight[nidx]) continue;
+      if (reached[nidx] || barrier[nidx]) continue;
       reached[nidx] = 1;
       qx[qt] = nx;
       qy[qt] = ny;
@@ -481,14 +464,87 @@ function clearHolesInsideLightLetters(d: Uint8ClampedArray, w: number, h: number
     }
   }
 
-  let cleared = 0;
-  for (let p = 0, i = 0; i < d.length; i += 4, p++) {
-    if (d[i + 3]! < 40) continue;
-    if (inLight[p] || reached[p]) continue;
-    // Opakes Pixel in einem Loch der hellen Buchstaben → Counter-Fremdfüllung
-    d[i + 3] = 0;
-    cleared++;
+  const inHole = new Uint8Array(nPix);
+  let holePix = 0;
+  for (let p = 0; p < nPix; p++) {
+    if (!barrier[p] && !reached[p]) {
+      inHole[p] = 1;
+      holePix++;
+    }
   }
+  if (holePix < 8) return 0;
+
+  // Dunkle Komponenten: nur löschen wenn überwiegend im Loch
+  const visited = new Uint8Array(nPix);
+  const dirs8 = [1, 0, -1, 0, 0, 1, 0, -1, 1, 1, 1, -1, -1, 1, -1, -1];
+  let cleared = 0;
+
+  for (let start = 0; start < nPix; start++) {
+    if (visited[start]) continue;
+    const si = start * 4;
+    if (d[si + 3]! < 40) {
+      visited[start] = 1;
+      continue;
+    }
+    if (lum(d[si]!, d[si + 1]!, d[si + 2]!) >= 100) {
+      visited[start] = 1;
+      continue;
+    }
+
+    qh = 0;
+    qt = 0;
+    qx[0] = start % w;
+    qy[0] = Math.floor(start / w);
+    visited[start] = 1;
+    qt = 1;
+    const comp: number[] = [];
+    let inside = 0;
+
+    while (qh < qt) {
+      const x = qx[qh]!;
+      const y = qy[qh]!;
+      qh++;
+      const idx = y * w + x;
+      comp.push(idx);
+      if (inHole[idx]) inside++;
+      for (let k = 0; k < 8; k++) {
+        const nx = x + dirs8[k * 2]!;
+        const ny = y + dirs8[k * 2 + 1]!;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const nidx = ny * w + nx;
+        if (visited[nidx]) continue;
+        const ni = nidx * 4;
+        if (d[ni + 3]! < 40) {
+          visited[nidx] = 1;
+          continue;
+        }
+        if (lum(d[ni]!, d[ni + 1]!, d[ni + 2]!) >= 100) {
+          visited[nidx] = 1;
+          continue;
+        }
+        visited[nidx] = 1;
+        qx[qt] = nx;
+        qy[qt] = ny;
+        qt++;
+      }
+    }
+
+    if (comp.length < 6) continue;
+    const frac = inside / comp.length;
+    if (frac >= 0.55) {
+      for (const idx of comp) {
+        d[idx * 4 + 3] = 0;
+        cleared++;
+      }
+    } else if (frac >= 0.15) {
+      for (const idx of comp) {
+        if (!inHole[idx]) continue;
+        d[idx * 4 + 3] = 0;
+        cleared++;
+      }
+    }
+  }
+
   return cleared;
 }
 
