@@ -76,6 +76,26 @@ function sampleEdgeColors(img: ImageData): { r: number; g: number; b: number }[]
   return out;
 }
 
+/** Anteil Papierweiß im äußeren Randstreifen (robuster als 12 Eckpunkte). */
+function borderPaperWhiteShare(img: ImageData, band = 4): number {
+  const w = img.width;
+  const h = img.height;
+  const d = img.data;
+  const b = Math.max(1, Math.min(band, Math.floor(Math.min(w, h) / 8)));
+  let opaque = 0;
+  let paper = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (x >= b && y >= b && x < w - b && y < h - b) continue;
+      const i = (y * w + x) * 4;
+      if (d[i + 3]! < 40) continue;
+      opaque++;
+      if (isPaperWhite(d[i]!, d[i + 1]!, d[i + 2]!)) paper++;
+    }
+  }
+  return opaque === 0 ? 0 : paper / opaque;
+}
+
 function dominantColor(samples: { r: number; g: number; b: number }[]): { r: number; g: number; b: number } | null {
   if (!samples.length) return null;
   // Median je Kanal – robuster als Mittelwert bei gemischten Ecken
@@ -104,8 +124,34 @@ function isPaperWhite(r: number, g: number, b: number): boolean {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const sat = max === 0 ? 0 : (max - min) / max;
-  // Etwas großzügiger: JPEG-Weiß oft ~230–250
-  return L >= 210 && sat < 0.22;
+  // JPEG-Weiß oft ~200–250, leicht eingefärbt durch Kompression
+  return L >= 200 && sat < 0.28;
+}
+
+/** Motiv-Tinte (nicht Papierweiß) um radius px aufblasen – schließt AA-Lücken in Buchstaben. */
+function dilateInkMask(d: Uint8ClampedArray, w: number, h: number, radius: number): Uint8Array {
+  const ink = new Uint8Array(w * h);
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+    if (d[i + 3]! < 40) continue;
+    if (!isPaperWhite(d[i]!, d[i + 1]!, d[i + 2]!)) ink[p] = 1;
+  }
+  if (radius <= 0) return ink;
+  const out = new Uint8Array(ink);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!ink[y * w + x]) continue;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          if (dx * dx + dy * dy > radius * radius) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          out[ny * w + nx] = 1;
+        }
+      }
+    }
+  }
+  return out;
 }
 
 function paperWhiteEdgeShare(samples: { r: number; g: number; b: number }[]): number {
@@ -118,6 +164,7 @@ function paperWhiteEdgeShare(samples: { r: number; g: number; b: number }[]): nu
 /**
  * Geschlossene Hintergrund-Löcher (z. B. Zwischenraum D–P, Innenraum von O/D)
  * entfernen – aber weiße Logo-Flächen auf Transparent/Dunkel behalten.
+ * Ink wird leicht dilatiert, damit JPEG-/AA-Lücken Innenlöcher nicht mit dem Rand verbinden.
  */
 function clearEnclosedBackgroundHoles(
   d: Uint8ClampedArray,
@@ -126,6 +173,7 @@ function clearEnclosedBackgroundHoles(
   matchesBg: (r: number, g: number, b: number, limit: number) => boolean,
   tol: number
 ): number {
+  const sealedInk = dilateInkMask(d, w, h, 2);
   const visited = new Uint8Array(w * h);
   const qx = new Int32Array(w * h);
   const qy = new Int32Array(w * h);
@@ -133,16 +181,10 @@ function clearEnclosedBackgroundHoles(
   let cleared = 0;
 
   const isBgOpaque = (idx: number) => {
+    if (sealedInk[idx]) return false;
     const i = idx * 4;
     if (d[i + 3]! < 40) return false;
     return matchesBg(d[i]!, d[i + 1]!, d[i + 2]!, tol) || isPaperWhite(d[i]!, d[i + 1]!, d[i + 2]!);
-  };
-
-  const isOpaqueNonBg = (x: number, y: number) => {
-    if (x < 0 || y < 0 || x >= w || y >= h) return false;
-    const i = (y * w + x) * 4;
-    if (d[i + 3]! < 40) return false;
-    return !matchesBg(d[i]!, d[i + 1]!, d[i + 2]!, tol) && !isPaperWhite(d[i]!, d[i + 1]!, d[i + 2]!);
   };
 
   for (let start = 0; start < w * h; start++) {
@@ -156,7 +198,7 @@ function clearEnclosedBackgroundHoles(
     qt = 1;
 
     let touchesBorder = false;
-    let touchesNonBg = false;
+    let touchesInk = false;
     const comp: number[] = [];
 
     while (qh < qt) {
@@ -171,8 +213,11 @@ function clearEnclosedBackgroundHoles(
         const nx = x + dirs[k * 2]!;
         const ny = y + dirs[k * 2 + 1]!;
         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        if (isOpaqueNonBg(nx, ny)) touchesNonBg = true;
         const nidx = ny * w + nx;
+        if (sealedInk[nidx]) {
+          touchesInk = true;
+          continue;
+        }
         if (visited[nidx] || !isBgOpaque(nidx)) continue;
         visited[nidx] = 1;
         qx[qt] = nx;
@@ -182,7 +227,7 @@ function clearEnclosedBackgroundHoles(
     }
 
     // Nur Innenlöcher im Motiv (von Buchstaben/Strichen umschlossen), nicht freischwebende Weiß-Logos
-    if (!touchesBorder && touchesNonBg) {
+    if (!touchesBorder && touchesInk) {
       for (const idx of comp) {
         d[idx * 4 + 3] = 0;
         cleared++;
@@ -190,6 +235,71 @@ function clearEnclosedBackgroundHoles(
     }
   }
 
+  return cleared;
+}
+
+/**
+ * Papierweiß, das vom Bildrand aus nicht erreichbar ist (Buchstaben-Counter),
+ * entfernen – mit abgedichteter Motiv-Kante gegen AA-Lücken.
+ */
+function clearUnreachablePaperWhite(d: Uint8ClampedArray, w: number, h: number): number {
+  const sealedInk = dilateInkMask(d, w, h, 2);
+  const reached = new Uint8Array(w * h);
+  const qx = new Int32Array(w * h);
+  const qy = new Int32Array(w * h);
+  const dirs = [1, 0, -1, 0, 0, 1, 0, -1];
+  let qh = 0;
+  let qt = 0;
+
+  const trySeed = (x: number, y: number) => {
+    const idx = y * w + x;
+    if (reached[idx] || sealedInk[idx]) return;
+    const i = idx * 4;
+    const a = d[i + 3]!;
+    if (a >= 40 && !isPaperWhite(d[i]!, d[i + 1]!, d[i + 2]!)) return;
+    reached[idx] = 1;
+    qx[qt] = x;
+    qy[qt] = y;
+    qt++;
+  };
+
+  for (let x = 0; x < w; x++) {
+    trySeed(x, 0);
+    trySeed(x, h - 1);
+  }
+  for (let y = 0; y < h; y++) {
+    trySeed(0, y);
+    trySeed(w - 1, y);
+  }
+
+  while (qh < qt) {
+    const x = qx[qh]!;
+    const y = qy[qh]!;
+    qh++;
+    for (let k = 0; k < 4; k++) {
+      const nx = x + dirs[k * 2]!;
+      const ny = y + dirs[k * 2 + 1]!;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nidx = ny * w + nx;
+      if (reached[nidx] || sealedInk[nidx]) continue;
+      const ni = nidx * 4;
+      const a = d[ni + 3]!;
+      if (a >= 40 && !isPaperWhite(d[ni]!, d[ni + 1]!, d[ni + 2]!)) continue;
+      reached[nidx] = 1;
+      qx[qt] = nx;
+      qy[qt] = ny;
+      qt++;
+    }
+  }
+
+  let cleared = 0;
+  for (let p = 0, i = 0; i < d.length; i += 4, p++) {
+    if (d[i + 3]! < 40) continue;
+    if (!isPaperWhite(d[i]!, d[i + 1]!, d[i + 2]!)) continue;
+    if (reached[p]) continue;
+    d[i + 3] = 0;
+    cleared++;
+  }
   return cleared;
 }
 
@@ -283,7 +393,21 @@ function stripLightStudioBackground(d: Uint8ClampedArray, w: number, h: number):
   const nearWhiteBg = (r: number, g: number, b: number, _limit: number) => isPaperWhite(r, g, b);
   let n = floodPaperWhiteFromEdges(d, w, h);
   n += clearEnclosedBackgroundHoles(d, w, h, nearWhiteBg, 40);
+  n += clearUnreachablePaperWhite(d, w, h);
   if (hasNonPaperInk(d)) n += wipeRemainingPaperWhite(d);
+  return n;
+}
+
+/**
+ * Nachbearbeitung: Buchstaben-Counter leeren, sobald Studio-Weiß oder schon freigestellt.
+ * Läuft immer nach dem Flood-Fill – auch wenn die erste Erkennung unsicher war.
+ */
+function finalizeLetterCounters(d: Uint8ClampedArray, w: number, h: number, studioLikely: boolean): number {
+  if (!hasNonPaperInk(d)) return 0;
+  const nearWhiteBg = (r: number, g: number, b: number, _limit: number) => isPaperWhite(r, g, b);
+  let n = clearEnclosedBackgroundHoles(d, w, h, nearWhiteBg, 40);
+  n += clearUnreachablePaperWhite(d, w, h);
+  if (studioLikely) n += wipeRemainingPaperWhite(d);
   return n;
 }
 
@@ -304,11 +428,11 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
   transparentShare /= d.length / 4;
 
   const nearWhiteBg = (r: number, g: number, b: number, _limit: number) => isPaperWhite(r, g, b);
+  const bandWhite = borderPaperWhiteShare(src);
 
   // PNG mit Alpha: Transparenz vertrauen, Innenlöcher + Papierweiß leeren wenn Motiv-Tinte da ist
   if (transparentShare > 0.04) {
-    clearEnclosedBackgroundHoles(d, w, h, nearWhiteBg, 40);
-    if (hasNonPaperInk(d)) wipeRemainingPaperWhite(d);
+    finalizeLetterCounters(d, w, h, bandWhite >= 0.25);
     return { image: out, removed: true, bgUniform: false };
   }
 
@@ -317,8 +441,8 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
   const spread = edgeColorSpread(samples);
   const bgUniform = spread < 48;
   const whiteShare = paperWhiteEdgeShare(samples);
-  // Auch bei buntem Motiv am Rand (Kreis, Waves): Mehrheit Weiß am Rand = Studio
-  const forceLightStudio = whiteShare >= 0.45;
+  // Randstreifen ist robuster als 12 Punkte – auch bei buntem Motiv (Kreis/Waves) am Rand
+  const forceLightStudio = whiteShare >= 0.4 || bandWhite >= 0.38;
 
   if (forceLightStudio) {
     const cleared = stripLightStudioBackground(d, w, h);
@@ -335,8 +459,8 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
   }
 
   if (!bg || (!bgUniform && spread > 85)) {
-    // Kein klarer Rand – wenn trotzdem viel Weiß + Tinte: Studio-Fallback
-    if (whiteShare >= 0.3 && hasNonPaperInk(d)) {
+    // Kein klarer Rand – Studio-Fallback über Randstreifen oder Restweiß + Tinte
+    if ((bandWhite >= 0.22 || whiteShare >= 0.25) && hasNonPaperInk(d)) {
       const cleared = stripLightStudioBackground(d, w, h);
       return { image: out, removed: cleared > 0, bgUniform: false };
     }
@@ -433,13 +557,9 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
     if (kill[idx]) d[idx * 4 + 3] = 0;
   }
 
-  // Innenlöcher + restliches Papierweiß bei hellem Studio-Hintergrund
-  let holeCleared = 0;
-  let paperWiped = 0;
-  if (bgLum > 200) {
-    holeCleared = clearEnclosedBackgroundHoles(d, w, h, matchesBg, Math.max(tol, 48));
-    paperWiped = wipeRemainingPaperWhite(d);
-  }
+  // Innenlöcher: helles Studio ODER viel Rand-Weiß ODER schon freigestellt
+  const studioLikely = bgLum > 185 || bandWhite >= 0.28 || qt > w * h * 0.08;
+  const holeCleared = finalizeLetterCounters(d, w, h, studioLikely && bgLum > 185);
 
   // Weiß-auf-Weiß: Flood-Fill hat fast alles weggefressen → Original behalten
   let opaqueLeft = 0;
@@ -454,7 +574,7 @@ export function removeBackground(src: ImageData): { image: ImageData; removed: b
     };
   }
 
-  return { image: out, removed: qt > 0 || holeCleared > 0 || paperWiped > 0, bgUniform };
+  return { image: out, removed: qt > 0 || holeCleared > 0, bgUniform };
 }
 
 function quantKey(r: number, g: number, b: number): number {

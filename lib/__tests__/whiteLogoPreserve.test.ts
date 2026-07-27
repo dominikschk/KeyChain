@@ -133,4 +133,48 @@ describe('white logo preservation', () => {
     const ring = (24 * 48 + 12) * 4
     expect(image.data[ring + 3]!).toBeGreaterThan(200)
   })
+
+  it('leert O-Innenraum trotz 1px AA-Lücke im Ring', () => {
+    const src = makeImage(40, 40, (x, y) => {
+      const dx = x - 20
+      const dy = y - 20
+      const r2 = dx * dx + dy * dy
+      if (r2 > 18 * 18) return [250, 250, 250, 255]
+      // absichtlich eine Lücke bei (20,6) — ohne Dilation würde Weiß durchsickern
+      if (x === 20 && y === 6) return [250, 250, 250, 255]
+      if (r2 >= 11 * 11 && r2 <= 16 * 16) return [25, 25, 35, 255]
+      if (r2 < 11 * 11) return [248, 248, 248, 255]
+      return [250, 250, 250, 255]
+    })
+    const { image } = removeBackground(src)
+    const center = (20 * 40 + 20) * 4
+    expect(image.data[center + 3]!).toBeLessThan(40)
+    const ring = (20 * 40 + 5) * 4
+    expect(image.data[ring + 3]!).toBeGreaterThan(200)
+  })
+
+  it('leert JPEG-artiges Counter-Weiß (L≈205) hinter blauem Kreis', () => {
+    const src = makeImage(56, 56, (x, y) => {
+      // bunte Waves am Rand
+      if (y < 4 && x < 20) return [20, 90, 180, 255]
+      if (y < 4 && x > 40) return [30, 100, 190, 255]
+      const dx = x - 28
+      const dy = y - 28
+      const r2 = dx * dx + dy * dy
+      if (r2 > 22 * 22) return [245, 245, 248, 255]
+      if (r2 >= 16 * 16) return [25, 70, 160, 255] // blauer Kreis
+      // dunkler Buchstabenring mit JPEG-Weiß innen
+      if (r2 >= 8 * 8 && r2 <= 12 * 12) return [20, 20, 30, 255]
+      if (r2 < 8 * 8) return [205, 206, 204, 255]
+      return [25, 70, 160, 255]
+    })
+    const { image, removed } = removeBackground(src)
+    expect(removed).toBe(true)
+    const hole = (28 * 56 + 28) * 4
+    expect(image.data[hole + 3]!).toBeLessThan(40)
+    // r≈19 → blauer Kreis (nicht Buchstabenring)
+    const blue = (28 * 56 + 9) * 4
+    expect(image.data[blue + 3]!).toBeGreaterThan(200)
+    expect(image.data[blue + 2]!).toBeGreaterThan(100)
+  })
 })
