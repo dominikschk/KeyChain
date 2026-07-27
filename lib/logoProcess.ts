@@ -386,6 +386,113 @@ function floodPaperWhiteFromEdges(d: Uint8ClampedArray, w: number, h: number): n
 }
 
 /**
+ * Fremdfüllungen in Buchstaben-Löchern entfernen (z. B. dunkelblau in S/O von ASK),
+ * ohne überlagerte dunkle Schrift (MENTORING) zu löschen, wenn sie vom Rand erreichbar ist.
+ *
+ * Idee: größte helle Motiv-Komponente (z. B. „ASK“) finden; alles Opake in deren
+ * Innenlöchern (vom Bildrand aus nicht erreichbar ohne die Helle zu kreuzen) leeren.
+ */
+function clearHolesInsideLightLetters(d: Uint8ClampedArray, w: number, h: number): number {
+  const nPix = w * h;
+  const light = new Uint8Array(nPix);
+  for (let p = 0, i = 0; i < d.length; i += 4, p++) {
+    if (d[i + 3]! < 40) continue;
+    const L = lum(d[i]!, d[i + 1]!, d[i + 2]!);
+    // Hell/mittel (Lavendel-ASK), keine dunkle Navy-Schrift
+    if (L >= 100) light[p] = 1;
+  }
+
+  const visited = new Uint8Array(nPix);
+  const qx = new Int32Array(nPix);
+  const qy = new Int32Array(nPix);
+  const dirs = [1, 0, -1, 0, 0, 1, 0, -1];
+  let bestComp: number[] = [];
+
+  for (let start = 0; start < nPix; start++) {
+    if (visited[start] || !light[start]) continue;
+    let qh = 0;
+    let qt = 0;
+    qx[0] = start % w;
+    qy[0] = Math.floor(start / w);
+    visited[start] = 1;
+    qt = 1;
+    const comp: number[] = [];
+    while (qh < qt) {
+      const x = qx[qh]!;
+      const y = qy[qh]!;
+      qh++;
+      const idx = y * w + x;
+      comp.push(idx);
+      for (let k = 0; k < 4; k++) {
+        const nx = x + dirs[k * 2]!;
+        const ny = y + dirs[k * 2 + 1]!;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const nidx = ny * w + nx;
+        if (visited[nidx] || !light[nidx]) continue;
+        visited[nidx] = 1;
+        qx[qt] = nx;
+        qy[qt] = ny;
+        qt++;
+      }
+    }
+    if (comp.length > bestComp.length) bestComp = comp;
+  }
+
+  // Zu klein = kein großes helles Wortzeichen
+  if (bestComp.length < Math.max(80, nPix * 0.02)) return 0;
+
+  const inLight = new Uint8Array(nPix);
+  for (const idx of bestComp) inLight[idx] = 1;
+
+  // Vom Rand durch alles außer der hellen Hauptkomponente fluten
+  const reached = new Uint8Array(nPix);
+  let qh = 0;
+  let qt = 0;
+  const trySeed = (x: number, y: number) => {
+    const idx = y * w + x;
+    if (reached[idx] || inLight[idx]) return;
+    reached[idx] = 1;
+    qx[qt] = x;
+    qy[qt] = y;
+    qt++;
+  };
+  for (let x = 0; x < w; x++) {
+    trySeed(x, 0);
+    trySeed(x, h - 1);
+  }
+  for (let y = 0; y < h; y++) {
+    trySeed(0, y);
+    trySeed(w - 1, y);
+  }
+  while (qh < qt) {
+    const x = qx[qh]!;
+    const y = qy[qh]!;
+    qh++;
+    for (let k = 0; k < 4; k++) {
+      const nx = x + dirs[k * 2]!;
+      const ny = y + dirs[k * 2 + 1]!;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const nidx = ny * w + nx;
+      if (reached[nidx] || inLight[nidx]) continue;
+      reached[nidx] = 1;
+      qx[qt] = nx;
+      qy[qt] = ny;
+      qt++;
+    }
+  }
+
+  let cleared = 0;
+  for (let p = 0, i = 0; i < d.length; i += 4, p++) {
+    if (d[i + 3]! < 40) continue;
+    if (inLight[p] || reached[p]) continue;
+    // Opakes Pixel in einem Loch der hellen Buchstaben → Counter-Fremdfüllung
+    d[i + 3] = 0;
+    cleared++;
+  }
+  return cleared;
+}
+
+/**
  * Heller Studio-Hintergrund: Außenweiß + Buchstaben-Innenlöcher (O/R/S) entfernen.
  * Hellgraues/farbiges Motiv bleibt.
  */
@@ -395,6 +502,7 @@ function stripLightStudioBackground(d: Uint8ClampedArray, w: number, h: number):
   n += clearEnclosedBackgroundHoles(d, w, h, nearWhiteBg, 40);
   n += clearUnreachablePaperWhite(d, w, h);
   if (hasNonPaperInk(d)) n += wipeRemainingPaperWhite(d);
+  n += clearHolesInsideLightLetters(d, w, h);
   return n;
 }
 
@@ -408,6 +516,7 @@ function finalizeLetterCounters(d: Uint8ClampedArray, w: number, h: number, stud
   let n = clearEnclosedBackgroundHoles(d, w, h, nearWhiteBg, 40);
   n += clearUnreachablePaperWhite(d, w, h);
   if (studioLikely) n += wipeRemainingPaperWhite(d);
+  n += clearHolesInsideLightLetters(d, w, h);
   return n;
 }
 

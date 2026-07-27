@@ -1026,10 +1026,11 @@ const ConfiguratorPage: React.FC = () => {
     try {
       let content: string;
       if (isSvgLogoFile(file)) {
-        content = await file.text();
-        if (!content?.trim()) {
-          showError('Die Datei ist leer.');
-          return;
+        const { svgFileToRasterLogoDetailed } = await import('../lib/logoFromRaster');
+        const result = await svgFileToRasterLogoDetailed(file);
+        content = result.svg;
+        if (result.dominantColor) {
+          setConfig((prev) => ({ ...prev, logoColor: result.dominantColor! }));
         }
       } else if (isRasterLogoFile(file)) {
         const { rasterFileToSvgDetailed } = await import('../lib/logoFromRaster');

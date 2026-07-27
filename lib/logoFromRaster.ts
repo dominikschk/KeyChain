@@ -440,9 +440,48 @@ export async function rasterFileToSvg(file: File): Promise<string> {
   return result.svg;
 }
 
-export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoResult> {
-  const raw = await fileToRawImageData(file);
+/** SVG: evenodd erzwingen (Buchstaben-Löcher), dann wie PNG freistellen. */
+function prepareSvgForRaster(svgText: string): string {
+  let s = svgText.trim();
+  if (!s) throw new Error('Die SVG-Datei ist leer.');
+  s = s.replace(/fill-rule\s*=\s*(["'])nonzero\1/gi, 'fill-rule="evenodd"');
+  s = s.replace(/clip-rule\s*=\s*(["'])nonzero\1/gi, 'clip-rule="evenodd"');
+  s = s.replace(/<path\b(?![^>]*\bfill-rule=)/gi, '<path fill-rule="evenodd" ');
+  s = s.replace(/<polygon\b(?![^>]*\bfill-rule=)/gi, '<polygon fill-rule="evenodd" ');
+  return s;
+}
 
+async function svgTextToRawImageData(svgText: string): Promise<ImageData> {
+  const prepared = prepareSvgForRaster(svgText);
+  const blob = new Blob([prepared], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('SVG konnte nicht geladen werden.'));
+      el.src = url;
+    });
+    const edge = maxEdge();
+    const iw = Math.max(1, img.naturalWidth || img.width || 512);
+    const ih = Math.max(1, img.naturalHeight || img.height || 512);
+    const scale = Math.min(1, edge / Math.max(iw, ih));
+    const w = Math.max(1, Math.round(iw * scale));
+    const h = Math.max(1, Math.round(ih * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('Canvas nicht verfügbar.');
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    return ctx.getImageData(0, 0, w, h);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function imageDataToRasterLogo(raw: ImageData): Promise<RasterLogoResult> {
   let forceLogo = true;
   try {
     const { Vecburner } = await import('vecburner');
@@ -478,6 +517,18 @@ export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoRes
     printReady: true,
     dominantColor: dominantHex,
   };
+}
+
+export async function rasterFileToSvgDetailed(file: File): Promise<RasterLogoResult> {
+  const raw = await fileToRawImageData(file);
+  return imageDataToRasterLogo(raw);
+}
+
+/** SVG-Upload: rastern + dieselbe Freistell-/Loch-Pipeline wie bei PNG. */
+export async function svgFileToRasterLogoDetailed(file: File): Promise<RasterLogoResult> {
+  const text = await file.text();
+  const raw = await svgTextToRawImageData(text);
+  return imageDataToRasterLogo(raw);
 }
 
 export async function textToEngraveSvg(raw: string): Promise<string> {
