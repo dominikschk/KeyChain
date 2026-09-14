@@ -9,6 +9,7 @@ export default tseslint.config(
       'dist/**',
       'node_modules/**',
       'supabase/functions/**',
+      'tools/bambu-bridge/**',
       'playwright-report/**',
       'test-results/**',
       'eslint.config.js',

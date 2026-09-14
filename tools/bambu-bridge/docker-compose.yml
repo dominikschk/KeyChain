@@ -1,0 +1,47 @@
+# Lokal: bambu-gateway + NUDAIM-Adapter
+#
+#   docker compose -f tools/bambu-bridge/docker-compose.yml up -d
+#
+# Gateway UI: http://localhost:4844
+# Adapter:    http://localhost:8787/health
+#
+# orcaslicer-headless separat starten und ORCASLICER_API_URL setzen,
+# sonst kein STL-Slice (nur Inbox + Fehlermeldung).
+
+services:
+  bambu-gateway:
+    image: ghcr.io/leolobato/bambu-gateway:latest
+    ports:
+      - '4844:4844'
+    volumes:
+      - bambu_gateway_data:/data
+    environment:
+      # STL→Slice: URL zu orcaslicer-headless (Host oder eigener Container)
+      # ORCASLICER_API_URL: http://host.docker.internal:8070
+      ALLOW_AGENT_PRINT: 'true'
+    restart: unless-stopped
+
+  nudaim-adapter:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - bambu_inbox:/app/inbox
+    command: ['node', 'server.mjs']
+    ports:
+      - '8787:8787'
+    environment:
+      PORT: '8787'
+      BAMBU_GATEWAY_URL: http://bambu-gateway:4844
+      BAMBU_PRINTER_ID: ${BAMBU_PRINTER_ID:-}
+      BAMBU_BRIDGE_SECRET: ${BAMBU_BRIDGE_SECRET:-}
+      BAMBU_AUTO_PRINT: ${BAMBU_AUTO_PRINT:-false}
+      BAMBU_MACHINE_PROFILE: ${BAMBU_MACHINE_PROFILE:-}
+      BAMBU_PROCESS_PROFILE: ${BAMBU_PROCESS_PROFILE:-}
+    depends_on:
+      - bambu-gateway
+    restart: unless-stopped
+
+volumes:
+  bambu_gateway_data:
+  bambu_inbox:

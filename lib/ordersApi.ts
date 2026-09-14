@@ -15,6 +15,9 @@ export interface OrderRow {
   print_qc_status?: string | null;
   print_qc_note?: string | null;
   print_qc_at?: string | null;
+  print_dispatch_status?: string | null;
+  print_dispatch_note?: string | null;
+  print_dispatch_at?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }

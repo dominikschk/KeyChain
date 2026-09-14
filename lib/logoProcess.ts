@@ -191,11 +191,10 @@ function clearEnclosedBackgroundHoles(
     if (visited[start] || !isBgOpaque(start)) continue;
 
     let qh = 0;
-    let qt = 0;
     qx[0] = start % w;
     qy[0] = Math.floor(start / w);
     visited[start] = 1;
-    qt = 1;
+    let qt = 1;
 
     let touchesBorder = false;
     let touchesInk = false;

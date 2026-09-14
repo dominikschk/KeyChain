@@ -154,8 +154,8 @@ Bewusst optional – nur wenn Kern läuft.
 
 ### Fertigung
 - [x] Print-QC: Side-by-Side Kunden-Vorschau vs. 3-Farben-Druck
-- [ ] Automatische E-Mail an Druckerei bei QC-Freigabe
-- [ ] Reprint-Grund erfassen (Dropdown) → Metrik
+- [x] Automatische E-Mail / Webhook an Druckerei bei QC-Freigabe (`dispatch-print` → bambu-gateway, siehe AUTO_PRINT.md)
+- [x] Reprint-Grund erfassen (Dropdown) → Metrik
 - [ ] G-Code/Export-Hinweise pro Material
 
 ### Konfigurator
