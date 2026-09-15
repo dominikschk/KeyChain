@@ -6,6 +6,14 @@ Kette: **NUDAIM-Adapter → [bambu-gateway](https://github.com/leolobato/bambu-g
 Wir implementieren **kein** eigenes Bambu-Protokoll. Gateway übernimmt Upload
 (`FTPS :990`) und Start (`MQTT project_file` auf `:8883`).
 
+## Sofort lokal testen (ohne Drucker)
+
+```bash
+npm run test:bambu-local
+```
+
+Erwartung: `✅ Lokaler Test OK`. Details: [`tools/bambu-bridge/LOCAL_TEST.md`](tools/bambu-bridge/LOCAL_TEST.md).
+
 ## Architektur
 
 ```

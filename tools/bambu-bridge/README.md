@@ -4,6 +4,19 @@ Wir bauen **kein** eigenes FTPS/MQTT nach. Stattdessen nutzen wir
 [**bambu-gateway**](https://github.com/leolobato/bambu-gateway)
 (FTPS Upload + MQTT `project_file`) und einen dünnen NUDAIM-Adapter.
 
+## Sofort lokal testen (ohne Drucker)
+
+Im Repo-Root:
+
+```bash
+npm run test:bambu-local
+```
+
+Erwartung: `✅ Lokaler Test OK`  
+Details: [`LOCAL_TEST.md`](LOCAL_TEST.md)
+
+## Architektur
+
 ```
 Admin QC freigeben
   → Supabase Edge `dispatch-print`
@@ -14,35 +27,13 @@ Admin QC freigeben
   → Gateway: FTPS + MQTT → Bambu-Drucker
 ```
 
-## 1. bambu-gateway starten
+## Echter Drucker
 
-```bash
-docker run -d --name bambu-gateway \
-  -p 4844:4844 \
-  -v $(pwd)/bambu-data:/data \
-  -e ORCASLICER_API_URL=http://host.docker.internal:8070 \
-  -e ALLOW_AGENT_PRINT=true \
-  ghcr.io/leolobato/bambu-gateway:latest
-```
-
-Oder: `docker compose -f tools/bambu-bridge/docker-compose.yml up -d`
-
-Dann im Browser **http://localhost:4844/settings** Drucker anlegen
-(IP, Access Code, Serial – Developer Mode am Drucker).
-
-Für STL→Slice zusätzlich [orcaslicer-headless](https://github.com/leolobato/orcaslicer-headless)
-mit `ORCASLICER_API_URL` am Gateway.
-
-## 2. NUDAIM-Adapter
-
-```bash
-cd tools/bambu-bridge
-BAMBU_GATEWAY_URL=http://127.0.0.1:4844 \
-BAMBU_PRINTER_ID=DEIN_SERIAL \
-BAMBU_BRIDGE_SECRET=dein-secret \
-BAMBU_AUTO_PRINT=true \
-node server.mjs
-```
+1. `cp tools/bambu-bridge/.env.bambu.local.example tools/bambu-bridge/.env.bambu.local`
+2. Serial / Secret eintragen
+3. `docker compose -f tools/bambu-bridge/docker-compose.yml --env-file tools/bambu-bridge/.env.bambu.local up -d`
+4. http://localhost:4844/settings → Drucker anlegen
+5. Adapter starten – siehe [`LOCAL_TEST.md`](LOCAL_TEST.md)
 
 | Env | Bedeutung |
 |-----|-----------|
@@ -53,18 +44,6 @@ node server.mjs
 | `BAMBU_SLICE` | default `true` |
 | `BAMBU_MACHINE_PROFILE` | optional Orca-Maschinenprofil |
 | `BAMBU_PROCESS_PROFILE` | optional Orca-Prozessprofil |
-
-Adapter per Tunnel (ngrok/Cloudflare) erreichbar machen → URL als
-`PRINT_DISPATCH_WEBHOOK_URL` in Supabase (siehe [`AUTO_PRINT.md`](../../AUTO_PRINT.md)).
-
-## 3. Was der Adapter aufruft
-
-1. `POST /api/print-sessions` – STL hochladen, Session anlegen (`slice=true`)
-2. Session pollen bis `sliced` / `ready`
-3. bei `BAMBU_AUTO_PRINT=true`: `POST /api/print-sessions/{id}/print`  
-   (Gateway braucht `ALLOW_AGENT_PRINT=true`)
-
-Ohne Auto-Print: `handoff_url` öffnen und in der Gateway-UI starten.
 
 ## Hinweis
 

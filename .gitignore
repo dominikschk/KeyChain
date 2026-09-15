@@ -18,6 +18,8 @@ blob-report
 
 # Lokale Bambu-Bridge Inbox
 tools/bambu-bridge/inbox/
+tools/bambu-bridge/inbox-test/
+tools/bambu-bridge/.env.bambu.local
 
 # Editor directories and files
 .vscode/*
