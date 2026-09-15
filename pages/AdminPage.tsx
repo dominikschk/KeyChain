@@ -12,6 +12,11 @@ import {
   updateOrderPrintQc,
   getOrderStatusOptions,
 } from '../lib/ordersApi';
+import { dispatchPrintJob } from '../lib/printDispatchApi';
+import {
+  normalizePrintDispatchStatus,
+  printDispatchLabel,
+} from '../lib/printDispatch';
 import { SHOPIFY_ADMIN_ORDERS_URL } from '../constants';
 import {
   checkIsAdmin,
@@ -194,6 +199,38 @@ export const AdminPage: React.FC = () => {
       setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
     }
     setQcModal(null);
+    if (approve && updated) {
+      const dispatched = await dispatchPrintJob(updated.id);
+      if (dispatched.order) {
+        setOrders((prev) => prev.map((o) => (o.id === updated.id ? { ...o, ...dispatched.order } : o)));
+      } else if (dispatched.status) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === updated.id
+              ? {
+                  ...o,
+                  print_dispatch_status: dispatched.status,
+                  print_dispatch_note: dispatched.message ?? o.print_dispatch_note,
+                  print_dispatch_at: new Date().toISOString(),
+                }
+              : o
+          )
+        );
+      }
+      if (!dispatched.ok && dispatched.status === 'failed') {
+        showError(dispatched.message || 'Auto-Druck fehlgeschlagen – Dateien bleiben im Admin.');
+      }
+    }
+  };
+
+  const handleResendPrint = async (order: OrderRow) => {
+    const dispatched = await dispatchPrintJob(order.id, { force: true });
+    if (dispatched.order) {
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...dispatched.order } : o)));
+    }
+    if (!dispatched.ok && dispatched.status === 'failed') {
+      showError(dispatched.message || 'Erneuter Versand fehlgeschlagen.');
+    }
   };
 
   const openQcReview = (order: OrderRow) => {
@@ -523,6 +560,9 @@ export const AdminPage: React.FC = () => {
                             <div className="text-[10px] uppercase tracking-wider text-zinc-500">
                               QC: {qc}
                             </div>
+                            <div className="text-[10px] text-zinc-500">
+                              {printDispatchLabel(normalizePrintDispatchStatus(o.print_dispatch_status))}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-xs">
                             {slaH == null ? (
@@ -551,6 +591,15 @@ export const AdminPage: React.FC = () => {
                                   className="px-2.5 py-1.5 rounded-lg border border-zinc-200 text-[10px] font-bold uppercase tracking-wide text-zinc-600"
                                 >
                                   {t('admin.qc.reject', locale)}
+                                </button>
+                              )}
+                              {qc === 'approved' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendPrint(o)}
+                                  className="px-2.5 py-1.5 rounded-lg border border-petrol/30 text-petrol text-[10px] font-bold uppercase tracking-wide"
+                                >
+                                  {t('admin.dispatch.resend', locale)}
                                 </button>
                               )}
                             </div>

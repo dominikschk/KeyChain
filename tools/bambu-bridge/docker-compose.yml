@@ -1,0 +1,47 @@
+# Lokal: bambu-gateway + NUDAIM-Adapter
+#
+#   docker compose -f tools/bambu-bridge/docker-compose.yml \
+#     --env-file tools/bambu-bridge/.env.bambu.local up -d
+#
+# Gateway UI: http://localhost:4844
+# Adapter:    http://localhost:8787/health
+
+services:
+  bambu-gateway:
+    image: ghcr.io/leolobato/bambu-gateway:latest
+    ports:
+      - '4844:4844'
+    volumes:
+      - bambu_gateway_data:/data
+    environment:
+      ALLOW_AGENT_PRINT: 'true'
+      BAMBU_PRINTER_IP: ${BAMBU_PRINTER_IP:-}
+      BAMBU_PRINTER_ACCESS_CODE: ${BAMBU_PRINTER_ACCESS_CODE:-}
+      BAMBU_PRINTER_SERIAL: ${BAMBU_PRINTER_ID:-}
+      # ORCASLICER_API_URL: http://host.docker.internal:8070
+    restart: unless-stopped
+
+  nudaim-adapter:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - bambu_inbox:/app/inbox
+    command: ['node', 'server.mjs']
+    ports:
+      - '8787:8787'
+    environment:
+      PORT: '8787'
+      BAMBU_GATEWAY_URL: http://bambu-gateway:4844
+      BAMBU_PRINTER_ID: ${BAMBU_PRINTER_ID:-}
+      BAMBU_BRIDGE_SECRET: ${BAMBU_BRIDGE_SECRET:-}
+      BAMBU_AUTO_PRINT: ${BAMBU_AUTO_PRINT:-false}
+      BAMBU_MACHINE_PROFILE: ${BAMBU_MACHINE_PROFILE:-}
+      BAMBU_PROCESS_PROFILE: ${BAMBU_PROCESS_PROFILE:-}
+    depends_on:
+      - bambu-gateway
+    restart: unless-stopped
+
+volumes:
+  bambu_gateway_data:
+  bambu_inbox:

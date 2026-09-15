@@ -16,6 +16,12 @@ test-results
 blob-report
 .playwright
 
+# Lokale Bambu-Bridge Inbox
+tools/bambu-bridge/inbox/
+tools/bambu-bridge/inbox-test/
+tools/bambu-bridge/.env.bambu.local
+tools/bambu-bridge/.bambu-gateway-src/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
