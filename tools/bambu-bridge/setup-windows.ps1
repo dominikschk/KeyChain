@@ -54,7 +54,7 @@ Write-Host "OK Python-Pakete..."
 python -m pip install -q -r (Join-Path $gw "requirements.txt")
 
 $web = Join-Path $gw "web"
-$distIndex = Join-Path $web "dist\index.html"
+$distIndex = Join-Path $gw "app\static\dist\index.html"
 if (-not (Test-Path $distIndex)) {
   Write-Host "OK Web-UI bauen (einmalig)..."
   Push-Location $web
