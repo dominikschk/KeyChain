@@ -54,6 +54,18 @@ if (-not (Test-Path (Join-Path $gw ".git"))) {
 Write-Host "→ Python-Pakete…"
 python -m pip install -q -r (Join-Path $gw "requirements.txt")
 
+$web = Join-Path $gw "web"
+$distIndex = Join-Path $web "dist\index.html"
+if (-not (Test-Path $distIndex)) {
+  Write-Host "→ Web-UI bauen (einmalig)…"
+  Push-Location $web
+  npm.cmd ci
+  npm.cmd run build
+  Pop-Location
+} else {
+  Write-Host "→ Web-UI schon gebaut"
+}
+
 $env:BAMBU_PRINTER_SERIAL = $env:BAMBU_PRINTER_ID
 $env:ALLOW_AGENT_PRINT = "true"
 $env:SERVER_PORT = "4844"
@@ -61,7 +73,8 @@ $env:SERVER_PORT = "4844"
 Write-Host ""
 Write-Host "Gateway startet: http://127.0.0.1:4844" -ForegroundColor Green
 Write-Host "Drucker $($env:BAMBU_PRINTER_IP) / $($env:BAMBU_PRINTER_ID)"
-Write-Host "Zweites PowerShell-Fenster danach: .\start-adapter.ps1"
+Write-Host "Danach zweites Fenster: .\start-adapter.ps1"
+Write-Host "API-Docs ohne UI: http://127.0.0.1:4844/docs"
 Write-Host ""
 
 Set-Location $gw
