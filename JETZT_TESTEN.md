@@ -1,7 +1,7 @@
 # STOP – nur das
 
 **Wichtig:** Gateway auf deinem **Heim-PC** (gleiches WLAN wie der Bambu).  
-Cloud-Agent: kein Docker, kein Zugriff auf `192.168.188.23`.
+Cloud-Agent: kein Docker, kein Zugriff auf `192.168.188.x`.
 
 ## A) Software-Check
 
@@ -12,19 +12,13 @@ npm run bambu:go
 
 Muss: `✅ SOFTWARE KLAPPT`
 
-## B) Echter Drucker – OHNE Docker
+## B) Echter Drucker – OHNE Docker (Heim-PC)
 
 **Terminal 1** (Gateway):
 ```bash
 cd tools/bambu-bridge
-cat > .env.bambu.local <<'EOF'
-BAMBU_BRIDGE_SECRET=local-test-secret
-BAMBU_AUTO_PRINT=false
-BAMBU_GATEWAY_URL=http://127.0.0.1:4844
-BAMBU_PRINTER_IP=192.168.188.23
-BAMBU_PRINTER_ACCESS_CODE=13623236
-BAMBU_PRINTER_ID=03900D5A0405958
-EOF
+# .env.bambu.local mit IP / Access Code / Serial füllen (nicht committen)
+cp -n .env.bambu.local.example .env.bambu.local
 chmod +x start-gateway-no-docker.sh start-adapter.sh
 ./start-gateway-no-docker.sh
 ```
