@@ -1,12 +1,10 @@
 # Lokal: bambu-gateway + NUDAIM-Adapter
 #
-#   docker compose -f tools/bambu-bridge/docker-compose.yml up -d
+#   docker compose -f tools/bambu-bridge/docker-compose.yml \
+#     --env-file tools/bambu-bridge/.env.bambu.local up -d
 #
 # Gateway UI: http://localhost:4844
 # Adapter:    http://localhost:8787/health
-#
-# orcaslicer-headless separat starten und ORCASLICER_API_URL setzen,
-# sonst kein STL-Slice (nur Inbox + Fehlermeldung).
 
 services:
   bambu-gateway:
@@ -16,9 +14,11 @@ services:
     volumes:
       - bambu_gateway_data:/data
     environment:
-      # STL→Slice: URL zu orcaslicer-headless (Host oder eigener Container)
-      # ORCASLICER_API_URL: http://host.docker.internal:8070
       ALLOW_AGENT_PRINT: 'true'
+      BAMBU_PRINTER_IP: ${BAMBU_PRINTER_IP:-}
+      BAMBU_PRINTER_ACCESS_CODE: ${BAMBU_PRINTER_ACCESS_CODE:-}
+      BAMBU_PRINTER_SERIAL: ${BAMBU_PRINTER_ID:-}
+      # ORCASLICER_API_URL: http://host.docker.internal:8070
     restart: unless-stopped
 
   nudaim-adapter:
