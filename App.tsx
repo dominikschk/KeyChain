@@ -1,14 +1,16 @@
 /**
- * Einstieg: Router für Konfigurator, CCP, Admin, Rechtstexte.
- * Pfade: /, /configurator | /ccp | /admin | /impressum | /datenschutz | /agb | /widerruf
+ * Einstieg: Router für Konfigurator, CCP, Admin, Partner, Rechtstexte.
+ * Pfade: /, /configurator | /ccp | /admin | /partner… | /impressum | …
  */
 import React, { useState, useEffect } from 'react';
 import ConfiguratorPage from './pages/ConfiguratorPage';
 import CcpPage from './pages/CcpPage';
 import AdminPage from './pages/AdminPage';
 import LegalPage from './pages/LegalPage';
+import PartnerPage from './pages/PartnerPage';
 import { CookieConsent } from './components/CookieConsent';
 import { isLegalPath } from './lib/legalCompany';
+import { isPartnerPath } from './lib/partner/routing';
 
 function getPath(): string {
   const p = window.location.pathname.replace(/\/$/, '') || '/';
@@ -17,7 +19,7 @@ function getPath(): string {
 
 /** Seiten mit normalem Dokument-Scroll (nicht Konfigurator-App-Shell). */
 function pathNeedsDocumentScroll(path: string): boolean {
-  return path === '/admin' || path === '/ccp' || isLegalPath(path);
+  return path === '/admin' || path === '/ccp' || isLegalPath(path) || isPartnerPath(path);
 }
 
 const App: React.FC = () => {
@@ -49,6 +51,9 @@ const App: React.FC = () => {
   }
   if (path === '/admin') {
     return <AdminPage />;
+  }
+  if (isPartnerPath(path)) {
+    return <PartnerPage />;
   }
   if (isLegalPath(path)) {
     return (

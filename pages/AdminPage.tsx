@@ -42,6 +42,7 @@ import {
 } from '../lib/adminOps';
 import { getStoredLocale, setStoredLocale, t, toggleLocale, type Locale } from '../lib/i18n';
 import { showError } from '../lib/utils';
+import { PartnerAdminPanel } from '../components/partner/PartnerAdminPanel';
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -77,6 +78,7 @@ export const AdminPage: React.FC = () => {
   const [locale, setLocale] = useState<Locale>(() =>
     typeof window !== 'undefined' ? getStoredLocale() : 'de'
   );
+  const [adminSection, setAdminSection] = useState<'production' | 'partner'>('production');
   const statusOptions = getOrderStatusOptions();
 
   useEffect(() => {
@@ -389,6 +391,50 @@ export const AdminPage: React.FC = () => {
       </header>
 
       <main id="admin-main" className="flex-1 p-4 md:p-6 max-w-6xl mx-auto w-full space-y-6">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Admin-Bereich">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={adminSection === 'production'}
+            onClick={() => setAdminSection('production')}
+            className={`min-h-[40px] px-4 rounded-xl text-xs font-semibold ${
+              adminSection === 'production'
+                ? 'bg-navy text-white'
+                : 'bg-white border border-zinc-200 text-navy'
+            }`}
+          >
+            Produktion
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={adminSection === 'partner'}
+            onClick={() => setAdminSection('partner')}
+            className={`min-h-[40px] px-4 rounded-xl text-xs font-semibold ${
+              adminSection === 'partner'
+                ? 'bg-navy text-white'
+                : 'bg-white border border-zinc-200 text-navy'
+            }`}
+          >
+            Partnerprogramm
+          </button>
+        </div>
+
+        {adminSection === 'partner' && (
+          <section className="card overflow-hidden p-5">
+            <h2 className="font-headline font-extrabold text-sm uppercase tracking-tight text-navy mb-1">
+              Partnerprogramm (Pilot)
+            </h2>
+            <p className="text-sm text-zinc-500 mb-4">
+              Partner, Leads, Provisionen, Materialien und Setup-Calls. Kennzahlen nur aus
+              gespeicherten Daten.
+            </p>
+            <PartnerAdminPanel />
+          </section>
+        )}
+
+        {adminSection === 'production' && (
+        <>
         <section className="card overflow-hidden">
           <div className="px-5 py-4 border-b border-zinc-200 flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -751,6 +797,8 @@ export const AdminPage: React.FC = () => {
             </div>
           )}
         </section>
+        </>
+        )}
       </main>
 
       {qcModal && (

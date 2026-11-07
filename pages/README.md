@@ -2,6 +2,7 @@
 
 - **/** oder **/configurator** – Konfigurator (NFeC konfigurieren, bestellen)
 - **/ccp** – Customer Control Panel (Scans; Bearbeiten nur mit `?t=` Write-Token aus `_CCP-URL`)
-- **/admin** – Admin (alle Bestellungen mit Microsite-URL-Links)
+- **/admin** – Admin (Produktion + Partnerprogramm)
+- **/partner** … – Vertriebs-/Partnerprogramm (öffentlich + Partner-App)
 
 Router: App.tsx
